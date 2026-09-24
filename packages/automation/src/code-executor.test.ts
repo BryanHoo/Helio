@@ -13,8 +13,8 @@ describe.sequential("Codevisor code executor", () => {
     const calls: Array<{ readonly path: string; readonly args: unknown }> = []
     const result = await makeCodeExecutor().execute(
       `async (): Promise<number> => {
-        const response = await tools.browser.tabs({ window: "current" });
-        console.log("tabs", response.count);
+        const response = await tools.codevisor.search({ query: "session" });
+        console.log("matches", response.count);
         emit({ type: "text", text: "visible output" });
         return response.count + 1;
       }`,
@@ -28,160 +28,10 @@ describe.sequential("Codevisor code executor", () => {
 
     expect(result).toMatchObject({
       result: 3,
-      logs: ["[log] tabs 2"],
+      logs: ["[log] matches 2"],
       output: [{ type: "content", content: { type: "text", text: "visible output" } }]
     })
-    expect(calls).toEqual([{ path: "browser.tabs", args: { window: "current" } }])
-  })
-
-  it("provides a native-shaped Playwright locator facade on tools.browser.tab", async () => {
-    const calls: Array<{ readonly path: string; readonly args: unknown }> = []
-    const result = await makeCodeExecutor().execute(
-      `async () => {
-        const submit = tools.browser.tab.playwright.getByRole("button", {
-          name: "Submit",
-          exact: true
-        });
-        const count = await submit.count();
-        await submit.click();
-        return count;
-      }`,
-      {
-        invoke: async (call) => {
-          calls.push(call)
-          if (call.path === "browser.playwright.count") return { count: 1 }
-          return { delivered: true }
-        }
-      }
-    )
-
-    expect(result).toMatchObject({ result: 1 })
-    expect(calls).toEqual([
-      {
-        path: "browser.playwright.count",
-        args: { locator: { role: "button", name: "Submit", exact: true } }
-      },
-      {
-        path: "browser.playwright.click",
-        args: {
-          locator: { role: "button", name: "Submit", exact: true },
-          button: undefined,
-          doubleClick: false,
-          force: undefined,
-          modifiers: undefined,
-          timeoutMs: undefined
-        }
-      }
-    ])
-  })
-
-  it("composes native-shaped locators, frames, evaluation, and tab capabilities", async () => {
-    const calls: Array<{ readonly path: string; readonly args: unknown }> = []
-    const result = await makeCodeExecutor().execute(
-      `async () => {
-        const page = tools.browser.tab.playwright;
-        const row = page.locator(".row").filter({
-          hasText: "Ada",
-          has: page.getByRole("button", { name: "Edit" }),
-          visible: true
-        }).first();
-        const nested = row.getByText("Ada");
-        const count = await nested.count();
-        const frameText = await page.frameLocator("iframe").locator("p").allTextContents();
-        const value = await nested.evaluate((element, suffix) => element.textContent + suffix, "!");
-        const cdpCapability = await tools.browser.tab.capabilities.get("cdp");
-        const cdp = await cdpCapability.send("Runtime.evaluate", {
-          expression: "1 + 1"
-        });
-        return { count, frameText, value, cdp };
-      }`,
-      {
-        invoke: async (call) => {
-          calls.push(call)
-          if (call.path === "browser.playwright.count") return { count: 1 }
-          if (call.path === "browser.playwright.allTextContents") return { values: ["Frame"] }
-          if (call.path === "browser.playwright.evaluate") return { value: "Ada!" }
-          if (call.path === "browser.cdp.send") return { result: { result: { value: 2 } } }
-          return {}
-        }
-      }
-    )
-
-    expect(result.error).toBeUndefined()
-    expect(result.result).toEqual({
-      count: 1,
-      frameText: ["Frame"],
-      value: "Ada!",
-      cdp: { result: { value: 2 } }
-    })
-    expect(calls.find((call) => call.path === "browser.playwright.count")?.args).toEqual({
-      locator: {
-        text: "Ada",
-        scope: {
-          css: ".row",
-          filters: {
-            has: { role: "button", name: "Edit" },
-            hasText: "Ada",
-            visible: true
-          },
-          index: 0
-        }
-      }
-    })
-    expect(calls.find((call) => call.path === "browser.playwright.allTextContents")?.args).toEqual({
-      locator: { css: "p", frame: ["iframe"] },
-      timeoutMs: undefined
-    })
-  })
-
-  it("provides native-shaped browser, tab lifecycle, and tab navigation facades", async () => {
-    const calls: Array<{ readonly path: string; readonly args: unknown }> = []
-    const result = await makeCodeExecutor().execute(
-      `async () => {
-        const browser = tools.browser;
-        await browser.nameSession("compatibility test");
-        const tab = await browser.tabs.new();
-        await tab.goto("https://example.com/");
-        const title = await tab.title();
-        await browser.tabs.finalize({ keep: [{ tab, status: "deliverable" }] });
-        return { id: tab.id, title };
-      }`,
-      {
-        invoke: async (call) => {
-          calls.push(call)
-          if (call.path === "browser.tabs" && (call.args as { action?: string }).action === "new") {
-            return {
-              tabs: [
-                {
-                  id: "tab-1",
-                  index: 0,
-                  selected: true,
-                  title: "",
-                  url: "about:blank"
-                }
-              ]
-            }
-          }
-          if (call.path === "browser.tab_info") {
-            return { id: "tab-1", title: "Example", url: "https://example.com/" }
-          }
-          return { delivered: true }
-        }
-      }
-    )
-
-    expect(result).toMatchObject({ result: { id: "tab-1", title: "Example" } })
-    expect(calls).toEqual([
-      { path: "browser.nameSession", args: { name: "compatibility test" } },
-      { path: "browser.tabs", args: { action: "new" } },
-      { path: "browser.navigate", args: { tabId: "tab-1", url: "https://example.com/" } },
-      { path: "browser.tab_info", args: { tabId: "tab-1" } },
-      { path: "browser.markTab", args: { id: "tab-1", status: "deliverable" } },
-      {
-        path: "browser.finalizeTabs",
-        args: { native: true, keepIds: ["tab-1"] }
-      }
-    ])
+    expect(calls).toEqual([{ path: "codevisor.search", args: { query: "session" } }])
   })
 
   it("does not charge time waiting for a host tool against the active execution budget", async () => {
@@ -189,7 +39,7 @@ describe.sequential("Codevisor code executor", () => {
     const entered = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
     const execution = makeCodeExecutor({ activeTimeoutMs: 1000, now: () => now }).execute(
-      `async () => (await tools.browser.choose({})).answer`,
+      `async () => (await tools.codevisor.choose({})).answer`,
       {
         invoke: async () => {
           entered.resolve()
@@ -219,7 +69,7 @@ describe.sequential("Codevisor code executor", () => {
 
   it("lets sandbox code catch intentional tool errors without leaking defects", async () => {
     const visible = await makeCodeExecutor().execute(
-      `async () => tools.browser.click({}).catch(error => error.message)`,
+      `async () => tools.codevisor.click({}).catch(error => error.message)`,
       {
         invoke: async () => {
           throw new CodeExecutionToolError("The click target is unavailable")
@@ -227,7 +77,7 @@ describe.sequential("Codevisor code executor", () => {
       }
     )
     const hidden = await makeCodeExecutor().execute(
-      `async () => tools.browser.click({}).catch(error => error.message)`,
+      `async () => tools.codevisor.click({}).catch(error => error.message)`,
       {
         invoke: async () => {
           throw new Error("secret internal detail")
@@ -243,7 +93,7 @@ describe.sequential("Codevisor code executor", () => {
     const controller = new AbortController()
     const entered = Promise.withResolvers<void>()
     const execution = makeCodeExecutor().execute(
-      `async () => tools.browser.choose({})`,
+      `async () => tools.codevisor.choose({})`,
       {
         invoke: () => {
           entered.resolve()

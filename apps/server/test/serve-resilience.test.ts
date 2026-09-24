@@ -10,7 +10,7 @@ describe("optional server feature initialization", () => {
   it("keeps synchronous feature failures inside their feature boundary", () => {
     const report = vi.fn()
     const result = initializeOptionalServerFeature(
-      "Browser Use",
+      "Optional integration",
       () => {
         throw new Error("extension missing")
       },
@@ -18,7 +18,7 @@ describe("optional server feature initialization", () => {
     )
 
     expect(result).toBeUndefined()
-    expect(report).toHaveBeenCalledWith("Browser Use unavailable: extension missing")
+    expect(report).toHaveBeenCalledWith("Optional integration unavailable: extension missing")
   })
 
   it("keeps asynchronous feature failures inside their feature boundary", async () => {

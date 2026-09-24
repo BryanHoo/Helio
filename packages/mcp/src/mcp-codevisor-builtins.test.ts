@@ -6,10 +6,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js"
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js"
 import { afterEach, describe, expect, it } from "vitest"
 
-import {
-  unavailableBrowserProvider,
-  unavailableComputerProvider
-} from "./mcp-automation-builtins.js"
+import { unavailableComputerProvider } from "./mcp-automation-builtins.js"
 import {
   cleanupMcpManagerTests,
   listen,
@@ -21,9 +18,8 @@ import { makeMcpManager } from "./mcp-manager.js"
 
 afterEach(cleanupMcpManagerTests)
 
-// These cases exercise Codevisor itself; desktop/browser state is irrelevant.
+// These cases exercise Codevisor itself; desktop state is irrelevant.
 const providers = {
-  makeBrowserProvider: () => unavailableBrowserProvider("Not used in this test"),
   makeComputerProvider: () => unavailableComputerProvider("Not used in this test")
 }
 

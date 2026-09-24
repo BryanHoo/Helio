@@ -107,8 +107,8 @@ export interface McpReadinessDeps {
 
 /// Publishes this machine's MCP readiness under its own machine key —
 /// single-writer, change-detected, so a settled machine republishes
-/// nothing. Built-in providers (computer use, browser use) are included
-/// deliberately: they are the most machine-specific MCPs of all.
+/// nothing. The built-in Computer Use provider is included because its
+/// availability depends on this machine's desktop permissions.
 export const publishMcpReadiness = async (
   deps: McpReadinessDeps
 ): Promise<{

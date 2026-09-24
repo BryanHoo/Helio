@@ -1,7 +1,6 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync } from "node:fs"
 import { join } from "node:path"
 
-import { makeAgentRuntime } from "@codevisor/agent-runtime"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { makeSkillsManager } from "./skills-manager.js"
@@ -11,7 +10,8 @@ import {
   writeSkill,
   manager,
   globalSkill,
-  installState
+  installState,
+  skillTestRuntime
 } from "./skills-test-support.js"
 
 afterEach(cleanupSkillsTests)
@@ -72,7 +72,7 @@ describe("auto-install on create and import", () => {
   it("remote imports link every imported skill everywhere", async () => {
     const home = makeHome()
     const skills = makeSkillsManager({
-      agents: makeAgentRuntime({}),
+      agents: skillTestRuntime(),
       env: {},
       homedir: home,
       overrides: {

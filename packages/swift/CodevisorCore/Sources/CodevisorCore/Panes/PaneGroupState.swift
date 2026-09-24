@@ -19,7 +19,6 @@ public enum PaneKind: String, Codable, Sendable {
   case plugin
   /// A file on the workspace’s machine. The persisted name retains compatibility with document panes.
   case document
-  case browser
   case screenSharing
 }
 
@@ -53,7 +52,6 @@ public struct PaneDescriptorState: Identifiable, Codable, Sendable, Equatable {
   /// Plugin panes only: which of the plugin's pane types this renders.
   public var pluginPaneType: String?
   public var screenSharing: ScreenSharingPanePreferences?
-  public var browserURL: String?
   public var documentPath: String?
   /// Every pane moves between groups alike — tabs are tabs (the only
   /// rule with real stakes is the CLOSE rule: a lone placeholder only
@@ -72,7 +70,6 @@ public struct PaneDescriptorState: Identifiable, Codable, Sendable, Equatable {
     pluginId: String? = nil,
     pluginPaneType: String? = nil,
     documentPath: String? = nil,
-    browserURL: String? = nil,
     screenSharing: ScreenSharingPanePreferences? = nil
   ) {
     self.id = id
@@ -85,7 +82,6 @@ public struct PaneDescriptorState: Identifiable, Codable, Sendable, Equatable {
     self.pluginId = pluginId
     self.pluginPaneType = pluginPaneType
     self.documentPath = documentPath
-    self.browserURL = browserURL
     self.screenSharing = screenSharing
   }
 
@@ -109,7 +105,6 @@ public struct PaneDescriptorState: Identifiable, Codable, Sendable, Equatable {
       pluginId: try container.decodeIfPresent(String.self, forKey: .pluginId),
       pluginPaneType: try container.decodeIfPresent(String.self, forKey: .pluginPaneType),
       documentPath: try container.decodeIfPresent(String.self, forKey: .documentPath),
-      browserURL: try container.decodeIfPresent(String.self, forKey: .browserURL),
       screenSharing: try container.decodeIfPresent(ScreenSharingPanePreferences.self, forKey: .screenSharing)
     )
   }
@@ -349,10 +344,6 @@ public struct PaneGroupState: Codable, Sendable, Equatable {
         )
       else { return nil }
       pane = converted
-    case .browser:
-      pane = PaneDescriptorState(
-        id: paneId, kind: .browser, name: "Browser",
-        terminalKey: paneId.uuidString, browserURL: "https://www.google.com/")
     case .screenSharing:
       pane = PaneDescriptorState(
         id: paneId, kind: .screenSharing, name: "Screen Sharing",

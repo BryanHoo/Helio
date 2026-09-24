@@ -489,11 +489,6 @@ extension FakeSessionServerClient {
     lock.withLock { _runtimeRequests.append("mode:\(modeId)") }
   }
 
-  func installDevelopmentBrowserExtension() async throws -> ServerBrowserUseConfiguration {
-    lock.withLock { _configUpdates.append(("browser-extension-installer", "open")) }
-    return .init(chromeAvailable: true, chromeConnected: false, managedAvailable: true)
-  }
-
   func setSessionConfig(id: UUID, configId: String, value: String) async throws {
     let (gate, shouldFail) = lock.withLock {
       _runtimeRequests.append("config:\(configId):\(value)")

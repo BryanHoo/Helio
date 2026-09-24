@@ -1,19 +1,16 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 
-import type { QuestionAnswer, RuntimeEventSink } from "@codevisor/agent-runtime"
+import type { RuntimeEventSink } from "@codevisor/agent-runtime"
 import type {
-  BrowserPreference,
-  BrowserUseConfiguration,
   CreateMcpServerRequest,
   McpAuthDetection,
   McpServer,
   McpTool,
   UpdateMcpServerRequest
 } from "@codevisor/api"
-import type { AutomationToolProvider, BrowserUseProvider } from "@codevisor/automation"
+import type { AutomationToolProvider } from "@codevisor/automation"
 import type { CodevisorDatabaseService } from "@codevisor/db"
 import type { ManagedSkillSpec } from "@codevisor/skills"
-import type WebSocket from "ws"
 
 import type { ToolGatewayConfig } from "./mcp-gateway.js"
 import type { PluginToolSource } from "./mcp-plugin-tools.js"
@@ -95,24 +92,6 @@ export interface McpManager {
     projectId?: string,
     sink?: RuntimeEventSink
   ) => Promise<ToolGatewayConfig>
-  readonly answerQuestion: (
-    sessionId: string,
-    questionId: string,
-    answer: QuestionAnswer
-  ) => Promise<boolean>
-  readonly acceptBrowserExtension: (socket: WebSocket) => void
-  readonly browserConfiguration: () => Promise<BrowserUseConfiguration>
-  readonly setBrowserPreference: (
-    preference: BrowserPreference | undefined
-  ) => Promise<BrowserUseConfiguration>
-  readonly openBrowserExtensionInstaller: () => Promise<BrowserUseConfiguration>
-  readonly openBrowserExtensionFolder: () => Promise<BrowserUseConfiguration>
-  readonly openBrowserExtensionsPage: () => Promise<BrowserUseConfiguration>
-  readonly openBrowserExtensionWebStore: () => Promise<BrowserUseConfiguration>
-  readonly browserExtensionArchive: () => string
-  readonly browserExtensionIcon: () => string
-  readonly finishTurn: (sessionId: string) => Promise<void>
-  readonly beginTurn: (sessionId: string) => Promise<void>
   readonly closeSession: (sessionId: string) => Promise<void>
   readonly handleGatewayRequest: (
     request: IncomingMessage,
@@ -128,17 +107,12 @@ export interface McpManagerConfig {
   /// ownership (exactly one machine rotates a server's tokens; the rest
   /// mirror them through config sync). Defaults to "local".
   readonly serverId?: string
-  /// The server's --kind. Remote-kind servers cannot launch the local Chrome
-  /// installer from Settings; composer setup can still hand the user off to
-  /// the app running on that machine. Defaults to "local".
-  readonly serverKind?: "local" | "remote"
   readonly syncManagedSkills?: (skills: ReadonlyArray<ManagedSkillSpec>) => Promise<void>
   /// Installed plugins' declared agent tools, exposed through the gateway as
   /// server "plugin" (`plugin.<pluginId>.<toolName>` paths). The server wires
   /// the plugins manager in directly — the structural PluginToolSource seam
   /// keeps this package free of a @codevisor/plugins dependency.
   readonly pluginTools?: PluginToolSource
-  readonly makeBrowserProvider?: (() => BrowserUseProvider) | undefined
   readonly makeComputerProvider?:
     | (() => AutomationToolProvider & {
         readonly ensureSetup: () => Promise<void>

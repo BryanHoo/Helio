@@ -3,11 +3,38 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { makeAgentRuntime } from "@codevisor/agent-runtime"
+import type { HarnessDefinition } from "@codevisor/agent-runtime"
 
 import { makeSkillsManager } from "./skills-manager.js"
 import type { SkillsManager } from "./skills-manager.js"
 
 export const directories: string[] = []
+
+// 测试独立目录与共享 canonical store；正式目录不包含这些夹具。
+const legacySkillHarnesses: ReadonlyArray<HarnessDefinition> = [
+  {
+    id: "opencode",
+    name: "OpenCode",
+    symbolName: "terminal",
+    detectBinaries: [],
+    provider: "codex",
+    skills: { globalDir: "~/.config/opencode/skills", alsoReadsCanonical: true }
+  },
+  {
+    id: "cline",
+    name: "Cline",
+    symbolName: "terminal",
+    detectBinaries: [],
+    provider: "codex",
+    skills: { globalDir: "~/.agents/skills", readsCanonical: true }
+  }
+]
+
+export const skillTestRuntime = () => {
+  const agents = makeAgentRuntime({})
+  agents.setExtraHarnesses(legacySkillHarnesses)
+  return agents
+}
 
 export const cleanupSkillsTests = (): void => {
   for (const directory of directories.splice(0)) {
@@ -36,7 +63,7 @@ export const writeSkill = (
 export const manager = (
   home: string,
   env: Record<string, string | undefined> = {}
-): SkillsManager => makeSkillsManager({ agents: makeAgentRuntime({}), env, homedir: home })
+): SkillsManager => makeSkillsManager({ agents: skillTestRuntime(), env, homedir: home })
 
 export const globalSkill = (
   scan: Awaited<ReturnType<SkillsManager["list"]>>,

@@ -380,7 +380,7 @@ struct UpdateCenterTests {
 /// Grouping, row text, and the pre-sweep probe: kept in an extension so the
 /// suite stays within the type-body budget.
 extension UpdateCenterTests {
-  @Test("Machine groups put each machine's Codevisor first, then harnesses, then plugins")
+  @Test("Machine groups put each machine's Helio first, then harnesses, then plugins")
   func machineGroups() async throws {
     let remote = makeRemote("remote-a")
     let fake = SyncFakeServerClient(projects: [], sessions: [])
@@ -400,14 +400,14 @@ extension UpdateCenterTests {
 
     let groups = center.machineGroups
     #expect(groups.map(\.id) == ["local", "remote-a"])
-    // Each machine's Codevisor is the section itself, never one of its rows.
+    // Each machine's Helio is the section itself, never one of its rows.
     #expect(groups.first?.isLocal == true)
     #expect(groups.first?.codevisor?.kind == .app)
-    #expect(groups.first?.codevisor?.title == "Codevisor")
+    #expect(groups.first?.codevisor?.title == "Helio")
     #expect(groups.first?.codevisor?.detailText == "1.0.0")
     #expect(groups.first?.components.isEmpty == true)
     #expect(groups.last?.codevisor?.kind == .server)
-    #expect(groups.last?.codevisor?.title == "Codevisor")
+    #expect(groups.last?.codevisor?.title == "Helio")
     #expect(groups.last?.codevisor?.detailText == "0.1.0 → 0.2.0")
     #expect(groups.last?.components.map(\.kind) == [.harness, .plugin])
     // The Codevisor update counts toward the machine's total.

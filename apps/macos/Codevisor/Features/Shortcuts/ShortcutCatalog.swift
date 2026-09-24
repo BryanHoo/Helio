@@ -30,11 +30,6 @@ enum ShortcutID: String, CaseIterable, Identifiable, Sendable {
   // View
   case toggleDebugOverlay
 
-  // Browser
-  case browserZoomIn
-  case browserZoomOut
-  case browserResetZoom
-
   // Composer
   case composerSend
   case composerNewline
@@ -55,7 +50,6 @@ enum ShortcutCategory: String, CaseIterable, Identifiable, Sendable {
   case chats = "Chats"
   case tabsAndSplits = "Tabs & Splits"
   case view = "View"
-  case browser = "Browser"
   case composer = "Composer"
   case questionPicker = "Question Picker"
 
@@ -178,19 +172,6 @@ enum ShortcutCatalog {
     case .toggleDebugOverlay:
       ShortcutDefinition(
         .toggleDebugOverlay, "Toggle Debug Overlay", ShortcutCombo("`", .command), category: .view)
-
-    case .browserZoomIn:
-      ShortcutDefinition(
-        .browserZoomIn, "Zoom In", ShortcutCombo("=", .command),
-        displayOverride: "⌘+ / ⌘=", category: .browser, context: "While browsing")
-    case .browserZoomOut:
-      ShortcutDefinition(
-        .browserZoomOut, "Zoom Out", ShortcutCombo("-", .command), category: .browser,
-        context: "While browsing")
-    case .browserResetZoom:
-      ShortcutDefinition(
-        .browserResetZoom, "Reset Zoom", ShortcutCombo("0", .command), category: .browser,
-        context: "While browsing")
 
     case .composerSend:
       ShortcutDefinition(

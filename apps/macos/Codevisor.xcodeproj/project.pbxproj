@@ -42,27 +42,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		CEF000000000000000000003 /* Exceptions for disabled Chromium sources */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				"Chromium/ChromiumAutomationBridge.swift",
-				"Chromium/ChromiumBridge.h",
-				"Chromium/ChromiumBridge.mm",
-				"Chromium/ChromiumBrowserModel.swift",
-				"Chromium/ChromiumBrowserPaneView.swift",
-				"Chromium/ChromiumBrowserToolbar.swift",
-				"Chromium/ChromiumBrowserWindow.swift",
-				"Chromium/ChromiumBrowserZoomControls.swift",
-				"Chromium/ChromiumBrowserZoomPopover.swift",
-				"Chromium/ChromiumFavicon.h",
-				"Chromium/ChromiumFavicon.mm",
-				"Chromium/ChromiumProfiles.swift",
-				"Chromium/ChromiumToolbarHost.swift",
-				"Chromium/ChromiumViewport.swift",
-				"Codevisor-Bridging-Header.h",
-			);
-			target = 000000000000000100000000 /* Codevisor */;
-		};
 		CEF000000000000000000004 /* LaunchAgent installed by build phase */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -76,7 +55,6 @@
 		000000000000000000000010 /* Codevisor */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				CEF000000000000000000003 /* Exceptions for disabled Chromium sources */,
 				CEF000000000000000000004 /* LaunchAgent installed by build phase */,
 			);
 			path = Codevisor;

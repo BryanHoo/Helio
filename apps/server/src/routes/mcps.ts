@@ -79,7 +79,7 @@ export const routeMcps = async (
   if (id !== undefined) {
     if (request.method === "PATCH") {
       const update = await readSchema(request, UpdateMcpServerRequestSchema)
-      if (["browser", "computer"].includes(id)) {
+      if (id === "computer") {
         const unsupported = Object.keys(update).filter((key) => key !== "enabled")
         if (unsupported.length > 0) {
           throw new HttpFailure(
@@ -92,7 +92,7 @@ export const routeMcps = async (
       return true
     }
     if (request.method === "DELETE") {
-      if (["browser", "computer"].includes(id)) {
+      if (id === "computer") {
         throw new HttpFailure(409, "Built-in automation providers cannot be removed")
       }
       await manager.remove(id)

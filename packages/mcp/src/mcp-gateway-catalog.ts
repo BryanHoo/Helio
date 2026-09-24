@@ -24,7 +24,7 @@ export interface GatewayCatalogDeps {
 
 export const executeToolDescription = (inventory: string): string =>
   [
-    "Primary Codevisor tool interface. Run sandboxed JavaScript or TypeScript that discovers and composes enabled integration, Browser Use, and Computer Use tools. The isolate has no filesystem, network, process environment, or credentials.",
+    "Primary Codevisor tool interface. Run sandboxed JavaScript or TypeScript that discovers and composes enabled integration and Computer Use tools. The isolate has no filesystem, network, process environment, or credentials.",
     'Inside code, start with `await tools.search({ query: "<intent>" })`, inspect a match with `await tools.describe.tool({ path })`, then call the exact returned path with `await tools[path](args)`. Pass an async arrow function.',
     inventory
   ].join("\n\n")

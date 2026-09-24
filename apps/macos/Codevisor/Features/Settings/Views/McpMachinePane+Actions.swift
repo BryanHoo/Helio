@@ -11,7 +11,6 @@ extension McpMachinePane {
     defer { isLoading = false }
     do {
       servers = try await client.listMcpServers()
-      browserConfiguration = try? await client.browserUseConfiguration()
       errorMessage = nil
     } catch {
       errorMessage = ErrorReporter.userFacingMessage(for: error)
@@ -128,29 +127,6 @@ extension McpMachinePane {
       try? await Task.sleep(for: .seconds(2))
       await reload()
       if servers.first(where: { $0.id == server.id })?.connectionState == "connected" { break }
-    }
-  }
-
-  func setPreferredBrowser(_ preference: String) async {
-    do {
-      browserConfiguration = try await client.setPreferredBrowser(preference)
-      errorMessage = nil
-    } catch {
-      errorMessage = ErrorReporter.userFacingMessage(for: error)
-    }
-  }
-
-  func installBrowserExtension() async {
-    do {
-      browserConfiguration = try await client.installDevelopmentBrowserExtension()
-      for _ in 0..<120 {
-        try? await Task.sleep(for: .seconds(1))
-        let refreshed = try await client.browserUseConfiguration()
-        browserConfiguration = refreshed
-        if refreshed.chromeConnected { break }
-      }
-    } catch {
-      errorMessage = ErrorReporter.userFacingMessage(for: error)
     }
   }
 

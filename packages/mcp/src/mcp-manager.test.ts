@@ -25,24 +25,24 @@ describe("MCP manager", () => {
     const root = mkdtempSync(join(tmpdir(), "codevisor-packaged-skills-"))
     directories.push(root)
     const runtime = join(root, "darwin-arm64")
-    const browserSkill = join(
+    const computerSkill = join(
       runtime,
       "packages",
       "automation",
       "resources",
       "automation-skills",
-      "browser-use",
+      "computer-use",
       "SKILL.md"
     )
-    mkdirSync(join(browserSkill, ".."), { recursive: true })
-    writeFileSync(browserSkill, "# Browser Use")
+    mkdirSync(join(computerSkill, ".."), { recursive: true })
+    writeFileSync(computerSkill, "# Computer Use")
 
     expect(
-      automationSkillPath("browser", {
+      automationSkillPath({
         moduleDirectory: join(runtime, "packages", "automation", "dist"),
         workingDirectory: "/"
       })
-    ).toBe(browserSkill)
+    ).toBe(computerSkill)
   })
 
   it("handles the Streamable HTTP response variants and transport lifecycle", async () => {
@@ -162,21 +162,18 @@ describe("MCP manager", () => {
         true
       )
       expect((await manager.list()).map((server) => server.id)).toEqual([
-        "browser",
         "codevisor",
         "computer",
         created.id
       ])
       expect(await manager.list()).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ id: "browser", kind: "browserUse", canRemove: false }),
           expect.objectContaining({ id: "computer", kind: "computerUse", canEdit: false })
         ])
       )
       expect(await manager.tools(created.id)).toHaveLength(2)
       expect(await manager.tools()).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ serverId: "browser", name: "snapshot" }),
           expect.objectContaining({ serverId: "computer", name: "get_app_state" }),
           expect.objectContaining({ serverId: created.id, name: "lookup_project" })
         ])
@@ -354,11 +351,7 @@ describe("MCP manager", () => {
       ).toBe("needsAuthorization")
       await manager.update(created.id, { authType: "none", enabled: false })
       await manager.remove(created.id)
-      expect((await manager.list()).map((server) => server.id)).toEqual([
-        "browser",
-        "codevisor",
-        "computer"
-      ])
+      expect((await manager.list()).map((server) => server.id)).toEqual(["codevisor", "computer"])
     }
   )
 })

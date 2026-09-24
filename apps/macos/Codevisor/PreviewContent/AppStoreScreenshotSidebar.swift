@@ -25,8 +25,7 @@
                 SidebarWorkspaceTabRow(
                   title: row.title, kind: row.kind, isAgentOwned: false,
                   chatSession: row.session, store: store,
-                  isSelected: (scene == "conversation" && row.id == AppStoreScreenshotData.id(11))
-                    || (scene == "browser" && row.id == AppStoreScreenshotData.id(13)),
+                  isSelected: scene == "conversation" && row.id == AppStoreScreenshotData.id(11),
                   isReordering: false, titleFont: .body, onActivate: {}, onClose: {}
                 )
               }
@@ -44,7 +43,6 @@
     var kind: PaneKind {
       switch icon {
       case .chat: .chat
-      case .browser: .browser
       case .terminal: .terminal
       case .document: .document
       }

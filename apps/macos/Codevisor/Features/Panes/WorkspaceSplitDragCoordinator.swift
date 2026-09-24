@@ -251,7 +251,6 @@ struct WorkspaceSplitDragGhost: View {
     case .newTab: "square.dashed"
     case .plugin: "puzzlepiece.extension"
     case .document: "doc.richtext"
-    case .browser: "globe"
     case .screenSharing: "display"
     }
   }

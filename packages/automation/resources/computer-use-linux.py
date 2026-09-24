@@ -880,7 +880,7 @@ def perform_tool(session_id, tool, args):
                 "delivered": True,
                 "verified": False,
                 "effect": "unverifiable",
-                "next": "Confirm the effect in the returned screenshot. Prefer Browser Use for web-page content.",
+                "next": "Confirm the effect in the returned screenshot.",
             }
         else:
             raise RuntimeError(

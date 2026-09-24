@@ -67,8 +67,10 @@ extension MachineControllerTests {
       id: remoteTabId.uuidString,
       workspaceId: workspaceId.uuidString,
       providerId: "codevisor",
-      paneType: "browser",
-      title: "Browser",
+      paneType: "file",
+      title: "README.md",
+      resourceKind: "file",
+      resourceId: "/tmp/shared-panes/README.md",
       createdAt: "2026-06-30T00:00:02.000Z"
     )
     let fake = SyncFakeServerClient(

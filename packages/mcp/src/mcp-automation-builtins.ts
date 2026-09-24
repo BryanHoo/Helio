@@ -1,7 +1,6 @@
 import { dirname, join } from "node:path"
 
 import { textToolResult, type AutomationToolProvider } from "@codevisor/automation"
-import { browserUseTools, type BrowserUseProvider } from "@codevisor/automation"
 import { computerUseTools } from "@codevisor/automation"
 import { requireServerResource, type ServerResourceOptions } from "@codevisor/automation"
 import type { ManagedSkillSpec } from "@codevisor/skills"
@@ -9,18 +8,14 @@ import type { ManagedSkillSpec } from "@codevisor/skills"
 import { errorMessage } from "./mcp-support.js"
 
 export const BUILTIN_MCP_SERVERS = [
-  { id: "browser", name: "Browser Use", kind: "browserUse" as const },
   { id: "computer", name: "Computer Use", kind: "computerUse" as const },
   { id: "codevisor", name: "Codevisor", kind: "codevisor" as const }
 ] as const
 
 export type BuiltinMcpId = (typeof BUILTIN_MCP_SERVERS)[number]["id"]
 
-export const automationSkillPath = (
-  id: "browser" | "computer",
-  options: ServerResourceOptions = {}
-): string => {
-  const skillName = id === "browser" ? "browser-use" : "computer-use"
+export const automationSkillPath = (options: ServerResourceOptions = {}): string => {
+  const skillName = "computer-use"
   const relative = join("automation-skills", skillName, "SKILL.md")
   return requireServerResource(relative, `managed ${skillName} skill`, options)
 }
@@ -28,53 +23,16 @@ export const automationSkillPath = (
 export const managedAutomationSkills = (
   enabledIds: ReadonlySet<string>
 ): ReadonlyArray<ManagedSkillSpec> =>
-  (["browser", "computer"] as const).map((id) => {
+  (["computer"] as const).map((id) => {
     const enabled = enabledIds.has(id)
     return {
-      directoryName: id === "browser" ? "browser-use" : "computer-use",
+      directoryName: "computer-use",
       enabled,
       // Disabled managed skills only need their installed copies removed.
       // Do not make an absent optional resource block that cleanup.
-      sourcePath: enabled ? dirname(automationSkillPath(id)) : ""
+      sourcePath: enabled ? dirname(automationSkillPath()) : ""
     }
   })
-
-export const unavailableBrowserProvider = (cause: unknown): BrowserUseProvider => {
-  const detail = errorMessage(cause)
-  const unavailable = (): never => {
-    throw new Error(detail)
-  }
-  return {
-    id: "browser",
-    tools: browserUseTools,
-    ensureSetup: async () => unavailable(),
-    status: () => ({
-      backend: "missing",
-      error: detail,
-      extensionConnected: false,
-      chromeAvailable: false,
-      extensionSetupMode: "development"
-    }),
-    sessionBackend: () => undefined,
-    setSessionBackend: () => undefined,
-    beginTurn: async () => undefined,
-    acceptExtensionConnection: (socket) => {
-      socket.close()
-    },
-    waitForExtensionConnection: async () => unavailable(),
-    onExtensionConnectionChange: () => () => undefined,
-    openDevelopmentExtensionFolder: unavailable,
-    openDevelopmentExtensionPage: unavailable,
-    openDevelopmentExtensionInstaller: unavailable,
-    openExtensionWebStore: unavailable,
-    extensionArchivePath: unavailable,
-    extensionIconPath: unavailable,
-    configureExtensionRelay: () => undefined,
-    invoke: async () => textToolResult(detail, true),
-    closeSession: async () => undefined,
-    close: async () => undefined
-  }
-}
 
 export const unavailableComputerProvider = (
   cause: unknown

@@ -73,7 +73,6 @@ export const makeMcpServerOperations = (
 ): McpServerOperations => {
   const {
     automationProviders,
-    browserProvider,
     builtinProviderState,
     builtinsReady,
     changeListeners,
@@ -99,7 +98,6 @@ export const makeMcpServerOperations = (
     const provider = automationProviders.get(id)
     if (provider !== undefined) {
       try {
-        if (id === "browser") await browserProvider.ensureSetup()
         if (id === "computer") await computerProvider.ensureSetup()
         const current = await record(id)
         return publicServer(
@@ -111,7 +109,7 @@ export const makeMcpServerOperations = (
         )
       } catch (cause) {
         await saveRecord(await record(id), {
-          connectionState: id === "browser" ? "needsSetup" : "unavailable",
+          connectionState: "unavailable",
           toolCount: provider.tools.length,
           detail: errorMessage(cause)
         })
@@ -201,10 +199,6 @@ export const makeMcpServerOperations = (
       const provider = automationProviders.get(saved.id)!
       if (!saved.enabled) {
         await provider.close()
-      } else if (saved.id === "browser" && state.connectionState === "needsSetup") {
-        // Browser downloads can take several minutes. Keep the toggle
-        // responsive and let the settings view observe setup progress.
-        void connect(saved.id).catch(() => undefined)
       } else if (state.connectionState !== "unavailable") {
         await connect(saved.id).catch(() => undefined)
       }

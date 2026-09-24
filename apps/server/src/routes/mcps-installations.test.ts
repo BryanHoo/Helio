@@ -115,7 +115,6 @@ describe("mcp installation routes", () => {
     expect(listed.body).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id, kind: "managed", name: "Renamed" }),
-        expect.objectContaining({ id: "browser", canRemove: false, kind: "browserUse" }),
         expect.objectContaining({
           id: "codevisor",
           kind: "codevisor",
@@ -127,7 +126,9 @@ describe("mcp installation routes", () => {
         expect.objectContaining({ id: "computer", canEdit: false, kind: "computerUse" })
       ])
     )
-    expect((await jsonRequest(server, "/v1/mcps/browser", { method: "DELETE" })).status).toBe(409)
+    expect(
+      (listed.body as ReadonlyArray<McpServer>).some((server) => server.id === "browser")
+    ).toBe(false)
     expect(
       (
         await jsonRequest(server, "/v1/mcps/computer", {
@@ -144,6 +145,7 @@ describe("mcp installation routes", () => {
         })
       ).status
     ).toBe(200)
+    expect((await jsonRequest(server, "/v1/mcps/computer", { method: "DELETE" })).status).toBe(409)
 
     expect((await jsonRequest(server, `/v1/mcps/${id}`, { method: "DELETE" })).status).toBe(204)
 
@@ -251,9 +253,8 @@ describe("mcp installation routes", () => {
       ((await jsonRequest(server, "/v1/mcps")).body as ReadonlyArray<McpServer>).map(
         (candidate) => candidate.id
       )
-    ).toEqual(["browser", "codevisor", "computer"])
+    ).toEqual(["codevisor", "computer"])
 
-    const automationAnswer = vi.spyOn(services.mcp, "answerQuestion").mockResolvedValueOnce(true)
     expect(
       (
         await jsonRequest(
@@ -266,10 +267,11 @@ describe("mcp installation routes", () => {
         )
       ).status
     ).toBe(202)
-    expect(automationAnswer).toHaveBeenCalledWith(session.id, "automation-question", {
-      outcome: "cancelled"
-    })
-    expect(agents.questionAnswers).toEqual([])
+    expect(agents.questionAnswers.at(-1)).toEqual([
+      expect.any(String),
+      "automation-question",
+      { outcome: "cancelled" }
+    ])
 
     const { mcp: _mcp, ...withoutMcp } = services
     const unavailable = await startWithApp(withoutMcp)

@@ -132,9 +132,7 @@ struct WorkspaceSyncPaneMappingTests {
         createdAt: "2026-01-01T00:00:00.000Z"
       )
     }
-    let browser = WorkspaceSyncModel.descriptor(from: record(paneType: "browser", title: "Browser"))
-    #expect(browser?.kind == .browser)
-    #expect(browser?.id == id)
+    #expect(WorkspaceSyncModel.descriptor(from: record(paneType: "browser", title: "Browser")) == nil)
     // The New Tab page is device-local. A row from a client that still
     // publishes it means nothing here.
     #expect(WorkspaceSyncModel.descriptor(from: record(paneType: "new-tab", title: "New tab")) == nil)

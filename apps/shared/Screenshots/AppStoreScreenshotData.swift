@@ -150,7 +150,6 @@
         rows: [
           row(11, title, .chat(harnessId: "codex", fallbackSymbolName: "sparkle"), status: .unread),
           row(12, "Polish the mobile layout", .chat(harnessId: "claude-code", fallbackSymbolName: "sparkle")),
-          row(13, "Daylight — localhost:3000", .browser(favicon: nil)),
           row(14, "Development server", .terminal(isAgentOwned: false)),
         ]
       ),
@@ -199,7 +198,6 @@
   struct ScreenshotSidebarTabRow: Identifiable {
     enum Icon {
       case chat(harnessId: String, fallbackSymbolName: String)
-      case browser(favicon: String?)
       case terminal(isAgentOwned: Bool)
       case document
     }

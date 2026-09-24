@@ -7,10 +7,10 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   cleanupMcpManagerTests,
-  run,
-  directories,
   databases,
+  directories,
   managers,
+  run,
   testManager,
   workingUpstream
 } from "./mcp-manager-test-support.js"
@@ -19,8 +19,40 @@ import { makeMcpManager } from "./mcp-manager.js"
 afterEach(cleanupMcpManagerTests)
 
 describe("MCP manager built-in providers and suppression", () => {
+  it("does not register Browser Use while retaining the other built-ins", async () => {
+    const { manager } = await testManager()
+    const servers = await manager.list()
+    expect(servers.map((server) => server.id)).toContain("computer")
+    expect(servers.map((server) => server.id)).toContain("codevisor")
+    expect(servers.map((server) => server.id)).not.toContain("browser")
+  })
+  it("removes a previously registered browser provider on startup", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "codevisor-retired-browser-"))
+    directories.push(directory)
+    const db = await run(
+      makeDatabase({ filename: join(directory, "codevisor.sqlite"), serverId: "test" })
+    )
+    databases.push(db)
+    await run(
+      db.saveMcpServer({
+        id: "browser",
+        name: "Browser Use",
+        kind: "browserUse",
+        transport: "stdio",
+        args: [],
+        enabled: true,
+        authType: "none",
+        connectionState: "connected",
+        toolCount: 40
+      })
+    )
+    const manager = makeMcpManager({ db, dataDir: directory })
+    managers.push(manager)
+
+    expect((await manager.list()).map((server) => server.id)).toEqual(["codevisor", "computer"])
+    expect(await run(db.getMcpServer("browser"))).toBeUndefined()
+  })
   it.each([
-    ["browser", "browserUse"],
     ["computer", "computerUse"],
     ["codevisor", "codevisor"]
   ])("keeps %s immutable but disableable", async (id, kind) => {
@@ -44,50 +76,10 @@ describe("MCP manager built-in providers and suppression", () => {
       synchronized.push(skills.map(({ directoryName, enabled }) => ({ directoryName, enabled })))
     })
     await manager.list()
-    expect(synchronized.at(-1)).toEqual([
-      { directoryName: "browser-use", enabled: true },
-      { directoryName: "computer-use", enabled: true }
-    ])
+    expect(synchronized.at(-1)).toEqual([{ directoryName: "computer-use", enabled: true }])
 
     await manager.update("computer", { enabled: false })
-    expect(synchronized.at(-1)).toEqual([
-      { directoryName: "browser-use", enabled: true },
-      { directoryName: "computer-use", enabled: false }
-    ])
-  })
-
-  it("keeps a Browser Use provider startup failure scoped to Browser Use", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "codevisor-browser-provider-failure-"))
-    directories.push(directory)
-    const db = await run(
-      makeDatabase({ filename: join(directory, "codevisor.sqlite"), serverId: "test" })
-    )
-    databases.push(db)
-    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined)
-    const manager = makeMcpManager({
-      db,
-      dataDir: directory,
-      makeBrowserProvider: () => {
-        throw new Error("extension archive is unreadable")
-      }
-    })
-    managers.push(manager)
-
-    await expect(manager.list()).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "browser",
-          connectionState: "needsSetup",
-          detail: "extension archive is unreadable"
-        }),
-        expect.objectContaining({ id: "computer" })
-      ])
-    )
-    await expect(manager.browserConfiguration()).resolves.toMatchObject({
-      chromeConnected: false,
-      managedAvailable: false
-    })
-    expect(errors).toHaveBeenCalledWith("Browser Use unavailable: extension archive is unreadable")
+    expect(synchronized.at(-1)).toEqual([{ directoryName: "computer-use", enabled: false }])
   })
 
   it("contains managed-skill synchronization failures", async () => {
@@ -97,10 +89,7 @@ describe("MCP manager built-in providers and suppression", () => {
     })
 
     await expect(manager.list()).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: "browser" }),
-        expect.objectContaining({ id: "computer" })
-      ])
+      expect.arrayContaining([expect.objectContaining({ id: "computer" })])
     )
     expect(errors).toHaveBeenCalledWith(
       "Built-in MCP initialization failed: managed skill directory is read-only"

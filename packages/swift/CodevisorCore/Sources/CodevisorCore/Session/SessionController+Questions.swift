@@ -51,43 +51,6 @@ extension SessionController {
     await model?.cancelQuestion()
   }
 
-  /// Opens one browser-extension setup destination without resolving the
-  /// blocking agent question. These are utility actions, so the composer
-  /// must remain mounted while Chrome or Finder opens.
-  public func performBrowserExtensionSetupAction(_ action: String) async {
-    guard let serverClient else { return }
-    do {
-      switch action {
-      case "Open Extensions":
-        _ = try await serverClient.openBrowserExtensionsPage()
-      case "Show Folder":
-        _ = try await serverClient.openBrowserExtensionFolder()
-      case "Open Web Store":
-        _ = try await serverClient.openBrowserExtensionWebStore()
-      default:
-        return
-      }
-    } catch {
-      Log.server.error(
-        "Failed to open browser extension setup destination: \(String(describing: error), privacy: .public)"
-      )
-    }
-  }
-
-  public func browserExtensionArchive() async throws -> URL {
-    guard let serverClient else {
-      throw CodevisorServerClientError.invalidResponse
-    }
-    return try await serverClient.browserExtensionArchive()
-  }
-
-  public func browserExtensionIcon() async throws -> URL {
-    guard let serverClient else {
-      throw CodevisorServerClientError.invalidResponse
-    }
-    return try await serverClient.browserExtensionIcon()
-  }
-
   // MARK: - Codex plan approval
 
   /// Only harnesses that propose plans without a blocking approval tool use

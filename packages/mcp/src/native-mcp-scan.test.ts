@@ -2,7 +2,6 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { makeAgentRuntime } from "@codevisor/agent-runtime"
 import { makeDatabase } from "@codevisor/db"
 import { afterEach, describe, expect, it } from "vitest"
 
@@ -16,7 +15,8 @@ import {
   HOME,
   fakeMcp,
   testManager,
-  harnessGroup
+  harnessGroup,
+  nativeMcpTestRuntime
 } from "./native-mcp-test-support.js"
 
 afterEach(cleanupNativeMcpTests)
@@ -31,7 +31,7 @@ describe("makeNativeMcpManager", () => {
     databases.push(db)
     const { mcp } = fakeMcp(db)
     expect(
-      makeNativeMcpManager({ agents: makeAgentRuntime({}), dataDir: directory, db, mcp })
+      makeNativeMcpManager({ agents: nativeMcpTestRuntime(), dataDir: directory, db, mcp })
     ).toBeDefined()
   })
 
@@ -50,6 +50,24 @@ describe("makeNativeMcpManager", () => {
       expect(harness.error).toBeUndefined()
     }
     expect(scan.candidates).toEqual([])
+  })
+
+  it("skips a custom harness without native MCP configuration", async () => {
+    const agents = nativeMcpTestRuntime()
+    agents.setExtraHarnesses([
+      {
+        id: "plain",
+        name: "Plain",
+        provider: "codex",
+        symbolName: "terminal",
+        detectBinaries: []
+      }
+    ])
+    // 通过已有扫描器的 runtime 注入入口验证缺失元数据，而非添加生产 catalog 条目。
+    const { manager } = await testManager({}, {}, {}, agents)
+    expect((await manager.scan()).harnesses.some(({ harnessId }) => harnessId === "plain")).toBe(
+      false
+    )
   })
 
   it("scans claude-code global servers and exposes secret names only", async () => {
@@ -324,7 +342,7 @@ command = "docs-mcp"
     )
     databases.push(db)
     const manager = makeNativeMcpManager({
-      agents: makeAgentRuntime({}),
+      agents: nativeMcpTestRuntime(),
       dataDir: directory,
       db,
       env: {},

@@ -158,8 +158,6 @@ final class PaneGroupModel: Identifiable {
     if let existing = live[descriptor.id] { return existing }
     let pane: any Pane
     switch descriptor.kind {
-    case .browser:
-      pane = BrowserPane(descriptor: descriptor)
     case .screenSharing:
       let sharing = ScreenSharingPane(context: makeContext(descriptor), descriptor: descriptor)
       wireScreenSharing(sharing)
@@ -243,7 +241,7 @@ final class PaneGroupModel: Identifiable {
           self.pendingNewTabFocus = paneId
           self.requestBackgroundFocus?()
         }
-      case .terminal, .plugin, .document, .browser, .screenSharing:
+      case .terminal, .plugin, .document, .screenSharing:
         break
       }
     }
@@ -420,8 +418,6 @@ final class PaneGroupModel: Identifiable {
       return previous.pluginId != next.pluginId
         || previous.pluginPaneType != next.pluginPaneType
     case (.screenSharing, .screenSharing):
-      return false
-    case (.browser, .browser):
       return false
     case (.document, .document):
       return previous.documentPath != next.documentPath

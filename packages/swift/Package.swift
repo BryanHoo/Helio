@@ -343,8 +343,7 @@ let package = Package(
       ],
       path: "CodevisorUI/Sources/CodevisorUI",
       resources: [
-        .copy("Resources/plugin-bridge.js"), .copy("Resources/BrowserRouting"),
-        .copy("Resources/browser-navigation.js"),
+        .copy("Resources/plugin-bridge.js"),
         .process("Resources/FileIcons.xcassets"), .copy("Resources/FileIcons"),
       ],
       swiftSettings: [.swiftLanguageMode(.v6)]

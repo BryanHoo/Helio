@@ -97,10 +97,6 @@ extension SessionContainerView {
         terminalKey: paneId.uuidString,
         pluginId: closed.pluginId, pluginPaneType: closed.pluginPaneType
       )
-    case .browser:
-      return PaneDescriptorState(
-        id: paneId, kind: .browser, name: closed.name,
-        terminalKey: paneId.uuidString, browserURL: closed.browserURL)
     case .screenSharing:
       return PaneDescriptorState(
         id: paneId, kind: .screenSharing, name: closed.name,

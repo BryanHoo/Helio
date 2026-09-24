@@ -8,7 +8,7 @@ export type McpContent = CallToolResult["content"][number]
 export interface SandboxArtifactInput {
   readonly data: Buffer
   readonly mimeType: string
-  /// The tool path that produced the bytes, e.g. `browser.screenshot`; names the stored file.
+  /// The tool path that produced the bytes, e.g. `computer.screenshot`; names the stored file.
   readonly toolPath: string
 }
 
@@ -114,7 +114,7 @@ const callToolErrorMessage = (result: CallToolResult): string => {
   return messages.join("\n") || "Tool call failed"
 }
 
-/// Native Computer Use and browser-client methods reject their promises on a
+/// Native Computer Use methods reject their promises on a
 /// failed action. Mirror that behavior inside execute instead of handing the
 /// model a truthy `{ isError: true }` object that it can accidentally ignore.
 export const sandboxSuccessfulToolResult = async (

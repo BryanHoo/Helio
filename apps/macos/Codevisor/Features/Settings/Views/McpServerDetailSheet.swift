@@ -138,7 +138,7 @@ struct McpServerDetailSheet: View {
     switch server.connectionState {
     case "connected": return "Connected · \(server.toolCount) tool\(server.toolCount == 1 ? "" : "s")"
     case "connecting": return "Connecting…"
-    case "needsSetup": return server.detail ?? "Browser setup required"
+    case "needsSetup": return server.detail ?? "Setup required"
     case "unavailable": return server.detail ?? "Unavailable on this machine"
     case "needsAuthorization": return "Authorization required"
     case "expired": return "Sign-in expired"

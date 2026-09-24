@@ -7,8 +7,6 @@ import type { ServerUpdateChannel } from "@codevisor/updater"
 
 import { applyAfterDrain } from "./apply-after-drain.js"
 import { readTailnetPeers } from "./infra/tailnet.js"
-import { routeBrowserState } from "./routes/browser-state.js"
-import { routeBrowserUse } from "./routes/browser-use.js"
 import { routeClientControl } from "./routes/client-control.js"
 import { routeCloud } from "./routes/cloud.js"
 import { handleEvents } from "./routes/events.js"
@@ -58,13 +56,6 @@ export const handleRequest = async (
   response: ServerResponse
 ): Promise<void> => {
   try {
-    // Absolute-form requests belong to the browser proxy, even when their path
-    // resembles a control API endpoint. Never pass them through loopback auth.
-    if (isBrowserProxyRequest(request)) {
-      if (routeState.browserProxy) routeState.browserProxy.handleHTTP(request, response)
-      else response.writeHead(501).end()
-      return
-    }
     const url = parseRequestUrl(request)
     if (url.pathname === "/harness/provider-token") {
       if (!services.sharedAccounts) throw new HttpFailure(501, "Account gateway unavailable")
@@ -176,19 +167,6 @@ export const handleRequest = async (
 
     if (await routeScreenSharing(services, config, request, response, url)) return
 
-    if (await routeBrowserState(services, request, response, url)) return
-
-    if (request.method === "POST" && url.pathname === "/v1/browser/proxy-session") {
-      // Native clients carry no Origin. A website must not mint capabilities
-      // through the local API's trusted-loopback exception.
-      if (request.headers.origin !== undefined) throw new HttpFailure(403, "Native clients only")
-      if (routeState.browserProxy === undefined)
-        throw new HttpFailure(501, "Browser proxy unavailable")
-      response.setHeader("Cache-Control", "no-store")
-      writeJson(response, 201, routeState.browserProxy.session)
-      return
-    }
-
     if (request.method === "GET" && url.pathname === "/v1/events/cursor") {
       writeJson(response, 200, { cursor: await run(services.db.latestEventCursor) })
       return
@@ -220,9 +198,6 @@ export const handleRequest = async (
         platform: process.platform,
         bindHost: config.host,
         features: [
-          "browser-proxy-v1",
-          "browser-http-proxy-v1",
-          "browser-state-v1",
           ...(config.screenSharing === undefined
             ? []
             : ["screen-sharing-v1", "computer-use-stream-v1"]),
@@ -381,9 +356,6 @@ export const handleRequest = async (
     if (await routeHarnesses(services, config, fanout, request, response, url)) {
       return
     }
-    if (await routeBrowserUse(services, request, response, url)) {
-      return
-    }
     if (await routeMachineMcps(services, config, fanout, request, response, url)) {
       return
     }
@@ -497,4 +469,3 @@ const publishUpdateChanged = (
   routeState.updateSignature.value = signature
   void appendAndPublish(services.db, fanout, "update.changed", "server", info).catch(swallowError)
 }
-import { isBrowserProxyRequest } from "./infra/browser-forward-proxy.js"

@@ -193,10 +193,15 @@ it("lists hidden entries and directories while skipping dangling and nonregular 
   fs.rmSync(join(root, "folder"), { recursive: true })
   fs.rmSync(join(root, ".hidden"))
   fs.rmSync(join(root, "broken"))
-  vi.mocked(fs.statSync).mockReturnValueOnce({
+  const statSync = vi.mocked(fs.statSync)
+  const originalStatSync = statSync.getMockImplementation()!
+  const unsupported = {
     isDirectory: () => false,
     isFile: () => false
-  } as fs.Stats)
+  } as fs.Stats
+  statSync.mockImplementation((path) =>
+    path === join(root, "file.txt") ? unsupported : originalStatSync(path)
+  )
   expect((await invoke(endpoint("entries", root))).body.entries).toEqual([])
 })
 

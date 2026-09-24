@@ -13,14 +13,11 @@ final class AppStoreScreenshotTests: XCTestCase {
       XCUIDevice.shared.orientation = .portrait
     #endif
     let appearance = ProcessInfo.processInfo.environment["CODEVISOR_SCREENSHOT_APPEARANCE"] ?? "light"
-    var scenes = [
+    let scenes = [
       ("projects", "01-projects", "portfolio"),
       ("conversation", "02-conversation", "The focus timer is ready to try."),
       ("new-chat", "03-new-chat", "portfolio"),
     ]
-    #if os(iOS)
-      scenes.append(("browser", "04-browser", "Start focus"))
-    #endif
     for (scene, name, marker) in scenes {
       let app = XCUIApplication()
       app.launchEnvironment["CODEVISOR_APP_STORE_SCREENSHOTS"] = "1"

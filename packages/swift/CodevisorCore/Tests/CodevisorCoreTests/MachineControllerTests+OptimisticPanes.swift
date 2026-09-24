@@ -298,10 +298,9 @@ extension MachineControllerTests {
     let repository = DefaultWorkspaceRepository(store: InMemoryStore())
     let pane = PaneDescriptorState(
       id: paneId,
-      kind: .browser,
-      name: "Browser",
-      terminalKey: paneId.uuidString,
-      browserURL: "https://example.com/"
+      kind: .screenSharing,
+      name: "Screen Sharing",
+      terminalKey: paneId.uuidString
     )
     let replacement = PaneDescriptorState(
       id: paneId,

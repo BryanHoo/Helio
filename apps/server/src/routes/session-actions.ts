@@ -425,17 +425,13 @@ export const routeSessionActions = async (
           outcome: payload.outcome,
           ...(payload.answers === undefined ? {} : { answers: payload.answers })
         }
-        const handledByAutomation =
-          (await services.mcp?.answerQuestion(answerSessionId, questionId, answer)) ?? false
-        if (!handledByAutomation) {
-          const agentSession = await ensureAgentSessionFor(
-            services,
-            fanout,
-            config.id,
-            answerSessionId
-          )
-          await run(services.agents.answerQuestion(agentSession.sessionId, questionId, answer))
-        }
+        const agentSession = await ensureAgentSessionFor(
+          services,
+          fanout,
+          config.id,
+          answerSessionId
+        )
+        await run(services.agents.answerQuestion(agentSession.sessionId, questionId, answer))
         return { outcome: payload.outcome, questionId }
       }
     )

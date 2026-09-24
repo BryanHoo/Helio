@@ -6,7 +6,7 @@ import Testing
 struct ClientControlTests {
   private func fixture() -> (DefaultWorkspaceRepository, Workspace, UUID) {
     let pane = PaneDescriptorState(
-      id: UUID(), kind: .browser, name: "Docs", terminalKey: "browser"
+      id: UUID(), kind: .screenSharing, name: "Screen", terminalKey: "screen"
     )
     let tabs = [
       WorkspaceTab(root: .leaf(.centerInitial(sessionId: UUID()))),

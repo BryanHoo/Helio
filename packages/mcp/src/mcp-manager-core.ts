@@ -2,8 +2,6 @@ import { createHash } from "node:crypto"
 
 import type { McpConnectionState, McpServer } from "@codevisor/api"
 import {
-  makeBrowserSetupBroker,
-  makeBrowserUseProvider,
   makeCodeExecutor,
   makeCodevisorProvider,
   makeComputerUseProvider,
@@ -16,7 +14,6 @@ import {
   type BuiltinMcpId,
   initializeAutomationProvider,
   managedAutomationSkills,
-  unavailableBrowserProvider,
   unavailableComputerProvider
 } from "./mcp-automation-builtins.js"
 import type { GatewayRuntime } from "./mcp-gateway.js"
@@ -81,11 +78,6 @@ export const makeMcpManagerCore = (config: McpManagerConfig) => {
     memoryLimitBytes: 64 * 1024 * 1024,
     maxStackSizeBytes: 1024 * 1024
   })
-  const browserProvider = initializeAutomationProvider(
-    "Browser Use",
-    config.makeBrowserProvider ?? (() => makeBrowserUseProvider(config.dataDir, config.db)),
-    unavailableBrowserProvider
-  )
   const computerProvider = initializeAutomationProvider(
     "Computer Use",
     config.makeComputerProvider ?? (() => makeComputerUseProvider(config.dataDir)),
@@ -96,26 +88,15 @@ export const makeMcpManagerCore = (config: McpManagerConfig) => {
     () => run(config.db.getOrCreateConnectionToken)
   )
   const automationProviders = new Map<string, AutomationToolProvider>([
-    [browserProvider.id, browserProvider],
     [computerProvider.id, computerProvider],
     [codevisorProvider.id, codevisorProvider]
   ])
-  const extensionFlowSupported = config.serverKind !== "remote"
-  const browserSetupBroker = makeBrowserSetupBroker(config.db, browserProvider)
   const builtinProviderState = (
     id: BuiltinMcpId,
     enabled: boolean
   ): { readonly connectionState: McpConnectionState; readonly detail?: string } => {
     if (!enabled) return { connectionState: "disconnected" }
     if (id === "codevisor") return { connectionState: "connected" }
-    if (id === "browser") {
-      const status = browserProvider.status()
-      if (status.backend !== "missing") return { connectionState: "connected" }
-      return {
-        connectionState: "needsSetup",
-        ...(typeof status.error === "string" ? { detail: status.error } : {})
-      }
-    }
     const status = computerProvider.status()
     if (status.available === true) return { connectionState: "connected" }
     return {
@@ -154,51 +135,60 @@ export const makeMcpManagerCore = (config: McpManagerConfig) => {
     }
   }
 
-  const builtinsReady = Promise.all(
-    BUILTIN_MCP_SERVERS.map(async (builtin) => {
-      const provider = automationProviders.get(builtin.id)!
-      const existing = await run(config.db.getMcpServer(builtin.id))
-      if (existing !== undefined) {
-        if (existing.kind !== builtin.kind) {
-          throw new Error(`Reserved built-in MCP id is already in use: ${builtin.id}`)
-        }
-        const state = builtinProviderState(builtin.id, existing.enabled)
-        return run(
-          config.db.saveMcpServer({
-            id: existing.id,
-            name: existing.name,
-            kind: existing.kind,
-            transport: existing.transport,
-            ...(existing.url === undefined ? {} : { url: existing.url }),
-            ...(existing.command === undefined ? {} : { command: existing.command }),
-            args: existing.args,
-            enabled: existing.enabled,
-            authType: existing.authType,
-            ...(existing.oauthScope === undefined ? {} : { oauthScope: existing.oauthScope }),
-            connectionState: state.connectionState,
-            toolCount: provider.tools.length,
-            ...(state.detail === undefined ? {} : { detail: state.detail }),
-            ...(existing.secretCipher === undefined ? {} : { secretCipher: existing.secretCipher })
-          })
-        )
-      }
-      const state = builtinProviderState(builtin.id, true)
-      return run(
-        config.db.saveMcpServer({
-          ...builtin,
-          // Internal providers never spawn this transport. Keeping a valid
-          // transport value preserves the existing external MCP wire schema.
-          transport: "stdio",
-          args: [],
-          enabled: true,
-          authType: "none",
-          connectionState: state.connectionState,
-          toolCount: provider.tools.length,
-          ...(state.detail === undefined ? {} : { detail: state.detail })
+  // Remove the previously persisted built-in before publishing the current roster.
+  const builtinsReady = run(config.db.getMcpServer("browser"))
+    .then((legacy) =>
+      legacy?.kind === "browserUse" ? run(config.db.deleteMcpServer("browser")) : undefined
+    )
+    .then(() =>
+      Promise.all(
+        BUILTIN_MCP_SERVERS.map(async (builtin) => {
+          const provider = automationProviders.get(builtin.id)!
+          const existing = await run(config.db.getMcpServer(builtin.id))
+          if (existing !== undefined) {
+            if (existing.kind !== builtin.kind) {
+              throw new Error(`Reserved built-in MCP id is already in use: ${builtin.id}`)
+            }
+            const state = builtinProviderState(builtin.id, existing.enabled)
+            return run(
+              config.db.saveMcpServer({
+                id: existing.id,
+                name: existing.name,
+                kind: existing.kind,
+                transport: existing.transport,
+                ...(existing.url === undefined ? {} : { url: existing.url }),
+                ...(existing.command === undefined ? {} : { command: existing.command }),
+                args: existing.args,
+                enabled: existing.enabled,
+                authType: existing.authType,
+                ...(existing.oauthScope === undefined ? {} : { oauthScope: existing.oauthScope }),
+                connectionState: state.connectionState,
+                toolCount: provider.tools.length,
+                ...(state.detail === undefined ? {} : { detail: state.detail }),
+                ...(existing.secretCipher === undefined
+                  ? {}
+                  : { secretCipher: existing.secretCipher })
+              })
+            )
+          }
+          const state = builtinProviderState(builtin.id, true)
+          return run(
+            config.db.saveMcpServer({
+              ...builtin,
+              // Internal providers never spawn this transport. Keeping a valid
+              // transport value preserves the existing external MCP wire schema.
+              transport: "stdio",
+              args: [],
+              enabled: true,
+              authType: "none",
+              connectionState: state.connectionState,
+              toolCount: provider.tools.length,
+              ...(state.detail === undefined ? {} : { detail: state.detail })
+            })
+          )
         })
       )
-    })
-  )
+    )
     .then(syncManagedAutomationSkills)
     .catch((cause: unknown) => {
       // Built-in MCP registration and managed-skill installation are optional
@@ -339,8 +329,6 @@ export const makeMcpManagerCore = (config: McpManagerConfig) => {
 
   return {
     automationProviders,
-    browserProvider,
-    browserSetupBroker,
     builtinProviderState,
     builtinsReady,
     callbackUrl,
@@ -353,7 +341,6 @@ export const makeMcpManagerCore = (config: McpManagerConfig) => {
     connections,
     emitCredentialsRotated,
     emitServerChanged,
-    extensionFlowSupported,
     gatewayBearerToken,
     gateways,
     key,

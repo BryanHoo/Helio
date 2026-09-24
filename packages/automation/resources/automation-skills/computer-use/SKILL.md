@@ -5,7 +5,7 @@ description: Control local desktop apps and record windows or displays through C
 
 # Computer Use
 
-Use Codevisor Computer Use for desktop apps. Prefer a purpose-built connector or Browser Use when it can operate the target semantically.
+Use Codevisor Computer Use for desktop apps. Prefer a purpose-built connector when it can operate the target semantically.
 
 ## Persistent JavaScript
 

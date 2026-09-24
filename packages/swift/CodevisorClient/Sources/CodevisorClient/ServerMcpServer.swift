@@ -25,40 +25,9 @@ public struct ServerMcpServer: Codable, Equatable, Identifiable, Sendable {
 
   public var isBuiltIn: Bool {
     switch kind {
-    case "browserUse", "computerUse", "codevisor": true
+    case "computerUse", "codevisor": true
     default: false
     }
-  }
-}
-
-public struct ServerBrowserUseConfiguration: Codable, Equatable, Sendable {
-  public var preferredBrowser: String?
-  public var chromeAvailable: Bool
-  public var chromeConnected: Bool
-  public var managedAvailable: Bool
-  /// Nil on servers that predate the field; treat as supported. False when
-  /// the server cannot launch local Chrome installation controls. Composer
-  /// setup may still hand the user off to Codevisor on that machine.
-  public var extensionFlowSupported: Bool?
-  public var developmentExtensionPath: String?
-
-  /// Whether clients can launch Chrome installation controls from this server.
-  public var supportsExtensionFlow: Bool { extensionFlowSupported ?? true }
-
-  public init(
-    preferredBrowser: String? = nil,
-    chromeAvailable: Bool,
-    chromeConnected: Bool,
-    managedAvailable: Bool,
-    extensionFlowSupported: Bool? = nil,
-    developmentExtensionPath: String? = nil
-  ) {
-    self.preferredBrowser = preferredBrowser
-    self.chromeAvailable = chromeAvailable
-    self.chromeConnected = chromeConnected
-    self.managedAvailable = managedAvailable
-    self.extensionFlowSupported = extensionFlowSupported
-    self.developmentExtensionPath = developmentExtensionPath
   }
 }
 

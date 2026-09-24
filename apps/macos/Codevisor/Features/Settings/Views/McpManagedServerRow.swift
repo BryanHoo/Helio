@@ -4,18 +4,15 @@ import SwiftUI
 import CodevisorUI
 
 /// A managed (or built-in) MCP server row: status glyph and text, the
-/// Browser Use browser picker, the enable toggle or OAuth Connect button,
+/// Enable toggle or OAuth Connect button,
 /// the more-actions menu, and — for Computer Use — the inline permission
 /// setup rows beneath it.
 struct McpManagedServerRow: View {
   @Environment(\.theme) private var theme
   let server: ServerMcpServer
-  let browserConfiguration: ServerBrowserUseConfiguration?
   /// Nil on remote machines: the permission probes read THIS Mac's
   /// TCC state, which says nothing about another machine.
   let computerPermissions: ComputerUsePermissionsModel?
-  let setPreferredBrowser: (String) async -> Void
-  let installBrowserExtension: () async -> Void
   let beginOAuth: () async -> Void
   let setEnabled: (Bool) async -> Void
   let showDetails: () -> Void
@@ -57,10 +54,6 @@ struct McpManagedServerRow: View {
           .lineLimit(1)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      if server.kind == "browserUse" {
-        Text("Chromium")
-          .controlSize(.small)
-      }
       let needsAuthorization =
         server.authType == "oauth"
         && ["needsAuthorization", "expired", "error"].contains(server.connectionState)
@@ -120,7 +113,7 @@ struct McpManagedServerRow: View {
     switch server.connectionState {
     case "connected": return "Connected · \(server.toolCount) tool\(server.toolCount == 1 ? "" : "s")"
     case "connecting": return "Connecting…"
-    case "needsSetup": return server.detail ?? "Browser setup required"
+    case "needsSetup": return server.detail ?? "Setup required"
     case "unavailable": return server.detail ?? "Unavailable on this machine"
     case "needsAuthorization": return "Authorization required"
     case "expired": return "Sign-in expired"

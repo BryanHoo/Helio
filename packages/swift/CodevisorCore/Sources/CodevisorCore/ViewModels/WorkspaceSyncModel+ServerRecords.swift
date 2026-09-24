@@ -1,8 +1,6 @@
 import Foundation
 
 extension WorkspaceSyncModel {
-  private struct BrowserPaneMetadata: Codable { var url: String? }
-
   private struct NativePaneMetadata: Codable {
     var attachOnly: Bool
     var ownerChatSessionId: UUID?
@@ -56,13 +54,6 @@ extension WorkspaceSyncModel {
       paneType = "new-tab"
       resourceKind = nil
       resourceId = nil
-    case .browser:
-      paneType = "browser"
-      resourceKind = nil
-      resourceId = nil
-      if let data = try? JSONEncoder().encode(BrowserPaneMetadata(url: pane.browserURL)) {
-        metadata = String(data: data, encoding: .utf8)
-      }
     case .screenSharing:
       paneType = "screen-sharing"
       resourceKind = nil
@@ -129,12 +120,6 @@ extension WorkspaceSyncModel {
       return PaneDescriptorState(
         id: id, kind: .screenSharing, name: record.title,
         terminalKey: id.uuidString, screenSharing: preferences)
-    case "browser":
-      let value = record.metadata.flatMap { $0.data(using: .utf8) }
-        .flatMap { try? JSONDecoder().decode(BrowserPaneMetadata.self, from: $0) }
-      return PaneDescriptorState(
-        id: id, kind: .browser, name: record.title,
-        terminalKey: id.uuidString, browserURL: value?.url)
     case "file", "markdown":
       guard record.resourceKind == "file", let path = record.resourceId, !path.isEmpty else {
         return nil

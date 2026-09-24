@@ -7,7 +7,6 @@ import { WebSocketServer } from "ws"
 
 import type { BootListener } from "./boot-listener.js"
 import { makeAttentionSettleScheduler } from "./infra/attention-settle.js"
-import { BrowserProxy } from "./infra/browser-proxy.js"
 import { ClientControlBroker } from "./infra/client-control.js"
 import { hasExistingListener } from "./infra/listener-probe.js"
 import { readMcpOverlays } from "./infra/mcp-fleet.js"
@@ -80,11 +79,9 @@ export const makeCodevisorServerApp = (
     // Resolved at call time: routeState is assembled just below.
     redrain: (sessionId) => drainPromptQueue(services, fanout, routeState, config.id, sessionId)
   })
-  const browserProxy = new BrowserProxy()
   const clientControl = new ClientControlBroker()
   const routeState: RouteState = {
     clientControl,
-    browserProxy,
     ...turns,
     gatedSessions: new Map(),
     pendingPromptActions: new Set(),
@@ -267,13 +264,7 @@ export const makeCodevisorServerApp = (
     handleRequest: (request: IncomingMessage, response: ServerResponse): void => {
       void handleRequest(services, config, fanout, routeState, request, response)
     },
-    handleConnect: (request: IncomingMessage, socket: Socket, head: Buffer) =>
-      browserProxy.handleConnect(request, socket, head),
     handleUpgrade: (request: IncomingMessage, socket: Socket, head: Buffer): void => {
-      if (isBrowserProxyRequest(request)) {
-        browserProxy.handleUpgrade(request, socket, head)
-        return
-      }
       void handleUpgrade(
         services,
         config,
@@ -286,7 +277,6 @@ export const makeCodevisorServerApp = (
       )
     },
     close: serverCloseAttempt(async () => {
-      browserProxy.close()
       clientControl.close()
       clearInterval(staleTurnSweep)
       restart.close()
@@ -372,13 +362,7 @@ export const startCodevisorServer = (
             server = bootListener.server
             server.on("request", onRequest)
           }
-          server.on("connect", (request, socket, head) => {
-            if (app === undefined) {
-              socket.destroy()
-              return
-            }
-            app.handleConnect(request, socket as Socket, head)
-          })
+          server.on("connect", (_request, socket) => socket.destroy())
           server.on("upgrade", (request, socket, head) => {
             if (app === undefined) {
               socket.destroy()
@@ -477,4 +461,3 @@ const serverCloseAttempt = (runClose: () => Promise<void>): Effect.Effect<void, 
   })
 
 export { defaultDatabasePath } from "./infra/data-dir.js"
-import { isBrowserProxyRequest } from "./infra/browser-forward-proxy.js"

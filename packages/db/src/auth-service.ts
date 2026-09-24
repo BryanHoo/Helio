@@ -15,8 +15,6 @@ export const makeAuthService = (
   | "getOrCreateInstanceId"
   | "getOrCreateConnectionToken"
   | "rotateConnectionToken"
-  | "getBrowserPreference"
-  | "setBrowserPreference"
 > => {
   const { sqlite } = context
 
@@ -92,28 +90,7 @@ export const makeAuthService = (
       })
       rotate()
       return token
-    }),
-    getBrowserPreference: attempt("getBrowserPreference", () => {
-      const row = sqlite
-        .prepare("select value from instance_meta where key = 'browser-preference'")
-        .get() as { readonly value: string } | undefined
-      return row?.value === "chrome" || row?.value === "managed" || row?.value === "builtin"
-        ? row.value
-        : undefined
-    }),
-    setBrowserPreference: (preference) =>
-      attempt("setBrowserPreference", () => {
-        if (preference === undefined) {
-          sqlite.prepare("delete from instance_meta where key = 'browser-preference'").run()
-          return
-        }
-        sqlite
-          .prepare(
-            `insert into instance_meta (key, value) values ('browser-preference', ?)
-             on conflict(key) do update set value = excluded.value`
-          )
-          .run(preference)
-      })
+    })
   }
 }
 

@@ -20,7 +20,7 @@ struct PaneLayoutProjectionTests {
       id: UUID(), kind: .chat, name: "Chat", terminalKey: "chat", chatSessionId: UUID()
     )
     let terminal = pane("Terminal 1")
-    let browser = pane("Docs", kind: .browser)
+    let browser = pane("Screen", kind: .screenSharing)
     let chatLeaf = UUID()
     let terminalLeaf = UUID()
     let splitTab = WorkspaceTab(

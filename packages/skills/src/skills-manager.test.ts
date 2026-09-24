@@ -43,18 +43,35 @@ describe("makeSkillsManager", () => {
     for (const harness of scan.harnesses) expect(harness.skills).toEqual([])
   })
 
+  it("skips a custom harness without skills metadata", async () => {
+    const home = makeHome()
+    const agents = makeAgentRuntime({
+      extraHarnesses: [
+        {
+          id: "plain",
+          name: "Plain",
+          provider: "codex",
+          symbolName: "terminal",
+          detectBinaries: []
+        }
+      ]
+    })
+    const scan = await makeSkillsManager({ agents, homedir: home }).list()
+    expect(scan.harnesses.some(({ harnessId }) => harnessId === "plain")).toBe(false)
+  })
+
   it("installs app-managed skills everywhere without exposing them as user skills", async () => {
     const home = makeHome()
     const sources = join(home, "managed-sources")
-    writeSkill(join(sources, "browser-use"), { name: "browser-use" })
+    writeSkill(join(sources, "example-skill"), { name: "example-skill" })
     writeSkill(join(sources, "computer-use"), { name: "computer-use" })
     const skills = manager(home)
 
     await skills.syncManaged([
       {
-        directoryName: "browser-use",
+        directoryName: "example-skill",
         enabled: true,
-        sourcePath: join(sources, "browser-use")
+        sourcePath: join(sources, "example-skill")
       },
       {
         directoryName: "computer-use",
@@ -66,15 +83,15 @@ describe("makeSkillsManager", () => {
     const scan = await skills.list()
     expect(scan.global).toEqual([])
     expect(scan.harnesses.every((harness) => harness.skills.length === 0)).toBe(true)
-    expect(existsSync(join(home, ".agents/skills/browser-use/SKILL.md"))).toBe(true)
+    expect(existsSync(join(home, ".agents/skills/example-skill/SKILL.md"))).toBe(true)
     expect(existsSync(join(home, ".claude/skills/computer-use/SKILL.md"))).toBe(true)
     expect(existsSync(join(home, ".codex/skills/computer-use/SKILL.md"))).toBe(true)
 
     await skills.syncManaged([
       {
-        directoryName: "browser-use",
+        directoryName: "example-skill",
         enabled: true,
-        sourcePath: join(sources, "browser-use")
+        sourcePath: join(sources, "example-skill")
       },
       {
         directoryName: "computer-use",
@@ -83,7 +100,7 @@ describe("makeSkillsManager", () => {
       }
     ])
 
-    expect(existsSync(join(home, ".agents/skills/browser-use/SKILL.md"))).toBe(true)
+    expect(existsSync(join(home, ".agents/skills/example-skill/SKILL.md"))).toBe(true)
     expect(existsSync(join(home, ".agents/skills/computer-use"))).toBe(false)
     expect(existsSync(join(home, ".claude/skills/computer-use"))).toBe(false)
     expect(existsSync(join(home, ".codex/skills/computer-use"))).toBe(false)

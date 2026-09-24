@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { makeAgentRuntime } from "@codevisor/agent-runtime"
+import type { HarnessDefinition } from "@codevisor/agent-runtime"
 import type { CreateMcpServerRequest, McpAuthDetection } from "@codevisor/api"
 import { makeDatabase } from "@codevisor/db"
 import type { CodevisorDatabaseService } from "@codevisor/db"
@@ -25,6 +26,70 @@ export const cleanupNativeMcpTests = async (): Promise<void> => {
 }
 
 export const HOME = "/home/u"
+
+// 旧配置格式只作为扫描和编辑夹具，不重新加入产品目录。
+const legacyNativeMcpHarnesses: ReadonlyArray<HarnessDefinition> = [
+  {
+    id: "opencode",
+    name: "OpenCode",
+    symbolName: "terminal",
+    detectBinaries: [],
+    provider: "codex",
+    nativeMcp: {
+      path: "~/.config/opencode/opencode.json",
+      key: "mcp",
+      format: "json",
+      disableField: { name: "enabled", enabledWhen: true },
+      writable: true
+    }
+  },
+  {
+    id: "gemini",
+    name: "Gemini",
+    symbolName: "terminal",
+    detectBinaries: [],
+    provider: "codex",
+    nativeMcp: {
+      path: "~/.gemini/settings.json",
+      key: "mcpServers",
+      format: "json",
+      writable: true
+    }
+  },
+  {
+    id: "cline",
+    name: "Cline",
+    symbolName: "terminal",
+    detectBinaries: [],
+    provider: "codex",
+    nativeMcp: {
+      path: "~/.cline/data/settings/cline_mcp_settings.json",
+      key: "mcpServers",
+      format: "json",
+      disableField: { name: "disabled", enabledWhen: false },
+      writable: true
+    }
+  },
+  {
+    id: "goose",
+    name: "Goose",
+    symbolName: "terminal",
+    detectBinaries: [],
+    provider: "codex",
+    nativeMcp: {
+      path: "~/.config/goose/config.yaml",
+      key: "extensions",
+      format: "yaml",
+      writable: false
+    }
+  }
+]
+
+export const nativeMcpTestRuntime = () => {
+  const agents = makeAgentRuntime({})
+  agents.setExtraHarnesses(legacyNativeMcpHarnesses)
+  return agents
+}
 
 /// In-memory filesystem: reads serve from the record, atomic writes mutate
 /// it — so write-pipeline tests can assert on resulting file contents.
@@ -87,7 +152,8 @@ export const fakeMcp = (
 export const testManager = async (
   files: Record<string, string | Error>,
   env: Record<string, string | undefined> = {},
-  behavior: Parameters<typeof fakeMcp>[1] = {}
+  behavior: Parameters<typeof fakeMcp>[1] = {},
+  agents = nativeMcpTestRuntime()
 ): Promise<{
   db: CodevisorDatabaseService
   fakes: ImportFakes
@@ -101,7 +167,7 @@ export const testManager = async (
   databases.push(db)
   const { fakes, mcp } = fakeMcp(db, behavior)
   const manager = makeNativeMcpManager({
-    agents: makeAgentRuntime({}),
+    agents,
     dataDir: directory,
     db,
     env,

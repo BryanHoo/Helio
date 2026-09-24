@@ -22,7 +22,7 @@ struct WorkspaceNavigationTests {
   @Test(
     "Every pane kind selects its complete destination synchronously",
     arguments: [
-      PaneKind.chat, .browser, .plugin, .terminal, .document, .newTab,
+      PaneKind.chat, .screenSharing, .plugin, .terminal, .document, .newTab,
     ])
   func selectDestination(kind: PaneKind) throws {
     let loadingChat = tab(.chat, chatId: UUID())
@@ -43,7 +43,7 @@ struct WorkspaceNavigationTests {
   @Test("An explicit split destination wins over a sibling routing chat")
   func selectSplitLeaf() throws {
     let chat = tab(.chat, chatId: UUID())
-    let browser = tab(.browser)
+    let browser = tab(.screenSharing)
     let browserState = try #require(browser.root.group(id: browser.activeLeafId))
     let split = WorkspaceTab(
       root: chat.root.splitting(
@@ -57,7 +57,7 @@ struct WorkspaceNavigationTests {
     workspace.selectDestination(.leaf(browser.activeLeafId))
     #expect(workspace.selectedCenterTabId == split.id)
     #expect(workspace.selectedCenterTab?.activeLeafId == browser.activeLeafId)
-    #expect(workspace.selectedPane(inLeaf: browser.activeLeafId)?.kind == .browser)
+    #expect(workspace.selectedPane(inLeaf: browser.activeLeafId)?.kind == .screenSharing)
 
     // Returning through the tab preserves its selected split.
     workspace.selectDestination(.tab(workspace.centerTabs[0].id))
@@ -71,7 +71,7 @@ struct WorkspaceNavigationTests {
     let chat = PaneDescriptorState(
       id: UUID(), kind: .chat, name: "Chat", terminalKey: "chat", chatSessionId: chatId
     )
-    let browser = PaneDescriptorState(id: UUID(), kind: .browser, name: "Browser", terminalKey: "browser")
+    let browser = PaneDescriptorState(id: UUID(), kind: .screenSharing, name: "Screen", terminalKey: "screen")
     let destination = WorkspaceTab(
       root: .leaf(PaneGroupState(panes: [chat, browser], selectedPaneId: browser.id))
     )
@@ -86,7 +86,7 @@ struct WorkspaceNavigationTests {
   @Test("Rapid navigation leaves the latest destination selected")
   func latestSelectionWins() {
     let chat = tab(.chat, chatId: UUID())
-    let browser = tab(.browser)
+    let browser = tab(.screenSharing)
     let plugin = tab(.plugin)
     var workspace = workspace([chat, browser, plugin])
 
@@ -100,7 +100,7 @@ struct WorkspaceNavigationTests {
 
   @Test("Stale destinations leave selection and layout intact")
   func invalidDestinations() {
-    var workspace = workspace([tab(.browser)])
+    var workspace = workspace([tab(.screenSharing)])
     let original = workspace
     let missing = UUID()
     for destination in [WorkspaceDestination.tab(missing), .leaf(missing), .chat(missing), .pane(missing)] {
@@ -112,14 +112,14 @@ struct WorkspaceNavigationTests {
 
   @Test(
     "Pane links select all layout levels without constructing content",
-    arguments: [PaneKind.chat, .browser, .plugin, .terminal, .document, .newTab])
+    arguments: [PaneKind.chat, .screenSharing, .plugin, .terminal, .document, .newTab])
   func selectPaneInsideGroup(kind: PaneKind) throws {
     let oldPane = PaneDescriptorState(id: UUID(), kind: .chat, name: "Old", terminalKey: "old")
     let target = PaneDescriptorState(id: UUID(), kind: kind, name: "Target", terminalKey: "target")
     let destination = WorkspaceTab(
       root: .leaf(PaneGroupState(panes: [oldPane, target], selectedPaneId: oldPane.id))
     )
-    var workspace = workspace([tab(.browser), destination])
+    var workspace = workspace([tab(.screenSharing), destination])
 
     workspace.selectDestination(.pane(target.id))
 
@@ -131,7 +131,7 @@ struct WorkspaceNavigationTests {
   @Test("A divider preview cannot display the previous tab after navigation")
   func staleTreePreview() {
     let chat = tab(.chat, chatId: UUID())
-    let browser = tab(.browser)
+    let browser = tab(.screenSharing)
     var workspace = workspace([chat, browser])
     let preview = WorkspaceTreePreview(workspace: workspace, tree: chat.root)
     #expect(preview.tree(in: workspace) == chat.root)

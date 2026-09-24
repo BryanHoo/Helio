@@ -159,7 +159,7 @@ public final class WorkspaceSyncModel {
     let hasAnchor = projectList.sessions.contains {
       $0.serverId == serverId && $0.id == anchorSessionId
     }
-    // macOS may be showing a browser, terminal, or New Tab through a chat
+    // macOS may be showing a terminal or New Tab through a chat
     // route. Closing that hidden routing chat must not replace the page
     // with a sibling chat. The closed route still owns this workspace.
     if preservingSelectedPane, hasAnchor,

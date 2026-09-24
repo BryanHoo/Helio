@@ -2,16 +2,12 @@ import ACPKit
 import CodevisorProtocol
 import Foundation
 
-public protocol CodevisorServerClienting: BrowserStateClienting {
+public protocol CodevisorServerClienting: Sendable {
   func sharedHarnessAccount(
     harnessId: String, request: ServerSharedHarnessAccountRequest
   ) async throws -> ServerSharedHarnessAccountResponse
   func screenSharing(_ request: ServerScreenSharingRequest) async throws -> ServerScreenSharingReply
   func screenSharingVNCSocket(displayId: String) throws -> any ServerWebSocketConnecting
-  func exchangeBrowserCookies(_ mutations: [BrowserCookieMutation]) async throws -> BrowserCookieSnapshot
-  func browserNavigation(paneId: UUID) async throws -> BrowserNavigation?
-  func publishBrowserNavigation(paneId: UUID, navigation: BrowserNavigation) async throws
-  func browserProxySession() async throws -> ServerBrowserProxySession
   func health() async throws -> ServerHealth
   func info() async throws -> ServerInfo
   /// This machine's cloud registration (`GET /v1/cloud`).
@@ -140,14 +136,6 @@ public protocol CodevisorServerClienting: BrowserStateClienting {
   func cancelOpenCodeAuthFlow(id: String) async throws
   func removeOpenCodeAuthProvider(accountId: String, providerId: String) async throws
   func listMcpServers() async throws -> [ServerMcpServer]
-  func browserUseConfiguration() async throws -> ServerBrowserUseConfiguration
-  func setPreferredBrowser(_ preference: String) async throws -> ServerBrowserUseConfiguration
-  func installDevelopmentBrowserExtension() async throws -> ServerBrowserUseConfiguration
-  func openBrowserExtensionFolder() async throws -> ServerBrowserUseConfiguration
-  func openBrowserExtensionsPage() async throws -> ServerBrowserUseConfiguration
-  func openBrowserExtensionWebStore() async throws -> ServerBrowserUseConfiguration
-  func browserExtensionArchive() async throws -> URL
-  func browserExtensionIcon() async throws -> URL
   func detectMcpAuth(url: String) async throws -> ServerMcpAuthDetection
   func createMcpServer(_ request: CreateMcpServerBody) async throws -> ServerMcpServer
   func updateMcpServer(id: String, request: UpdateMcpServerBody) async throws -> ServerMcpServer

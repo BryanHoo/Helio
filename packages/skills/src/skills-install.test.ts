@@ -9,7 +9,6 @@ import {
 } from "node:fs"
 import { join } from "node:path"
 
-import { makeAgentRuntime } from "@codevisor/agent-runtime"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { makeSkillsManager } from "./skills-manager.js"
@@ -20,7 +19,8 @@ import {
   writeSkill,
   manager,
   globalSkill,
-  installState
+  installState,
+  skillTestRuntime
 } from "./skills-test-support.js"
 
 afterEach(cleanupSkillsTests)
@@ -31,7 +31,7 @@ describe("skills write operations", () => {
     overrides?: { symlink?: never; rename?: never } | Record<string, unknown>
   ): SkillsManager =>
     makeSkillsManager({
-      agents: makeAgentRuntime({}),
+      agents: skillTestRuntime(),
       env: {},
       homedir: home,
       ...(overrides === undefined ? {} : { overrides })

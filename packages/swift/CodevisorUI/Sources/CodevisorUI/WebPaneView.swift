@@ -1,5 +1,4 @@
-//  The plugin WebKit surface. Browser panes use BrowserPaneModel with their
-//  own proxy configuration and no plugin bridge or theme injection.
+//  The plugin WebKit surface, with no browser pane bridge or theme injection.
 //
 //  A WebPaneController owns a WKWebView configured with bridge v1 (frozen):
 //  `window.codevisor.getContext()/openUrl()/setTitle()`, `--codevisor-*`

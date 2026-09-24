@@ -1,6 +1,5 @@
 import { detectMcpAuth } from "./mcp-auth-detection.js"
 import { makeMcpGateway } from "./mcp-gateway.js"
-import { makeMcpBrowserOperations } from "./mcp-manager-browser.js"
 import { makeMcpManagerCore } from "./mcp-manager-core.js"
 import { makeMcpGatewayOperations } from "./mcp-manager-gateway.js"
 import { makeMcpOAuthFlows } from "./mcp-manager-oauth-flows.js"
@@ -24,7 +23,6 @@ export const makeMcpManager = (config: McpManagerConfig): McpManager => {
   const { allTools, createGatewayConnection, gatewayRuntime, refreshGatewayInventories } =
     makeMcpGateway({
       automationProviders: core.automationProviders,
-      browserSetupBroker: core.browserSetupBroker,
       codeExecutor: core.codeExecutor,
       config,
       connectUpstream,
@@ -73,7 +71,11 @@ export const makeMcpManager = (config: McpManagerConfig): McpManager => {
       gatewayRuntime,
       unsubscribePluginTools
     }),
-    ...makeMcpBrowserOperations(core)
+    setBaseUrl: (url) => {
+      const parsed = new URL(url)
+      core.state.gatewayBaseUrl = `${parsed.protocol}//127.0.0.1:${parsed.port}`
+      core.state.oauthBaseUrl = core.state.gatewayBaseUrl
+    }
   }
 
   void run(config.db.listMcpServers)

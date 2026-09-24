@@ -93,26 +93,6 @@ public extension CodevisorServerClienting {
     return nil
   }
 
-  func openBrowserExtensionFolder() async throws -> ServerBrowserUseConfiguration {
-    throw CodevisorServerClientError.invalidResponse
-  }
-
-  func openBrowserExtensionsPage() async throws -> ServerBrowserUseConfiguration {
-    throw CodevisorServerClientError.invalidResponse
-  }
-
-  func openBrowserExtensionWebStore() async throws -> ServerBrowserUseConfiguration {
-    throw CodevisorServerClientError.invalidResponse
-  }
-
-  func browserExtensionArchive() async throws -> URL {
-    throw CodevisorServerClientError.invalidResponse
-  }
-
-  func browserExtensionIcon() async throws -> URL {
-    throw CodevisorServerClientError.invalidResponse
-  }
-
   func connectSession(id: UUID) async throws -> ServerSessionRuntimeMetadata? { nil }
 
   /// Default for fakes/older transports: no combined open — callers use
@@ -394,15 +374,6 @@ public extension CodevisorServerClienting {
   func cancelOpenCodeAuthFlow(id: String) async throws {}
   func removeOpenCodeAuthProvider(accountId: String, providerId: String) async throws {}
   func listMcpServers() async throws -> [ServerMcpServer] { [] }
-  func browserUseConfiguration() async throws -> ServerBrowserUseConfiguration {
-    .init(chromeAvailable: false, chromeConnected: false, managedAvailable: true)
-  }
-  func setPreferredBrowser(_ preference: String) async throws -> ServerBrowserUseConfiguration {
-    throw CodevisorServerClientError.invalidResponse
-  }
-  func installDevelopmentBrowserExtension() async throws -> ServerBrowserUseConfiguration {
-    throw CodevisorServerClientError.invalidResponse
-  }
   func detectMcpAuth(url: String) async throws -> ServerMcpAuthDetection {
     .init(authType: "none", detail: "No authorization challenge detected")
   }

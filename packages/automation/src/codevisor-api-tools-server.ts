@@ -4,7 +4,6 @@ import {
   CreateScratchProjectRequest,
   CreateWorktreeRequest,
   PromoteWorkspacePaneToChatRequest,
-  UpdateBrowserUseConfigurationRequest,
   UpdateProjectRequest,
   UpdateWorkspacePaneRequest,
   UpdateWorkspaceRequest,
@@ -108,21 +107,6 @@ export const codevisorServerApiTools: ReadonlyArray<CodevisorApiToolSpec> = [
     "Disconnect this machine from Codevisor Cloud.",
     "POST",
     "/v1/cloud/disconnect"
-  ),
-  apiTool(
-    "settings.browser_get",
-    "Get server-owned Browser Use settings and availability.",
-    "GET",
-    "/v1/browser-use"
-  ),
-  apiTool(
-    "settings.browser_update",
-    "Update the server's preferred Browser Use backend.",
-    "PATCH",
-    "/v1/browser-use",
-    {
-      body: UpdateBrowserUseConfigurationRequest
-    }
   ),
   apiTool(
     "filesystem.list",

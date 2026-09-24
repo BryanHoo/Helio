@@ -42,7 +42,6 @@ struct McpMachinePane: View {
   @State var lastNativeRemoval: ServerNativeMcpRemoval?
   @State var nativeActionError: String?
   @State private var expandedNativeHarnesses: Set<String> = []
-  @State var browserConfiguration: ServerBrowserUseConfiguration?
 
   var client: any CodevisorServerClienting {
     environment.machines.client(for: machine.id)
@@ -195,10 +194,7 @@ struct McpMachinePane: View {
   private func serverRow(_ server: ServerMcpServer) -> some View {
     McpManagedServerRow(
       server: displayServer(server),
-      browserConfiguration: server.kind == "browserUse" ? browserConfiguration : nil,
       computerPermissions: machine.isLocal ? permissions : nil,
-      setPreferredBrowser: { await setPreferredBrowser($0) },
-      installBrowserExtension: { await installBrowserExtension() },
       beginOAuth: { await beginOAuth(server) },
       setEnabled: { await setEnabled(server, enabled: $0) },
       showDetails: { selectedServer = server },

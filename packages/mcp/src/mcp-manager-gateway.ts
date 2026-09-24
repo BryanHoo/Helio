@@ -17,7 +17,7 @@ export interface McpGatewayOperationDeps {
 
 export type McpGatewayOperations = Pick<
   McpManager,
-  "close" | "closeSession" | "beginTurn" | "finishTurn" | "handleGatewayRequest" | "issueGateway"
+  "close" | "closeSession" | "handleGatewayRequest" | "issueGateway"
 >
 
 /// Per-session tool gateways: issuing credentials, routing gateway HTTP
@@ -28,7 +28,6 @@ export const makeMcpGatewayOperations = (
 ): McpGatewayOperations => {
   const {
     automationProviders,
-    browserSetupBroker,
     builtinsReady,
     closeConnection,
     connections,
@@ -40,11 +39,8 @@ export const makeMcpGatewayOperations = (
   } = core
   const { createGatewayConnection, gatewayRuntime, unsubscribePluginTools } = deps
 
-  const issueGateway: McpManager["issueGateway"] = async (sessionId, projectId, sink) => {
+  const issueGateway: McpManager["issueGateway"] = async (sessionId, projectId) => {
     await builtinsReady
-    if (sink !== undefined) {
-      browserSetupBroker.setSink(sessionId, sink)
-    }
     const existingId = sessionGatewayIds.get(sessionId)
     if (existingId !== undefined && gateways.has(existingId)) {
       const existingUrl = new URL("/mcp/gateway", state.gatewayBaseUrl)
@@ -79,7 +75,6 @@ export const makeMcpGatewayOperations = (
     await Promise.all(
       [...automationProviders.values()].map((provider) => provider.closeSession(sessionId))
     )
-    await browserSetupBroker.closeSession(sessionId)
   }
 
   const handleGatewayRequest: McpManager["handleGatewayRequest"] = async (request, response) => {
@@ -156,7 +151,6 @@ export const makeMcpGatewayOperations = (
     /* v8 ignore next -- timers only exist for the live OAuth refresh adapter. */
     for (const timer of refreshTimers.values()) clearTimeout(timer)
     await Promise.all([...connections.keys()].map(closeConnection))
-    await browserSetupBroker.close()
     await Promise.all([...automationProviders.values()].map((provider) => provider.close()))
     await Promise.all(
       [...gateways.values()].flatMap((gateway) =>
@@ -170,14 +164,5 @@ export const makeMcpGatewayOperations = (
     sessionGatewayIds.clear()
   }
 
-  const finishTurn = async (sessionId: string) => {
-    await Promise.all(
-      [...automationProviders.values()].map((provider) => provider.finishTurn?.(sessionId))
-    )
-  }
-  const beginTurn = async (sessionId: string) => {
-    await builtinsReady
-    await browserSetupBroker.beginTurn(sessionId)
-  }
-  return { close, closeSession, beginTurn, finishTurn, handleGatewayRequest, issueGateway }
+  return { close, closeSession, handleGatewayRequest, issueGateway }
 }

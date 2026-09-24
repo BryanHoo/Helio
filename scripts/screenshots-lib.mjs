@@ -1,6 +1,6 @@
 import { basename, isAbsolute, resolve } from "node:path"
 
-export const scenes = ["01-projects", "02-conversation", "03-new-chat", "04-browser"]
+export const scenes = ["01-projects", "02-conversation", "03-new-chat"]
 export const appearances = ["light", "dark"]
 
 export function parseCaptureOptions(args, root, platform) {

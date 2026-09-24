@@ -37,8 +37,10 @@ afterEach(() => {
 describe("Codevisor MCP provider", () => {
   it("publishes a unique, resource-oriented tool contract", async () => {
     const names = codevisorTools.map((tool) => tool.name)
-    expect(names).toHaveLength(150)
+    expect(names).toHaveLength(148)
     expect(new Set(names).size).toBe(names.length)
+    expect(names).not.toContain("settings.browser_status")
+    expect(names).not.toContain("settings.browser_select_backend")
     expect(names).toEqual(
       expect.arrayContaining([
         "context.current",

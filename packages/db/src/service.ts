@@ -1,14 +1,8 @@
-import type {
-  NavigationSnapshot,
-  BrowserCookieMutation,
-  BrowserCookieSnapshot,
-  BrowserNavigation
-} from "@codevisor/api"
+import type { NavigationSnapshot } from "@codevisor/api"
 import type {
   ArchivedWorktree,
   AttachmentKind,
   AttachmentRef,
-  BrowserPreference,
   CreateProjectRequest,
   CreateSessionRequest,
   DataUpgradeProgress,
@@ -421,20 +415,6 @@ export interface CodevisorDatabaseService {
   /// Replaces the connection token with a fresh one and retires the old,
   /// forcing previously paired clients to re-pair.
   readonly rotateConnectionToken: Effect.Effect<string, DatabaseError>
-  readonly exchangeBrowserCookies: (
-    mutations: ReadonlyArray<BrowserCookieMutation>
-  ) => Effect.Effect<BrowserCookieSnapshot, DatabaseError>
-  readonly getBrowserNavigation: (
-    paneId: string
-  ) => Effect.Effect<BrowserNavigation | undefined, DatabaseError>
-  readonly setBrowserNavigation: (
-    paneId: string,
-    navigation: BrowserNavigation
-  ) => Effect.Effect<void, DatabaseError>
-  readonly getBrowserPreference: Effect.Effect<BrowserPreference | undefined, DatabaseError>
-  readonly setBrowserPreference: (
-    preference: BrowserPreference | undefined
-  ) => Effect.Effect<void, DatabaseError>
   readonly getUpdateInfo: Effect.Effect<UpdateInfo, DatabaseError>
   readonly setUpdateInfo: (update: UpdateInfo) => Effect.Effect<UpdateInfo, DatabaseError>
   /// Persisted latest-version knowledge per harness (the periodic update

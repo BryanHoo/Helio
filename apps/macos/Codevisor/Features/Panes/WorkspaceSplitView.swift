@@ -370,7 +370,6 @@ private struct SplitLeafHeader: View {
     case .terminal: pane?.attachOnly == true ? "server.rack" : "terminal"
     case .plugin: "puzzlepiece.extension"
     case .document: "doc.richtext"
-    case .browser: "globe"
     case .screenSharing: "display"
     case .newTab, .none: "square.dashed"
     }
@@ -437,7 +436,7 @@ private struct SplitLeafHeader: View {
     switch pane?.kind {
     case .chat: "Rename Chat"
     case .terminal: "Rename Terminal"
-    case .newTab, .plugin, .document, .browser, .screenSharing, .none: "Rename Pane"
+    case .newTab, .plugin, .document, .screenSharing, .none: "Rename Pane"
     }
   }
 

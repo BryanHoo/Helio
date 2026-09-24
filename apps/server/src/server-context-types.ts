@@ -17,7 +17,6 @@ import type { ServerUpdateChannel } from "@codevisor/updater"
 import { Context, Effect, Layer, PubSub, Schema } from "effect"
 
 import type { SessionActivityController } from "./infra/active-work-sleep-inhibitor.js"
-import type { BrowserProxy } from "./infra/browser-proxy.js"
 import type { ClientControlBroker } from "./infra/client-control.js"
 import type { SharedAccounts } from "./infra/shared-accounts.js"
 import type { RestartCoordinator } from "./restart-drain.js"
@@ -173,7 +172,6 @@ export interface RunningCodevisorServer {
 }
 
 export interface CodevisorServerApp {
-  readonly handleConnect: (request: IncomingMessage, socket: Socket, head: Buffer) => void
   readonly handleRequest: (request: IncomingMessage, response: ServerResponse) => void
   readonly handleUpgrade: (request: IncomingMessage, socket: Socket, head: Buffer) => void
   readonly close: Effect.Effect<void, ServerError>
@@ -181,7 +179,6 @@ export interface CodevisorServerApp {
 
 export interface RouteState {
   readonly clientControl?: ClientControlBroker
-  readonly browserProxy?: BrowserProxy
   readonly pendingSessionCreates: Map<string, Promise<SessionSummary>>
   readonly pendingPromptActions: Set<string>
   readonly activePromptSessions: Set<string>

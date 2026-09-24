@@ -34,7 +34,7 @@ export function developmentLayout(repoRoot, environment = process.env) {
         derivedData: join(buildRoot, "pixelbook", "DerivedData"),
         sourcePackages: join(buildRoot, "pixelbook", "SourcePackages")
       },
-      // Shared across worktrees like the Ghostty and Chromium artifacts.
+      // Shared across worktrees like the Ghostty artifacts.
       // SwiftPM's package cache is an append-only store of git mirrors and
       // checksummed binary artifacts keyed by origin — Xcode shares it
       // machine-wide by default, and SwiftPM serializes access itself. Which

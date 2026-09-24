@@ -37,8 +37,8 @@ struct HarnessAccountsStoreTests {
     #expect(!paths.contains(where: { $0.contains("/providers/") && $0.hasSuffix("/login") }))
     #expect(environment.configSync.value(namespace: HarnessSharedCredentials.namespace, key: "pi-auth") == nil)
   }
-  @Test("Grok account management and device sign-in stay in shared scope")
-  func grokSharedAccount() async throws {
+  @Test("Account management and device sign-in stay in shared scope")
+  func deviceSharedAccount() async throws {
     let transport = SharedAccountTestTransport()
     let environment = AppEnvironment(
       projectRepository: DefaultProjectRepository(store: InMemoryStore()),
@@ -50,32 +50,32 @@ struct HarnessAccountsStoreTests {
       }
     )
     let store = HarnessAccountsStore(environment: environment, machineId: "local", isShared: true)
-    let account = try #require(try await store.listHarnessAccounts(harnessId: "grok-build").first)
+    let account = try #require(try await store.listHarnessAccounts(harnessId: "codex").first)
     let flow = try await store.loginHarnessAccount(
-      harnessId: "grok-build", accountId: account.id, methodId: "grok.com", apiKey: nil)
+      harnessId: "codex", accountId: account.id, methodId: "deviceCode", apiKey: nil)
     #expect(flow.kind == "deviceCode")
     #expect(flow.userCode == "ABCD-EFGH")
     #expect(flow.verificationUrl == "https://auth.x.ai/device")
-    try await store.cancelHarnessLogin(harnessId: "grok-build", accountId: account.id, flowId: flow.id)
+    try await store.cancelHarnessLogin(harnessId: "codex", accountId: account.id, flowId: flow.id)
     #expect(
       try await store.loginHarnessAccount(
-        harnessId: "grok-build", accountId: account.id, methodId: "apiKey", apiKey: "fixture-key"
+        harnessId: "codex", accountId: account.id, methodId: "apiKey", apiKey: "fixture-key"
       ).kind == "complete")
     #expect(
-      try await store.probeHarnessAccount(harnessId: "grok-build", accountId: account.id).authState == "authenticated")
+      try await store.probeHarnessAccount(harnessId: "codex", accountId: account.id).authState == "authenticated")
     #expect(
-      try await store.activateHarnessAccount(harnessId: "grok-build", accountId: account.id).first?.isActive == true)
+      try await store.activateHarnessAccount(harnessId: "codex", accountId: account.id).first?.isActive == true)
     #expect(
-      try await store.logoutHarnessAccount(harnessId: "grok-build", accountId: account.id).authState
+      try await store.logoutHarnessAccount(harnessId: "codex", accountId: account.id).authState
         == "unauthenticated")
-    #expect(await transport.requests.allSatisfy { $0 == "/v1/harnesses/grok-build/shared-accounts" })
+    #expect(await transport.requests.allSatisfy { $0 == "/v1/harnesses/codex/shared-accounts" })
   }
 
   @Test("Shared profiles use the existing editor operations and remain distinct from machine accounts")
   func profiles() async throws {
     let environment = AppEnvironment.preview(seedProjects: [])
     let store = HarnessAccountsStore(environment: environment, machineId: "local", isShared: true)
-    #expect(try store.sharedHarness(id: "opencode", name: "OpenCode").auth?.supportsMultipleAccounts == true)
+    #expect(try store.sharedHarness(id: "opencode", name: "OpenCode").auth?.supportsMultipleAccounts == false)
     #expect(try await store.listHarnessAccounts(harnessId: "opencode").map(\.id) == ["default"])
     let profile = try await store.createHarnessAccount(harnessId: "opencode", label: "Work")
     #expect(profile.id.hasPrefix("shared-"))
@@ -197,7 +197,7 @@ private actor SharedAccountTestTransport: ServerRequestTransport {
     let payload = try JSONDecoder().decode([String: String].self, from: body)
     let action = payload["action"]!
     let oauth = payload["methodId"] == "oauth"
-    let device = payload["methodId"] == "grok.com"
+    let device = payload["methodId"] == "deviceCode"
     if action == "rename" { label = payload["label"]! }
     if action == "answer" || (action == "login" && !oauth && !device) { authenticated = true }
     if action == "logout" { authenticated = false }
