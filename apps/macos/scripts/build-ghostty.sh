@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Builds GhosttyKit.xcframework from the vendored Ghostty source and copies it
+# Builds GhosttyKit.xcframework from the pinned Ghostty source and copies it
 # next to the app for linking. Codevisor requires the real libghostty-backed
 # terminal; app and release builds should fail if this framework is missing.
 #
@@ -9,7 +9,7 @@
 #
 # Usage:
 #   apps/macos/scripts/build-ghostty.sh --fetch-only
-#   nix develop ./.repos/ghostty -c apps/macos/scripts/build-ghostty.sh
+#   bun run ghostty:build
 set -euo pipefail
 
 MACOS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -67,8 +67,7 @@ fi
 CURRENT_GHOSTTY_REF="$(git -C "$GHOSTTY_DIR" rev-parse HEAD 2>/dev/null || true)"
 if [[ ! -f "$GHOSTTY_DIR/build.zig" || "$CURRENT_GHOSTTY_REF" != "$GHOSTTY_REF" ]]; then
   echo "Fetching Ghostty source $GHOSTTY_REF from $GHOSTTY_REPOSITORY"
-  # `.git` is a file (not a directory) in submodule checkouts — either form
-  # is a live repo that can fetch in place.
+  # Reuse an existing checkout when present; otherwise clone the pinned source.
   if [[ ! -e "$GHOSTTY_DIR/.git" ]]; then
     mkdir -p "$(dirname "$GHOSTTY_DIR")"
     rm -rf "$GHOSTTY_DIR"

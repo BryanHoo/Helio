@@ -60,8 +60,7 @@ result for each scenario. Scale the scope to the change:
    component or state. Check persistence or cross-device synchronization when
    the change affects it.
 
-For shared native behavior, cover macOS and iOS. For a platform-specific
-change, focus on that platform. Choose scenarios for their ability to expose
+For native behavior, cover the macOS workflow. Choose scenarios for their ability to expose
 mistakes; do not expand every change into a full product audit.
 
 ## Run the right environment
@@ -74,18 +73,10 @@ there. They may not appear in the session's skill list, so read the file from
 that path before treating one as unavailable.
 
 - [run-dev](../run-dev/SKILL.md) owns development startup and runner lifecycle.
-  Use `bun run dev` for both native apps, `bun run dev:macos` or
-  `bun run dev:ios` for one platform, and `bun run dev:web` for the website.
-  Before either iOS-capable runner, start `bun run ios-simulator` as a
-  separate persistent background task and wait for `Simulator ready`.
-  Keep it running across rebuilds; stopping it deletes its worktree device.
-  Reuse this worktree's matching instance when possible. Track processes you
-  start and respect the one-runner-per-worktree rule.
-- [ios-development](../ios-development/SKILL.md) owns iOS Simulator inspection
-  and interaction, including Xcode setup and tool selection.
+  Use `bun run dev:macos` for the local app and server. Reuse this worktree's
+  matching instance when possible, and track processes you start.
 - Use the available `computer-use` skill for macOS app interaction and
-  recordings, and `browser-use` for website interaction. Load these skills
-  from the current skill catalog instead of guessing tool APIs.
+  recordings. Load it from the current skill catalog instead of guessing tool APIs.
 
 Confirm that the running app and backend belong to the intended worktree and
 contain the change before testing. Use development data and the real runtime

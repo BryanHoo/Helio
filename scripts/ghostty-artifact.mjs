@@ -69,7 +69,6 @@ export async function ensureGhosttyFramework(repoRoot, environment = process.env
 }
 
 export async function buildGhosttyFramework(repoRoot, environment = process.env) {
-  await run("git", ["submodule", "update", "--init", ".repos/ghostty"], { cwd: repoRoot })
   await run(join(repoRoot, "apps/macos/scripts/build-ghostty.sh"), [], { cwd: repoRoot })
   const stamp = await ghosttyBuildStamp(repoRoot)
   const artifactsRoot = ghosttyArtifactsRoot(environment)

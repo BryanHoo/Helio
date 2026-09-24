@@ -132,9 +132,6 @@ test target over another bespoke implementation.
   or stream consumption instead of flushing microtasks.
 - `packages/worktrees/src/git-test-support.ts`: isolated Git configuration,
   immutable repository seeds, and automatic temporary-directory cleanup.
-- `apps/cloud/test/cloud-test-support.ts`: acknowledge the Durable Object's
-  disconnect handler before advancing resume expiry. Keep workerd's real
-  alarms dormant and invoke the alarm explicitly under the controlled clock.
 
 ## Review and verify
 

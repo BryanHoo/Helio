@@ -27,9 +27,6 @@ tmp/
 
 apps/macos/Codevisor/Resources/AppIconDevGenerated.icon/
 
-# Unmanaged reference checkouts and artifacts from removed targets.
-.gitmodules
+# Optional upstream checkout created by the Ghostty build script.
 .repos/
-apps/cloud/
-apps/www/
 .dev.vars
