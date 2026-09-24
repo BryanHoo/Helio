@@ -16,6 +16,14 @@ The development server listens on `127.0.0.1` and keeps its data under `tmp/` in
 bun run build:macos
 ```
 
+To build a signed, self-contained Release DMG for the current Mac architecture:
+
+```sh
+bun run package:macos
+```
+
+The DMG is written to `tmp/build/release/`. This requires a Developer ID Application signing identity; local packaging does not notarize the DMG.
+
 Internal package names, CLI commands, and existing on-disk data paths still use `codevisor`.
 
 ## License

@@ -11,6 +11,7 @@
     "dev": "bun scripts/dev.mjs",
     "dev:macos": "bun scripts/dev.mjs",
     "build:macos": "bun scripts/build-native.mjs macos",
+    "package:macos": "bun scripts/package-macos.mjs",
     "screenshots:macos": "bun scripts/screenshots-macos.mjs",
     "build:pixelbook": "bun scripts/build-native.mjs pixelbook",
     "ghostty:build": "bun scripts/ghostty-artifact.mjs build",

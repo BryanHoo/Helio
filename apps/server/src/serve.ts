@@ -35,7 +35,7 @@ import { makeTerminalManager } from "@codevisor/terminal"
 import { Effect } from "effect"
 
 import {
-  FAILED_UPGRADE_GRAC
+  FAILED_UPGRADE_GRACE_MS,
   startBootListenerIfPortFree,
   type BootListener
 } from "./boot-listener.js"
