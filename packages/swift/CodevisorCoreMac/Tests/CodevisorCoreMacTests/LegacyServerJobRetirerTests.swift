@@ -1,0 +1,265 @@
+import Foundation
+import Testing
+import CodevisorTestSupport
+@testable import CodevisorCoreMac
+
+@Suite("LegacyServerJobRetirer")
+struct LegacyServerJobRetirerTests {
+  @Test("Boots out every updater-era launchd job")
+  func removesEveryLegacyJob() async throws {
+    let runner = RecordingLaunchctlRunner(result: .success)
+    let retirer = LegacyServerJobRetirer(runner: runner, userID: 501, lifecycleLog: ServerLifecycleLog(fileURL: nil))
+
+    try await retirer.retire()
+
+    let invocations = await runner.invocations
+    #expect(invocations.count == LegacyServerJobRetirer.labels.count)
+    for label in LegacyServerJobRetirer.labels {
+      #expect(invocations.contains(["bootout", "gui/501/\(label)"]))
+    }
+  }
+
+  @Test("Treats an already-absent job as retired")
+  func acceptsMissingJobs() async throws {
+    let runner = RecordingLaunchctlRunner(result: .missing)
+    let retirer = LegacyServerJobRetirer(runner: runner, userID: 501, lifecycleLog: ServerLifecycleLog(fileURL: nil))
+
+    try await retirer.retire()
+
+    #expect(await runner.invocations.count == LegacyServerJobRetirer.labels.count)
+  }
+
+  @Test("Surfaces real bootout failures")
+  func reportsBootoutFailure() async {
+    let runner = RecordingLaunchctlRunner(result: .failure)
+    let retirer = LegacyServerJobRetirer(runner: runner, userID: 501, lifecycleLog: ServerLifecycleLog(fileURL: nil))
+
+    await #expect(throws: LegacyServerJobRetirementError.self) {
+      try await retirer.retire()
+    }
+  }
+
+  @Test("Times out a cleanup command instead of pinning startup")
+  func timesOutHangingCleanup() async {
+    let clock = TestClock()
+    let retirer = LegacyServerJobRetirer(
+      runner: HangingLaunchctlRunner(clock: clock),
+      userID: 501,
+      lifecycleLog: ServerLifecycleLog(fileURL: nil),
+      clock: clock
+    )
+
+    let retire = Task { try await retirer.retire() }
+    await clock.waitForSleep(.seconds(5))
+    await clock.waitForSleep(.seconds(60))
+    clock.advance(by: .seconds(5))
+    await #expect(throws: CommandRunnerError.self) { try await retire.value }
+  }
+}
+
+private actor RecordingLaunchctlRunner: CommandRunner {
+  enum Result {
+    case success
+    case missing
+    case failure
+  }
+
+  let result: Result
+  private(set) var invocations: [[String]] = []
+
+  init(result: Result) {
+    self.result = result
+  }
+
+  func run(
+    executableURL: URL,
+    arguments: [String],
+    environment: [String: String]?
+  ) async throws -> CommandResult {
+    invocations.append(arguments)
+    switch result {
+    case .success:
+      return CommandResult(standardOutput: "", standardError: "", exitCode: 0)
+    case .missing:
+      return CommandResult(
+        standardOutput: "",
+        standardError: "Boot-out failed: 3: No such process",
+        exitCode: 3
+      )
+    case .failure:
+      return CommandResult(
+        standardOutput: "",
+        standardError: "Boot-out failed: 1: Operation not permitted",
+        exitCode: 1
+      )
+    }
+  }
+}
+
+private actor HangingLaunchctlRunner: CommandRunner {
+  let clock: TestClock
+  init(clock: TestClock) { self.clock = clock }
+  func run(
+    executableURL: URL,
+    arguments: [String],
+    environment: [String: String]?
+  ) async throws -> CommandResult {
+    try await clock.sleep(for: .seconds(60))
+    return CommandResult(standardOutput: "", standardError: "", exitCode: 0)
+  }
+}
+
+@Suite("ProcessCommandRunner")
+struct ProcessCommandRunnerTests {
+  @Test("Terminates a child process when its deadline expires")
+  func terminatesTimedOutProcess() async {
+    let started = TestSignal()
+    let clock = TestClock()
+    let exited = TestSignal()
+    let runner = ProcessCommandRunner(onStart: started.signal, onExit: exited.signal)
+    let command = Task {
+      try await runner.run(
+        executableURL: URL(fileURLWithPath: "/usr/bin/tail"),
+        arguments: ["-f", "/dev/null"],
+        environment: nil,
+        timeout: .seconds(5),
+        clock: clock
+      )
+    }
+    await started.wait()
+    await clock.waitForSleep(.seconds(5))
+    clock.advance(by: .seconds(5))
+    await #expect(throws: CommandRunnerError.self) { try await command.value }
+    await exited.wait()
+  }
+}
+
+@Suite("LaunchctlPrintOutput")
+struct LaunchctlPrintOutputTests {
+  @Test("Only confirmed missing or stopped jobs count as stopped")
+  func classifiesJobState() {
+    #expect(
+      LaunchctlPrintOutput.isRunning(CommandResult(standardOutput: "pid = 123", standardError: "", exitCode: 0)) == true
+    )
+    #expect(
+      LaunchctlPrintOutput.isRunning(
+        CommandResult(standardOutput: "state = not running", standardError: "", exitCode: 0)) == false)
+    #expect(
+      LaunchctlPrintOutput.isRunning(CommandResult(standardOutput: "state = waiting", standardError: "", exitCode: 0))
+        == false)
+    #expect(
+      LaunchctlPrintOutput.isRunning(CommandResult(standardOutput: "", standardError: "missing", exitCode: 113))
+        == false)
+    #expect(
+      LaunchctlPrintOutput.isRunning(CommandResult(standardOutput: "", standardError: "missing", exitCode: 3)) == false)
+    #expect(
+      LaunchctlPrintOutput.isRunning(CommandResult(standardOutput: "", standardError: "permission denied", exitCode: 5))
+        == nil)
+    #expect(
+      LaunchctlPrintOutput.isRunning(CommandResult(standardOutput: "unreadable", standardError: "", exitCode: 0)) == nil
+    )
+  }
+
+  @Test("Finds the job's live pid")
+  func findsPid() {
+    let output = """
+      gui/501/com.851labs.Codevisor.ServerAgent = {
+      \tactive count = 1
+      \tpath = /Users/me/Library/LaunchAgents/com.851labs.Codevisor.ServerAgent.plist
+      \tstate = running
+      \tpid = 70634
+      \tprogram = /bin/bash
+      }
+      """
+    #expect(LaunchctlPrintOutput.pid(in: output) == 70634)
+  }
+
+  @Test("A job without a process has no pid")
+  func noPid() {
+    let output = """
+      gui/501/com.851labs.Codevisor.ServerAgent = {
+      \tactive count = 0
+      \tstate = not running
+      \tlast exit code = 78
+      }
+      """
+    #expect(LaunchctlPrintOutput.pid(in: output) == nil)
+  }
+}
+
+extension ProcessCommandRunnerTests {
+  @Test("An elapsed clock deadline completes without another advance")
+  func elapsedClockDeadline() async throws {
+    let clock = TestClock()
+    let deadline = clock.now.advanced(by: .seconds(5))
+    clock.advance(by: .seconds(5))
+    try await clock.sleep(until: deadline, tolerance: nil)
+    #expect(clock.pendingCount == 0)
+  }
+
+  @Test("Cancellation waits for the child to exit and releases its output readers")
+  func cancelsRunningProcess() async {
+    let started = TestSignal()
+    let exited = TestSignal()
+    let runner = ProcessCommandRunner(onStart: started.signal, onExit: exited.signal)
+    let command = Task {
+      try await runner.run(
+        executableURL: URL(fileURLWithPath: "/usr/bin/tail"),
+        arguments: ["-f", "/dev/null"], environment: nil)
+    }
+    await started.wait()
+    command.cancel()
+    await #expect(throws: CancellationError.self) { try await command.value }
+    await exited.wait()
+  }
+
+  @Test("Drains stdout and stderr beyond pipe capacity without blocking the child")
+  func capturesLargeOutput() async throws {
+    let result = try await ProcessCommandRunner().run(
+      executableURL: URL(fileURLWithPath: "/bin/sh"),
+      arguments: ["-c", "/usr/bin/head -c 262144 /dev/zero; /usr/bin/head -c 262144 /dev/zero >&2"],
+      environment: [:])
+    #expect(result.standardOutput == String(repeating: "\0", count: 262144))
+    #expect(result.standardError == String(repeating: "\0", count: 262144))
+    #expect(result.exitCode == 0)
+  }
+
+  @Test("Short commands deliver output and exit even if they finish before the waiter")
+  func capturesQuickExit() async throws {
+    let result = try await ProcessCommandRunner().run(
+      executableURL: URL(fileURLWithPath: "/bin/sh"),
+      arguments: ["-c", "printf output; printf error >&2; exit 3"], environment: [:]
+    )
+    #expect(result == CommandResult(standardOutput: "output", standardError: "error", exitCode: 3))
+  }
+
+  @Test("A deadline returns while a command ignores cancellation")
+  func nonCooperativeDeadline() async {
+    let clock = TestClock()
+    let runner = UnresponsiveCommandRunner()
+    let command = Task {
+      try await runner.run(
+        executableURL: URL(fileURLWithPath: "/bin/launchctl"), arguments: [], environment: nil,
+        timeout: .seconds(5), clock: clock)
+    }
+    await runner.started.wait()
+    await clock.waitForSleep(.seconds(5))
+    clock.advance(by: .seconds(5))
+    await #expect(throws: CommandRunnerError.self) { try await command.value }
+    // The command is still blocked; release it and acknowledge cleanup.
+    runner.release.signal()
+    await runner.finished.wait()
+  }
+}
+
+private struct UnresponsiveCommandRunner: CommandRunner {
+  let started = TestSignal()
+  let release = TestSignal()
+  let finished = TestSignal()
+  func run(executableURL: URL, arguments: [String], environment: [String: String]?) async throws -> CommandResult {
+    started.signal()
+    await release.wait()
+    defer { finished.signal() }
+    return CommandResult(standardOutput: "", standardError: "", exitCode: 0)
+  }
+}

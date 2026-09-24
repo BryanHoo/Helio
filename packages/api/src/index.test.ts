@@ -1,0 +1,457 @@
+import { describe, expect, it } from "vitest"
+
+import {
+  PluginRegistryIndex,
+  PromptRequest,
+  CreateProjectRequest,
+  CreateSessionRequest,
+  CreateWorktreeRequest,
+  EventEnvelope,
+  HarnessAuthFlow,
+  Project,
+  ProjectGitBranch,
+  UpdateProjectRequest,
+  ServerCapabilities,
+  SessionDetail,
+  SessionGoal,
+  SetGoalRequest,
+  TerminalClientFrame,
+  TranscriptItemDetails,
+  UpsertWorkspaceRequest,
+  Workspace,
+  Worktree,
+  WorktreeSetupUpdate,
+  decode,
+  encode,
+  endpoints,
+  isoTimestamp,
+  makeOpenApiDocument
+} from "./index.js"
+
+describe("@codevisor/api", () => {
+  it("carries the session key needed to attach to an authentication terminal", () => {
+    const flow = decode(HarnessAuthFlow)({
+      id: "flow-1",
+      accountId: "account-1",
+      kind: "terminal",
+      terminalId: "terminal-1",
+      terminalKey: "auth:flow-1"
+    })
+
+    expect(flow).toMatchObject({
+      terminalId: "terminal-1",
+      terminalKey: "auth:flow-1"
+    })
+  })
+
+  it("normalizes pre-rename session origins", () => {
+    const legacy = decode(Project)({
+      id: "project-1",
+      name: "Legacy",
+      origin: "herdman",
+      createdAt: "2026-06-30T00:00:00.000Z",
+      locations: []
+    })
+
+    expect(legacy.origin).toBe("codevisor")
+    expect(encode(Project)(legacy).origin).toBe("codevisor")
+  })
+
+  it("decodes and encodes project payloads", () => {
+    const project = decode(Project)({
+      id: "project-1",
+      name: "Codevisor",
+      origin: "codevisor",
+      createdAt: "2026-06-30T00:00:00.000Z",
+      locations: [
+        {
+          id: "location-1",
+          projectId: "project-1",
+          serverId: "local",
+          folderPath: "/Users/me/src/Codevisor",
+          createdAt: "2026-06-30T00:00:00.000Z",
+          isGitRepository: true
+        }
+      ]
+    })
+
+    expect(encode(Project)(project)).toEqual({
+      id: "project-1",
+      name: "Codevisor",
+      origin: "codevisor",
+      createdAt: "2026-06-30T00:00:00.000Z",
+      locations: [
+        {
+          id: "location-1",
+          projectId: "project-1",
+          serverId: "local",
+          folderPath: "/Users/me/src/Codevisor",
+          createdAt: "2026-06-30T00:00:00.000Z",
+          isGitRepository: true
+        }
+      ]
+    })
+
+    const configured = decode(Project)({
+      ...encode(Project)(project),
+      worktreeBase: { remote: "upstream", branch: "release/next" }
+    })
+    expect(configured.worktreeBase).toEqual({ remote: "upstream", branch: "release/next" })
+    expect(
+      decode(ProjectGitBranch)({
+        remote: "upstream",
+        branch: "release/next",
+        isDefault: false
+      })
+    ).toMatchObject({ remote: "upstream", branch: "release/next" })
+    expect(decode(UpdateProjectRequest)({ worktreeBase: null })).toEqual({ worktreeBase: null })
+  })
+
+  it("accepts client-provided creation metadata", () => {
+    expect(
+      decode(CreateProjectRequest)({
+        id: "project-1",
+        folderPath: "/Users/me/src/Codevisor",
+        name: "Codevisor",
+        origin: "imported",
+        createdAt: "2026-06-30T00:00:00.000Z"
+      })
+    ).toMatchObject({
+      id: "project-1",
+      origin: "imported"
+    })
+
+    expect(
+      decode(CreateSessionRequest)({
+        id: "session-1",
+        projectId: "project-1",
+        harnessId: "codex",
+        agentSessionId: "agent-1",
+        title: "Synced",
+        origin: "codevisor",
+        deferAgentSession: true,
+        worktreeName: "fix-auth",
+        workspaceId: "workspace-1",
+        createdAt: "2026-06-30T00:00:00.000Z",
+        updatedAt: "2026-06-30T00:01:00.000Z"
+      })
+    ).toMatchObject({
+      agentSessionId: "agent-1",
+      deferAgentSession: true,
+      id: "session-1",
+      title: "Synced",
+      worktreeName: "fix-auth",
+      workspaceId: "workspace-1"
+    })
+  })
+
+  it("decodes pane workspaces and upsert requests", () => {
+    const workspace = decode(Workspace)({
+      id: "workspace-1",
+      serverId: "local",
+      projectId: "project-1",
+      name: "Main",
+      hasCustomName: false,
+      isArchived: false,
+      createdAt: "2026-07-01T00:00:00.000Z"
+    })
+    expect(workspace.rootDirectory).toBeUndefined()
+
+    expect(
+      decode(UpsertWorkspaceRequest)({
+        id: "workspace-1",
+        projectId: "project-1",
+        name: "Renamed",
+        hasCustomName: true,
+        rootDirectory: "/Users/me/src/Codevisor",
+        isArchived: false,
+        createdAt: "2026-07-01T00:00:00.000Z"
+      })
+    ).toMatchObject({
+      hasCustomName: true,
+      rootDirectory: "/Users/me/src/Codevisor"
+    })
+    expect(() => decode(UpsertWorkspaceRequest)({ name: "Missing project" })).toThrow()
+  })
+
+  it("decodes worktrees and worktree creation requests", () => {
+    expect(
+      decode(Worktree)({
+        id: "worktree-1",
+        projectId: "project-1",
+        serverId: "local",
+        name: "fix-auth",
+        branch: "codevisor/fix-auth",
+        path: "/Users/me/codevisor/project-1/fix-auth",
+        createdAt: "2026-06-30T00:00:00.000Z"
+      }).branch
+    ).toBe("codevisor/fix-auth")
+
+    expect(decode(CreateWorktreeRequest)({})).toEqual({})
+    expect(decode(CreateWorktreeRequest)({ name: "fix-auth" })).toEqual({ name: "fix-auth" })
+    expect(
+      decode(CreateWorktreeRequest)({
+        id: "worktree-1",
+        name: "fix-auth",
+        sessionId: "session-1"
+      })
+    ).toEqual({
+      id: "worktree-1",
+      name: "fix-auth",
+      sessionId: "session-1"
+    })
+  })
+
+  it("decodes prompt requests with and without a client message id", () => {
+    expect(
+      decode(PromptRequest)({
+        messageId: "0f6b2c8e-8a34-4b9d-9f2e-1a7c5d3e9b01",
+        text: "run pwd"
+      }).messageId
+    ).toBe("0f6b2c8e-8a34-4b9d-9f2e-1a7c5d3e9b01")
+    expect(decode(PromptRequest)({ text: "run pwd" }).messageId).toBeUndefined()
+  })
+
+  it("decodes worktree setup updates", () => {
+    expect(
+      decode(WorktreeSetupUpdate)({
+        state: "log",
+        worktreeId: "worktree-1",
+        projectId: "project-1",
+        name: "fix-auth",
+        branch: "codevisor/fix-auth",
+        stream: "stderr",
+        line: "Preparing worktree (new branch 'codevisor/fix-auth')"
+      }).line
+    ).toContain("Preparing worktree")
+
+    expect(
+      decode(WorktreeSetupUpdate)({
+        state: "failed",
+        worktreeId: "worktree-1",
+        projectId: "project-1",
+        name: "fix-auth",
+        branch: "codevisor/fix-auth",
+        message: "fatal: a branch named 'codevisor/fix-auth' already exists",
+        durationMs: 42
+      }).durationMs
+    ).toBe(42)
+
+    expect(() => decode(WorktreeSetupUpdate)({ state: "unknown", worktreeId: "w" })).toThrow()
+  })
+
+  it("rejects invalid terminal frames", () => {
+    expect(() => decode(TerminalClientFrame)({ type: "resize", cols: "80", rows: 24 })).toThrow()
+  })
+
+  it("allows opaque event payloads", () => {
+    const event = decode(EventEnvelope)({
+      id: 1,
+      serverId: "local",
+      kind: "session.output",
+      subjectId: "session-1",
+      createdAt: "2026-06-30T00:00:00.000Z",
+      payload: { text: "hello" }
+    })
+    expect(event.payload).toEqual({ text: "hello" })
+  })
+
+  it("decodes a bounded page of transcript state", () => {
+    const details = decode(TranscriptItemDetails)({
+      itemId: "item-1",
+      revision: 2,
+      eventCursor: 4,
+      entries: [{ key: "text:3", position: 3, revision: 4, payload: { text: "hello" } }],
+      nextAfter: "opaque-page-cursor"
+    })
+    expect(details.entries[0]?.payload).toEqual({ text: "hello" })
+    expect(details.nextAfter).toBe("opaque-page-cursor")
+  })
+
+  it("decodes session details with an event replay cursor", () => {
+    const detail = decode(SessionDetail)({
+      session: {
+        id: "session-1",
+        projectId: "project-1",
+        serverId: "local",
+        harnessId: "codex",
+        title: "Synced",
+        origin: "codevisor",
+        createdAt: "2026-06-30T00:00:00.000Z"
+      },
+      conversation: [
+        {
+          id: "item-1",
+          role: "user",
+          messageId: "user-1",
+          text: "hello",
+          createdAt: "2026-06-30T00:00:01.000Z",
+          isGenerating: false
+        }
+      ],
+      promptQueue: [
+        {
+          id: "queue-1",
+          sessionId: "session-1",
+          text: "follow up",
+          createdAt: "2026-06-30T00:00:02.000Z",
+          updatedAt: "2026-06-30T00:00:02.000Z"
+        }
+      ],
+      eventCursor: 7,
+      hasMore: false
+    })
+    expect(detail.eventCursor).toBe(7)
+    expect(detail.conversation[0]?.role).toBe("user")
+    expect(detail.conversation[0]?.messageId).toBe("user-1")
+    expect(detail.promptQueue[0]?.text).toBe("follow up")
+  })
+
+  it("decodes harness capabilities with modes and config options", () => {
+    const capabilities = decode(ServerCapabilities)({
+      harnesses: [
+        {
+          harness: {
+            id: "codex",
+            name: "Codex",
+            symbolName: "chevron.left.forwardslash.chevron.right",
+            source: "registry",
+            launchKind: "npx",
+            enabled: true,
+            readiness: { state: "ready" }
+          },
+          modes: {
+            currentModeId: "default",
+            availableModes: [
+              { id: "default", name: "Default", canonicalId: "ask" },
+              { id: "custom", name: "Custom" }
+            ]
+          },
+          configOptions: [
+            {
+              id: "model",
+              name: "Model",
+              category: "model",
+              currentValue: "gpt-5",
+              options: [{ value: "gpt-5", name: "GPT-5" }]
+            },
+            {
+              id: "grouped",
+              name: "Grouped",
+              currentValue: "a",
+              options: [{ group: "main", name: "Main", options: [{ value: "a", name: "A" }] }]
+            }
+          ]
+        }
+      ]
+    })
+    expect(capabilities.harnesses[0]?.configOptions.map((option) => option.id)).toEqual([
+      "model",
+      "grouped"
+    ])
+    const modes = capabilities.harnesses[0]?.modes?.availableModes
+    expect(modes?.[0]?.canonicalId).toBe("ask")
+    expect(modes?.[1]?.canonicalId).toBeUndefined()
+  })
+
+  it("decodes goal payloads, preserving the tokenBudget double-option", () => {
+    const goal = decode(SessionGoal)({
+      objective: "ship goal mode",
+      status: "active",
+      activity: "verifying",
+      tokenBudget: null,
+      tokensUsed: 1200,
+      timeUsedSeconds: 42,
+      createdAt: "2026-07-05T00:00:00.000Z",
+      updatedAt: "2026-07-05T00:01:00.000Z"
+    })
+    expect(goal.tokenBudget).toBeNull()
+    expect(goal.activity).toBe("verifying")
+
+    // The three set-request budget states survive decoding distinctly:
+    // absent key = keep, null = clear, number = set.
+    const keep = decode(SetGoalRequest)({ status: "paused" })
+    expect("tokenBudget" in keep).toBe(false)
+    const clear = decode(SetGoalRequest)({ tokenBudget: null })
+    expect(clear.tokenBudget).toBeNull()
+    const set = decode(SetGoalRequest)({ objective: "focus", tokenBudget: 50000 })
+    expect(set.tokenBudget).toBe(50000)
+    expect(() => decode(SetGoalRequest)({ status: "later" })).toThrow()
+  })
+
+  it("decodes plugin registry indexes, keeping GitHub facts and diagnostics", () => {
+    const index = decode(PluginRegistryIndex)({
+      generatedAt: "2026-08-18T00:00:00.000Z",
+      entries: [
+        {
+          commit: "a".repeat(40),
+          id: "acme.git-diff",
+          name: "Git Diff",
+          version: "0.1.0",
+          description: "Live git diff viewer",
+          panes: [{ type: "diff", title: "Git Diff", path: "/panes/diff/" }],
+          protocolVersion: 1,
+          tools: [
+            { name: "diff_summary", description: "Summarize the diff", path: "/tools/summary" }
+          ],
+          repo: "acme/git-diff",
+          stars: 12,
+          pushedAt: "2026-08-17T00:00:00Z"
+        },
+        // Manifest description and tools stay optional, as in PluginSummary.
+        {
+          commit: "b".repeat(40),
+          id: "beta.notes",
+          name: "Notes",
+          version: "1.0.0",
+          panes: [],
+          protocolVersion: 1,
+          repo: "beta/notes",
+          stars: 0,
+          pushedAt: "2026-08-16T00:00:00Z"
+        }
+      ],
+      rejected: [{ repo: "x/y", reason: "codevisor-plugin.json not found" }]
+    })
+    expect(index.entries).toHaveLength(2)
+    expect(index.entries[0]?.repo).toBe("acme/git-diff")
+    expect(index.entries[1]?.description).toBeUndefined()
+    // Curation groundwork: the indexer never sets `verified` yet.
+    expect(index.entries[0]?.verified).toBeUndefined()
+    expect(index.rejected[0]?.reason).toContain("not found")
+    expect(() => decode(PluginRegistryIndex)({ entries: [] })).toThrow()
+
+    // Before the indexer's first poll, the cloud serves an honest empty
+    // index whose generatedAt is null.
+    const empty = decode(PluginRegistryIndex)({ generatedAt: null, entries: [], rejected: [] })
+    expect(empty.generatedAt).toBeNull()
+    expect(empty.entries).toEqual([])
+  })
+
+  it("exports the complete server endpoint inventory as OpenAPI operations", () => {
+    const doc = makeOpenApiDocument("0.1.0")
+    expect(doc.info.version).toBe("0.1.0")
+    const documented = Object.entries(doc.paths).flatMap(([path, operations]) =>
+      Object.keys(operations).map(
+        (method) => `${method.toUpperCase()} ${path.replace(/\{([A-Za-z][A-Za-z0-9]*)\}/g, ":$1")}`
+      )
+    )
+    expect(documented.sort()).toEqual([...endpoints].sort())
+    const operations = Object.values(doc.paths).flatMap((path) => Object.values(path)) as Array<
+      Record<string, unknown>
+    >
+    const operationIds = operations.map((operation) => operation.operationId)
+    expect(new Set(operationIds).size).toBe(operationIds.length)
+    expect(operations.every((operation) => operation.responses !== undefined)).toBe(true)
+    expect(doc.components).toHaveProperty("securitySchemes.bearerAuth")
+    expect(doc.paths["/v1/health"]?.get).toMatchObject({ security: [] })
+    expect(doc.paths["/v1/projects"]?.post).toMatchObject({
+      operationId: "post-projects",
+      security: [{ bearerAuth: [] }]
+    })
+  })
+
+  it("creates ISO timestamps for server state", () => {
+    expect(Date.parse(isoTimestamp())).not.toBeNaN()
+  })
+})

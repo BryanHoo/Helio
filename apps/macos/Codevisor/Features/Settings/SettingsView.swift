@@ -1,0 +1,554 @@
+import SwiftUI
+import AppKit
+import CodevisorCore
+import os
+import UniformTypeIdentifiers
+import UserNotifications
+import CodevisorUI
+
+enum SettingsTab: String, CaseIterable, Identifiable {
+  case general, account, updates, appearance, notifications
+  case shortcuts
+  // Fleet-synced config planes: the panes render the app's selected
+  // machine, whose content converges with every other machine.
+  case agents, mcps, skills, plugins
+  case projects, machines
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .account: "Account"
+    case .updates: "Updates"
+    case .general: "General"
+    case .appearance: "Appearance"
+    case .notifications: "Notifications"
+    case .shortcuts: "Shortcuts"
+    case .agents: "Harnesses"
+    case .mcps: "MCP Servers"
+    case .skills: "Skills"
+    case .plugins: "Plugins"
+    case .projects: "Projects"
+    case .machines: "Machines"
+    }
+  }
+
+  var systemImage: String {
+    switch self {
+    case .account: "person.crop.circle"
+    case .updates: "arrow.down.circle"
+    case .general: "gear"
+    case .appearance: "paintpalette"
+    case .notifications: "bell"
+    case .shortcuts: "keyboard"
+    case .agents: "brain"
+    case .mcps: "puzzlepiece.extension"
+    case .skills: "book.closed"
+    case .plugins: "puzzlepiece"
+    case .projects: "folder"
+    case .machines: "desktopcomputer"
+    }
+  }
+}
+
+enum SettingsPaneRoute: Hashable {
+  case machine(MachinePaneRoute)
+  case project(ProjectGroup.ID)
+}
+
+/// A place in Settings: the sidebar section plus any detail pages pushed
+/// over it. The unit of the router's back/forward history — pushes are
+/// history steps, so Back always retraces exactly one page.
+struct SettingsLocation: Equatable {
+  var tab: SettingsTab
+  var panePath: [SettingsPaneRoute]
+}
+
+/// A one-shot deep link to one harness's account manager on one machine.
+struct HarnessAccountSettingsRequest: Equatable {
+  let machineId: String
+  let harnessId: String
+}
+
+/// Routes programmatic Settings navigation (e.g. the sidebar's
+/// "Manage machines…" opens Settings on the Machines section) and keeps
+/// the Xcode-style back/forward history over every visited page — sidebar
+/// selections and pushed machine pages alike.
+@MainActor
+@Observable
+final class SettingsRouter {
+  static let shared = SettingsRouter()
+  @ObservationIgnored weak var controlWindow: NSWindow?
+  var selectedTab: SettingsTab = .general
+  /// Detail pages pushed over the current pane.
+  var panePath: [SettingsPaneRoute] = []
+  /// Seeds Add Project without changing the app's selected machine or draft.
+  var projectCreationMachineId: String?
+  /// Pages behind and ahead of the current one. Every navigation —
+  /// sidebar selection, push, pop, deep link — lands the previous page in
+  /// `backHistory`; going back moves the current page to
+  /// `forwardHistory` (cleared again by the next normal navigation, like
+  /// a browser).
+  private(set) var backHistory: [SettingsLocation] = []
+  private(set) var forwardHistory: [SettingsLocation] = []
+  /// Set while back/forward applies a location. Applying can change tab
+  /// and path in separate observation firings, so the recorder swallows
+  /// EVERY change until the observed location equals this target —
+  /// a one-shot flag here is exactly how Back used to jump two pages.
+  @ObservationIgnored var pendingAppliedLocation: SettingsLocation?
+  /// Consumed by the Harnesses pane when it appears.
+  var pendingHarnessAccountRequest: HarnessAccountSettingsRequest?
+
+  var currentLocation: SettingsLocation {
+    SettingsLocation(tab: selectedTab, panePath: panePath)
+  }
+
+  var canGoBack: Bool { !backHistory.isEmpty || !panePath.isEmpty }
+  var canGoForward: Bool { !forwardHistory.isEmpty }
+
+  /// Files the page just left into the back history. Called by the view's
+  /// change observer for every user navigation.
+  func recordNavigation(from previous: SettingsLocation) {
+    backHistory.append(previous)
+    if backHistory.count > 50 { backHistory.removeFirst() }
+    forwardHistory.removeAll()
+  }
+
+  func goBack() {
+    // A detail deeplink can arrive before the Settings window exists, so
+    // its parent wasn't observed as a history step. Back still reaches it.
+    let parent = panePath.isEmpty ? nil : SettingsLocation(tab: selectedTab, panePath: Array(panePath.dropLast()))
+    guard let target = backHistory.popLast() ?? parent else { return }
+    forwardHistory.append(currentLocation)
+    apply(target)
+  }
+
+  func goForward() {
+    guard let target = forwardHistory.popLast() else { return }
+    backHistory.append(currentLocation)
+    apply(target)
+  }
+
+  private func apply(_ location: SettingsLocation) {
+    pendingAppliedLocation = location
+    selectedTab = location.tab
+    panePath = location.panePath
+  }
+
+  func showMachines() {
+    panePath = []
+    selectedTab = .machines
+  }
+
+  func showProjects(machineId: String? = nil) {
+    projectCreationMachineId = machineId
+    panePath = []
+    selectedTab = .projects
+  }
+
+  /// Opens the selected repository's details from a composer's checkout.
+  func showProject(_ project: Project) {
+    projectCreationMachineId = project.serverId
+    panePath = [.project(ProjectGroup.groupID(for: project))]
+    selectedTab = .projects
+  }
+
+  /// Opens the Updates pane — the one surface for everything updatable.
+  func showUpdates() {
+    panePath = []
+    selectedTab = .updates
+  }
+
+  /// Opens the Harnesses pane. The list is harness-major, so a machine
+  /// only informs which rows the caller cares about; the pane is one page.
+  func showHarnesses(machineId: String? = nil) {
+    pendingHarnessAccountRequest = nil
+    panePath = []
+    selectedTab = .agents
+  }
+
+  /// Opens the Harnesses pane and presents one harness's accounts on one machine.
+  func showHarnessAccounts(machineId: String, harnessId: String) {
+    pendingHarnessAccountRequest = HarnessAccountSettingsRequest(
+      machineId: machineId,
+      harnessId: harnessId
+    )
+    panePath = []
+    selectedTab = .agents
+  }
+
+  /// Opens the Plugins pane; same machine-first shape as showHarnesses.
+  func showPlugins(machineId: String? = nil) {
+    _ = machineId
+    panePath = []
+    selectedTab = .plugins
+  }
+
+  /// A plugin source handed in from outside the settings window (the
+  /// `codevisor://install-plugin` deeplink). The plugins pane consumes it
+  /// and opens the install sheet — discover→consent still runs; a link can
+  /// never skip the consent step.
+  var pendingPluginInstallSource: String?
+}
+
+/// The native back/forward control (System Settings, Xcode): a `ControlGroup`
+/// in the navigation control-group style. AppKit draws the grouped capsule,
+/// divider, sizing, and disabled dimming.
+private struct SettingsBackForwardControl: View {
+  @Bindable private var router = SettingsRouter.shared
+
+  var body: some View {
+    ControlGroup {
+      Button {
+        router.goBack()
+      } label: {
+        Label("Back", systemImage: "chevron.left")
+      }
+      .disabled(!router.canGoBack)
+      .help("Back")
+      .keyboardShortcut("[", modifiers: .command)
+
+      Button {
+        router.goForward()
+      } label: {
+        Label("Forward", systemImage: "chevron.right")
+      }
+      .disabled(!router.canGoForward)
+      .help("Forward")
+      .keyboardShortcut("]", modifiers: .command)
+    }
+    .controlGroupStyle(.navigation)
+  }
+}
+
+/// Puts the back/forward control in the window toolbar. Applied to every
+/// page in the detail column — the root panes and each pushed machine page —
+/// so the control is always present.
+private struct SettingsNavigationToolbar: ViewModifier {
+  func body(content: Content) -> some View {
+    content.toolbar {
+      ToolbarItem(placement: .navigation) {
+        SettingsBackForwardControl()
+      }
+    }
+  }
+}
+
+extension View {
+  fileprivate func settingsNavigationToolbar() -> some View {
+    modifier(SettingsNavigationToolbar())
+  }
+}
+
+/// The machine a Settings subtree is scoped to. Set at the root of each
+/// machine's disclosure content; sheets resolve the server they talk to from
+/// this, falling back to the app's selected machine (onboarding, previews).
+private struct SettingsMachineIdKey: EnvironmentKey {
+  static let defaultValue: String? = nil
+}
+
+extension EnvironmentValues {
+  var settingsMachineId: String? {
+    get { self[SettingsMachineIdKey.self] }
+    set { self[SettingsMachineIdKey.self] = newValue }
+  }
+}
+
+/// The app's Settings window (⌘, / Codevisor ▸ Settings…) in the modern
+/// sidebar style (System Settings, Xcode 26): sections on the left, the
+/// selected section's content on the right with push navigation for
+/// per-item pages. Client-scoped sections (Updates, Privacy & Data, Appearance,
+/// Notifications, Shortcuts) sit alongside Machines, which owns everything
+/// scoped to a specific machine: its server, harnesses, MCP servers, and
+/// skills.
+struct SettingsView: View {
+  @Bindable private var router = SettingsRouter.shared
+  @Environment(AppEnvironment.self) private var environment
+  @Environment(\.theme) private var theme
+
+  var body: some View {
+    NavigationSplitView {
+      // A sidebar-styled List and the grouped Forms in the detail column both
+      // use SwiftUI's AppKit outline-coordinator path. A large live row update
+      // can corrupt their presentation state: the sidebar's rows disappear,
+      // and the detail scroller stops consuming wheel events. The app's main
+      // sidebar already avoids that path for the same reason. Keep this short,
+      // fixed navigation list on a plain ScrollView as well.
+      ScrollView {
+        VStack(spacing: 2) {
+          ForEach(SettingsTab.allCases.filter { $0 != .account }) { tab in
+            SettingsSidebarRow(
+              tab: tab,
+              isSelected: router.selectedTab == tab,
+              badgeCount: tab == .updates ? environment.updateCenter.availableCount : 0
+            ) {
+              selectSidebarTab(tab)
+            }
+          }
+        }
+        .padding(8)
+      }
+      .scrollContentBackground(.hidden)
+      .scrollBounceBehavior(.basedOnSize)
+      .themedSurface(.sidebar)
+      .navigationSplitViewColumnWidth(min: 185, ideal: 205, max: 240)
+      .themedToolbarBackground(theme, role: .sidebar)
+      // System Settings keeps its sidebar fixed; a collapse control
+      // would just leave an empty content window here.
+      .toolbar(removing: .sidebarToggle)
+    } detail: {
+      NavigationStack(path: $router.panePath) {
+        detailRoot
+          .settingsNavigationToolbar()
+          .navigationDestination(for: SettingsPaneRoute.self) { route in
+            switch route {
+            case let .machine(machineRoute):
+              machinePage(for: machineRoute)
+            case let .project(groupId):
+              ProjectSettingsDetailView(groupId: groupId)
+                .navigationBarBackButtonHidden(true)
+                .settingsNavigationToolbar()
+            }
+          }
+      }
+      .themedToolbarBackground(theme, role: .content)
+    }
+    // Every navigation (sidebar selection, push, pop, deep link) files
+    // the previous page into the history. While back/forward applies a
+    // location, every intermediate firing is swallowed until the
+    // observed location matches the target — recording those would make
+    // the next Back jump multiple pages.
+    .onChange(of: router.currentLocation) { previous, current in
+      if let pending = router.pendingAppliedLocation {
+        if current == pending { router.pendingAppliedLocation = nil }
+        return
+      }
+      router.recordNavigation(from: previous)
+    }
+    .frame(minWidth: 780, idealWidth: 780, minHeight: 560, idealHeight: 560)
+    // One-row toolbar with the back button and title inline (the Settings
+    // scene ignores the windowToolbarStyle scene modifier).
+    .settingsWindowToolbarStyle()
+    // When themed, drop the grouped forms' own backdrop so the theme
+    // surface (painted by ThemedRoot) shows through; system themes keep
+    // the native look.
+    .scrollContentBackground(theme.isSystem ? .automatic : .hidden)
+  }
+
+  private func selectSidebarTab(_ tab: SettingsTab) {
+    if tab != router.selectedTab { router.panePath = [] }
+    if tab == .projects { router.projectCreationMachineId = nil }
+    router.selectedTab = tab
+  }
+
+  @ViewBuilder
+  private var detailRoot: some View {
+    switch router.selectedTab {
+    case .updates:
+      UpdateCenterView()
+        .navigationTitle("Updates")
+    case .general:
+      GeneralSettingsView()
+        .navigationTitle("Privacy & Data")
+    case .appearance:
+      AppearanceSettingsView()
+        .navigationTitle("Appearance")
+    case .notifications:
+      NotificationsSettingsView()
+        .navigationTitle("Notifications")
+    case .shortcuts:
+      ShortcutsSettingsView()
+        .navigationTitle("Shortcuts")
+    case .agents:
+      HarnessesSettingsView()
+        .navigationTitle("Harnesses")
+    case .mcps:
+      McpSettingsView()
+        .navigationTitle("MCP Servers")
+    case .skills:
+      SkillsSettingsView()
+        .navigationTitle("Skills")
+    case .plugins:
+      PluginsSettingsView()
+        .navigationTitle("Plugins")
+    case .projects:
+      ProjectsSettingsView()
+        .navigationTitle("Projects")
+    case .account:
+      CloudSettingsView()
+        .navigationTitle("Account")
+    case .machines:
+      MachinesSettingsView()
+        .navigationTitle("Machines")
+    }
+  }
+}
+
+private struct SettingsSidebarRow: View {
+  let tab: SettingsTab
+  let isSelected: Bool
+  let badgeCount: Int
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 8) {
+        Image(systemName: tab.systemImage)
+          .frame(width: 18)
+          .foregroundStyle(.secondary)
+        Text(tab.title)
+          .lineLimit(1)
+        Spacer(minLength: 4)
+        if badgeCount > 0 {
+          Text(badgeCount, format: .number)
+            .font(.caption)
+            .monospacedDigit()
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(.quaternary, in: Capsule())
+        }
+      }
+      .padding(.horizontal, 8)
+      .padding(.vertical, 6)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .sidebarRowHover(isSelected: isSelected)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
+  }
+}
+
+extension SettingsView {
+  /// One machine's page inside a config pane, pushed from the pane's
+  /// machine list. Pinned to its machine via `settingsMachineId` so every
+  /// sheet keeps talking to that machine.
+  @ViewBuilder
+  fileprivate func machinePage(for route: MachinePaneRoute) -> some View {
+    let machine =
+      environment.machines.allMachines.first { $0.id == route.machineId }
+      ?? CodevisorMachine.local
+    Form {
+      switch route.pane {
+      case .mcps:
+        McpMachinePane(machine: machine)
+      case .plugins:
+        PluginMachinePane(machine: machine)
+      case .skills:
+        SkillMachinePane(machine: machine)
+      }
+    }
+    .settingsPaneFormStyle(theme)
+    .navigationTitle(machine.name)
+    .environment(\.settingsMachineId, machine.id)
+    .navigationBarBackButtonHidden(true)
+    .settingsNavigationToolbar()
+  }
+}
+
+extension View {
+  /// Keeps every top-level Settings pane on the same native grouped-Form
+  /// layout and background behavior.
+  func settingsPaneFormStyle(_ theme: Theme) -> some View {
+    formStyle(.grouped)
+      .scrollContentBackground(theme.isSystem ? .automatic : .hidden)
+  }
+
+  // `settingsActionTint(_:)` moved to CodevisorUI's ThemedSurfaceModifier so
+  // shared sheet chrome can tint its own actions. Same name, so call sites
+  // are unchanged.
+}
+
+/// Privacy and local data settings. Everything scoped to a machine (server
+/// status, remote access) lives in Settings ▸ Machines.
+struct GeneralSettingsView: View {
+  @Environment(AppEnvironment.self) private var environment
+  @Environment(\.theme) private var theme
+  @State private var showingConfirmation = false
+
+  var body: some View {
+    Form {
+      Section {
+        Toggle("Ask before quitting", isOn: confirmBeforeQuitting)
+          .toggleStyle(.switch)
+      } header: {
+        Text("General")
+      } footer: {
+        Text("Shows a confirmation when you press ⌘Q, so a stray keystroke can't close every session at once.")
+      }
+
+      Section {
+        Toggle("Share usage analytics", isOn: shareAnalytics)
+          .toggleStyle(.switch)
+        Toggle("Send crash and error reports", isOn: shareCrashReports)
+          .toggleStyle(.switch)
+      } header: {
+        Text("Privacy")
+      } footer: {
+        Text(
+          "Anonymous. Prompts, responses, code, file paths, browser content, and terminal commands are never included."
+        )
+      }
+
+      Section("Data") {
+        HStack(alignment: .center, spacing: 16) {
+          VStack(alignment: .leading, spacing: 3) {
+            Text("Delete all data")
+            Text("Removes all projects, chats, and settings, then restarts setup.")
+              .font(.callout)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+          Spacer(minLength: 8)
+          Button("Delete…", role: .destructive) {
+            showingConfirmation = true
+          }
+          .settingsActionTint(theme)
+          .fixedSize()
+        }
+      }
+    }
+    .settingsPaneFormStyle(theme)
+    .confirmationDialog(
+      "Delete all Codevisor data?",
+      isPresented: $showingConfirmation,
+      titleVisibility: .visible
+    ) {
+      Button("Delete everything", role: .destructive) {
+        environment.deleteAllData()
+      }
+      .settingsActionTint(theme)
+      Button("Cancel", role: .cancel) {}
+        .settingsActionTint(theme)
+    } message: {
+      Text("This can't be undone. You'll be taken back through setup.")
+    }
+  }
+
+  private var confirmBeforeQuitting: Binding<Bool> {
+    Binding(
+      get: { environment.settings.confirmBeforeQuitting },
+      set: { environment.settings.setConfirmBeforeQuitting($0) }
+    )
+  }
+
+  private var shareAnalytics: Binding<Bool> {
+    Binding(
+      get: { environment.settings.shareAnalytics },
+      set: { environment.setShareAnalytics($0) }
+    )
+  }
+
+  private var shareCrashReports: Binding<Bool> {
+    Binding(
+      get: { environment.settings.shareCrashReports },
+      set: { environment.setShareCrashReports($0) }
+    )
+  }
+
+}
+
+#Preview("Settings") {
+  SettingsView()
+    .environment(AppEnvironment.preview())
+}

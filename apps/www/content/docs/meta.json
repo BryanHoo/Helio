@@ -1,0 +1,27 @@
+{
+  "pages": [
+    "index",
+    "---Extensions---",
+    "extensions",
+    "plugins",
+    "mcp",
+    "skills",
+    "custom-agents",
+    "---Codevisor Server---",
+    "server",
+    "quickstart",
+    "installation",
+    "configuration",
+    "authentication",
+    "security",
+    "api-concepts",
+    "realtime",
+    "terminals",
+    "operations",
+    "---Reference---",
+    "api-reference",
+    "...(openapi)",
+    "---Help---",
+    "troubleshooting"
+  ]
+}

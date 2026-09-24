@@ -1,0 +1,34 @@
+# Structural lint only — formatting is swift-format's job (.swift-format).
+# Runs with --strict (scripts/swift-lint.sh), so any warning fails the check.
+
+only_rules:
+  - file_length
+  - type_body_length
+  - file_name
+
+included:
+  - apps/ios
+  - apps/macos
+  - apps/shared
+  - packages
+
+excluded:
+  - apps/macos/Codevisor/Vendor
+  - "**/.build"
+  - "**/DerivedData"
+  - tmp
+  - .repos
+  - node_modules
+  - "**/node_modules"
+
+file_length:
+  warning: 500
+  error: 1000
+  ignore_comment_only_lines: true
+
+type_body_length:
+  warning: 400
+  error: 800
+
+file_name:
+  severity: warning

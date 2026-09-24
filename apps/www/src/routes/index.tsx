@@ -1,0 +1,142 @@
+import { createFileRoute } from "@tanstack/react-router"
+
+import { InstallCommand } from "../components/install-command"
+import { SiteFooter } from "../components/site-footer"
+import { SiteNav } from "../components/site-nav"
+
+export const Route = createFileRoute("/")({
+  head: () => ({ meta: [{ name: "theme-color", content: "#000000" }] }),
+  component: Home
+})
+
+function Home() {
+  return (
+    <div className="marketing-shell min-h-screen">
+      <SiteNav />
+      <main>
+        <Hero />
+        <Screenshot
+          src="/screenshots/chat.png"
+          alt="Codevisor running a Claude Code chat that fixes flaky webhook retries, with the conversation and code changes side by side"
+        />
+        <Feature
+          title="A real terminal. Built in."
+          body="Watch your agents work, or take the wheel yourself. Every chat has a terminal underneath it, right where the work happens."
+          src="/screenshots/terminal.png"
+          alt="Codevisor with the built-in terminal open under an agent chat"
+        />
+        <Feature
+          title="Projects keep the thread."
+          body="Point Codevisor at a folder and every conversation about that code lives together — including the agent chats you already had."
+          src="/screenshots/new-chat.png"
+          alt="Codevisor project view listing chats for the api-gateway project"
+        />
+        <TextFeatures />
+        <Install />
+      </main>
+      <SiteFooter />
+    </div>
+  )
+}
+
+function Hero() {
+  return (
+    <section className="px-6 pt-32 pb-14 text-center sm:pt-40">
+      <h1 className="mx-auto max-w-3xl text-5xl font-semibold tracking-tight text-balance sm:text-7xl">
+        Every coding agent. One app.
+      </h1>
+      <p className="mx-auto mt-6 max-w-xl text-lg text-muted">
+        Codevisor runs Claude Code, Codex, and any ACP agent on your machines — in one native macOS
+        app.
+      </p>
+      <InstallCta placement="hero" />
+    </section>
+  )
+}
+
+function InstallCta({ placement }: { placement: "hero" | "footer" }) {
+  return (
+    <div className="mx-auto mt-8 w-full max-w-lg">
+      <InstallCommand placement={placement} />
+    </div>
+  )
+}
+
+function Screenshot({ src, alt }: { src: string; alt: string }) {
+  return (
+    <div className="mx-auto max-w-5xl px-6">
+      <img src={src} alt={alt} className="h-auto w-full" loading="lazy" />
+    </div>
+  )
+}
+
+function Feature({
+  title,
+  body,
+  src,
+  alt
+}: {
+  title: string
+  body: string
+  src: string
+  alt: string
+}) {
+  return (
+    <section className="pt-28 text-center sm:pt-36">
+      <div className="mx-auto max-w-xl px-6">
+        <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl">{title}</h2>
+        <p className="mt-4 text-lg text-muted">{body}</p>
+      </div>
+      <div className="mt-10">
+        <Screenshot src={src} alt={alt} />
+      </div>
+    </section>
+  )
+}
+
+function TextFeatures() {
+  const items = [
+    {
+      title: "Local-first",
+      body: "Your chats live in a database on your machine. No cloud in the middle."
+    },
+    {
+      title: "Remote machines",
+      body: "Run the server on a Linux box and pair it with a token. Everything syncs live."
+    },
+    {
+      title: "Native",
+      body: "Purpose-built downloads for Apple Silicon and Intel Macs — no fat binaries."
+    },
+    {
+      title: "Self-updating",
+      body: "The app and your remote servers keep themselves on the latest release."
+    }
+  ]
+  return (
+    <section className="mx-auto max-w-5xl px-6 pt-28 sm:pt-36">
+      <div className="grid gap-x-12 gap-y-10 border-t border-hairline pt-12 sm:grid-cols-2">
+        {items.map((item) => (
+          <div key={item.title}>
+            <h3 className="text-[15px] font-semibold">{item.title}</h3>
+            <p className="mt-1.5 text-[15px] leading-relaxed text-muted">{item.body}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function Install() {
+  return (
+    <section id="install" className="px-6 pt-28 pb-32 text-center sm:pt-36">
+      <h2 className="mx-auto max-w-3xl text-5xl font-semibold tracking-tight text-balance sm:text-7xl">
+        Get Codevisor.
+      </h2>
+      <p className="mx-auto mt-6 max-w-xl text-lg text-muted">
+        One command installs the app on a Mac and sets up the Codevisor server on Linux.
+      </p>
+      <InstallCta placement="footer" />
+    </section>
+  )
+}

@@ -1,0 +1,570 @@
+import ACPKit
+import CodevisorCore
+import CodevisorUI
+import StreamMarkdown
+import SwiftUI
+import UIKit
+
+extension Notification.Name {
+  static let codevisorOpenSettings = Notification.Name("codevisor.open-settings")
+}
+
+/// The chat pane body: connects an existing session through the shared
+/// SessionController/SessionModel engine and renders the transcript with the
+/// shared row views. UIKit owns the virtual window and viewport coordinate so
+/// opening, measurement, pagination, and streaming are one position system.
+struct SessionTranscriptView: View {
+  @Environment(\.openFileDocument) var openFileDocument
+  /// Increment whenever the iOS row-measurement environment changes. Scroll
+  /// state can outlive a mounted transcript, so heights produced under an
+  /// older hosting contract must not be restored as exact geometry.
+  static let transcriptMeasurementSchemaVersion = 3
+  /// Space between the newest row and the composer's top edge when the
+  /// transcript rests at the bottom.
+  static let transcriptBottomBreathingRoom: CGFloat = 8
+  /// The composer cluster's margin above the chat area's bottom edge.
+  static let composerBottomMargin: CGFloat = 6
+
+  @Bindable var controller: SessionController
+  let presentationSurface: TranscriptPresentationSurface
+  /// The new-chat page shows project/run-location chips above the composer;
+  /// the first chat inside a workspace doesn't (its directory is fixed).
+  /// This flag is the only difference between the two surfaces — everything
+  /// else (watermark, composer, expansion, notice rails) is shared here.
+  var showsRunPickers: Bool = false
+  /// New Chat supplies one request for its initial presentation. Existing
+  /// chats leave this nil and never steal keyboard focus when opened.
+  var initialComposerFocusRequest: UUID? = nil
+  var onInitialComposerFocusRequestFulfilled: ((UUID) -> Void)? = nil
+  /// During first-send promotion the destination beneath the sheet is laid
+  /// out ahead of time, but the sheet remains the sole owner of presentation
+  /// events and shared viewport state until the handoff commits.
+  var presentationRole: TranscriptPresentationRole = .foreground
+  var onSendAnimationCompleted: ((UserSendAnimationRequest) -> Void)? = nil
+  var onSendAnimationStarted:
+    (
+      (
+        UserSendAnimationRequest,
+        TranscriptSendAnimationTarget
+      ) -> Bool
+    )? = nil
+  var onComposerWillSend: ((String, CGRect) -> Void)? = nil
+  /// A promoted New Chat keeps its UIKit editor first responder while its
+  /// real workspace route mounts underneath. Ordinary chats still dismiss
+  /// the keyboard on send.
+  var preservesComposerFocusOnSend = false
+  /// A draft adopting its workspace in place (the New Chat page, not the
+  /// sheet) hashes this instead of the controller's preview namespace, so
+  /// adoption does not invalidate layout and cut the first send short.
+  var layoutNamespaceToken: UUID? = nil
+  var composerTextEditorHandoffRole: ComposerTextEditorHandoffRole = .none
+  var composerTextEditorHandoffID: UUID? = nil
+  @Environment(\.accessibilityReduceMotion) var reduceMotion
+  @Environment(\.displayScale) var displayScale
+  @Environment(\.dynamicTypeSize) var dynamicTypeSize
+  @Environment(\.scenePhase) var scenePhase
+  @Environment(\.theme) var theme
+  @Environment(\.markdownTheme) var markdownTheme
+  @Environment(AppEnvironment.self) var environment
+  @State private var presentationOwner = UUID()
+  var disclosure: TranscriptDisclosureStore { presentationSurface.disclosure }
+  @Namespace var composerGlassNamespace
+  /// Resting measurements stay split so a live resize drag never republishes
+  /// transcript geometry. `ComposerBar` owns the card measurement; the
+  /// accessory stack changes only when semantic surfaces appear or resize.
+  @State var composerCardHeight: CGFloat = 96
+  @State var composerAccessoryHeight: CGFloat = 0
+  /// True while the transcript is parked at the newest content; drives both
+  /// auto-scroll and the scroll-to-bottom button, mirroring the macOS
+  /// transcript's follow mode.
+  @State var followsLatest = true
+  @State var isAtBottom = true
+  /// Height available to the chat area, used to cap composer expansion.
+  @State var availableHeight: CGFloat = 600
+  /// Window-space bottoms, as UIKit lays them out, of the transcript (which
+  /// runs beneath the composer and the home indicator) and of the chat area
+  /// the composer rests on (above the home indicator or the keyboard).
+  @State var transcriptWindowBottom: CGFloat = 0
+  @State var chatAreaWindowBottom: CGFloat = 0
+  /// True while the composer is dragged to full height; informational
+  /// accessories hide until it collapses, while actionable failures remain.
+  @State var composerExpanded = false
+  /// Fetches and caches transcript attachment previews via the controller's
+  /// authenticated client.
+  @State var attachmentImages: AttachmentImageStore?
+  /// Quick Look for a workspace file linked from any transcript row.
+  @State var linkedQuickLookURL: URL?
+  @State var scrollCommand = TranscriptScrollCommand()
+  @State var historyLoadTask: Task<Void, Never>?
+  @State var olderHistoryPresentation = TranscriptPaginationPresentationGate()
+  @State var showsInitialLoadingSpinner = false
+  @State var projectedRows: [TranscriptVirtualRow] = []
+  @State var projectedRowsVersion: UInt64 = 0
+  @State var workedRowsVisibilityCache = TranscriptWorkedRowsVisibilityCache()
+  @State var projectedSessionID: UUID?
+  /// Readiness belongs to a particular projection request. Existing chats
+  /// move from an empty/loading request to a history-backed request, and the
+  /// native gate must not treat the old rows as current between those two.
+  @State var projectionPublication =
+    TranscriptProjectionPublicationState<TranscriptProjectionRequest>()
+  @State var ownsVisibleTranscriptLifecycle = false
+  var textAnimationVisibility: StreamingTextAnimationVisibility {
+    presentationSurface.textAnimationVisibility
+  }
+  var textAnimationRegistry: StreamingTextAnimationRegistry {
+    presentationSurface.textAnimationRegistry
+  }
+  /// Window-space bounds of the live editor. UIKit uses this as the actual
+  /// launch point for the optimistic user row instead of estimating from the
+  /// transcript's bottom inset.
+  @State var sendAnimationSourceFrame: CGRect?
+  @State var queueSendAnimation = IOSQueueSendAnimation()
+
+  /// The complete resting bottom chrome above the safe-area margin. Every
+  /// transcript inset and snapshot crop reads this single value.
+  var composerHeight: CGFloat {
+    composerCardHeight + composerAccessoryHeight
+  }
+
+  var body: some View {
+    chat
+      .attachmentQuickLookPreview($linkedQuickLookURL)
+      .acknowledgesPresentedTurnAttention(
+        controller: controller,
+        presentationRole: presentationRole
+      )
+      .onAppear { [controller] in
+        followsLatest = controller.scrollState?.followMode.followsLatest ?? true
+        isAtBottom = controller.scrollState?.isAtBottom ?? true
+        installAttachmentImageStoreIfNeeded()
+        updateVisibleTranscriptLifecycle(for: presentationRole)
+      }
+      .onChange(of: controller.previewCacheNamespace) {
+        installAttachmentImageStoreIfNeeded()
+      }
+      .onChange(of: presentationRole) { _, role in
+        IOSNavigationDiagnostics.record(
+          "transcript.roleChanged", "role=\(role) session=\(diagnosticSessionID)")
+        updateVisibleTranscriptLifecycle(for: role)
+      }
+      // Remount / reset diagnostics: every one of these is a candidate
+      // for a visible flicker after a first send.
+      .onAppear {
+        IOSNavigationDiagnostics.record(
+          "transcript.appear", "session=\(diagnosticSessionID) role=\(presentationRole)")
+      }
+      .onDisappear {
+        IOSNavigationDiagnostics.record(
+          "transcript.disappear", "session=\(diagnosticSessionID) role=\(presentationRole)")
+      }
+      .onChange(of: ObjectIdentifier(controller)) { _, _ in
+        IOSNavigationDiagnostics.record(
+          "transcript.controllerChanged", "session=\(diagnosticSessionID)")
+      }
+      .onChange(of: projectedRows.isEmpty) { _, isEmpty in
+        IOSNavigationDiagnostics.record(
+          "transcript.rowsEmptyChanged", "empty=\(isEmpty) session=\(diagnosticSessionID)")
+      }
+      .onChange(of: controller.isLoadingInitialHistory) { _, loading in
+        IOSNavigationDiagnostics.record(
+          "transcript.isLoadingInitialHistory", "value=\(loading) session=\(diagnosticSessionID)")
+      }
+      .onChange(of: showsWatermark) { _, shows in
+        IOSNavigationDiagnostics.record(
+          "transcript.watermark", "shows=\(shows) session=\(diagnosticSessionID)")
+      }
+      .onChange(of: controller.settledConversation.count) { old, new in
+        IOSNavigationDiagnostics.record(
+          "transcript.settledCount", "\(old)->\(new) session=\(diagnosticSessionID)")
+      }
+      .onChange(of: scenePhase, initial: true) { _, phase in
+        if phase == .active {
+          textAnimationRegistry.resumePlayback()
+        } else {
+          textAnimationRegistry.suspendPlayback()
+        }
+      }
+      .onDisappear { [controller] in
+        historyLoadTask?.cancel()
+        historyLoadTask = nil
+        olderHistoryPresentation.cancel()
+        publishAttentionFocus(isForeground: false)
+        presentationSurface.disappear(owner: presentationOwner)
+        TranscriptPresentationSurfaceCache.shared.scheduleTrim()
+        if ownsVisibleTranscriptLifecycle {
+          ownsVisibleTranscriptLifecycle = false
+          controller.transcriptViewDidDisappear()
+        }
+      }
+      .environment(\.attachmentImages, attachmentImages)
+      .task(id: transcriptProjectionRequest) {
+        let request = transcriptProjectionRequest
+        let key = request.key
+        let input = controller.transcriptProjectionInput
+        if projectedSessionID != key.sessionID {
+          projectedRows = []
+          projectedRowsVersion &+= 1
+          projectedSessionID = key.sessionID
+          projectionPublication.reset()
+        }
+        do {
+          let rows = try await TranscriptRowProjectionCache.shared.rows(
+            for: key,
+            input: input,
+            options: request.options
+          )
+          guard !Task.isCancelled,
+            transcriptProjectionRequest == request
+          else { return }
+          projectedRows = rows
+          projectedRowsVersion &+= 1
+          projectionPublication.publish(request)
+          olderHistoryPresentation.projectionDidPublish(
+            key: request.key,
+            revision: projectedRowsVersion
+          )
+        } catch is CancellationError {
+          return
+        } catch {
+          // Never authorize rows from an older request after an
+          // unexpected projection failure.
+        }
+      }
+      .task(id: isLoadingTranscriptContent) {
+        showsInitialLoadingSpinner = false
+        guard isLoadingTranscriptContent else { return }
+        try? await Task.sleep(for: .milliseconds(500))
+        guard !Task.isCancelled, isLoadingTranscriptContent else { return }
+        showsInitialLoadingSpinner = true
+      }
+  }
+
+  private var diagnosticSessionID: String {
+    controller.serverSession.map { String($0.id.uuidString.prefix(8)) } ?? "draft"
+  }
+
+  var isLoadingTranscriptContent: Bool {
+    (isPreparingTranscript && projectedRows.isEmpty)
+      || (!showsWatermark && !presentationSurface.hasPresentedContent)
+      || (controller.isLoadingInitialHistory
+        && controller.settledConversation.isEmpty
+        && !controller.hasActiveItem)
+  }
+
+  func installAttachmentImageStoreIfNeeded() {
+    let namespace = controller.previewCacheNamespace
+    guard attachmentImages?.namespace != namespace else { return }
+    attachmentImages = AttachmentImageStore(
+      namespace: namespace,
+      fetch: { [weak controller] source in
+        guard let controller else {
+          throw SessionControllerError.serverUnavailable
+        }
+        return try await controller.fileData(for: source)
+      },
+      fetchPreview: { [weak controller] source in
+        guard let controller else { throw SessionControllerError.serverUnavailable }
+        return try await controller.filePreview(for: source)
+      },
+      version: { [weak controller] source in
+        guard let controller else {
+          throw SessionControllerError.serverUnavailable
+        }
+        return try await controller.fileVersion(for: source)
+      }
+    )
+  }
+
+  func updateVisibleTranscriptLifecycle(for role: TranscriptPresentationRole) {
+    let shouldOwnLifecycle = role == .foreground
+    publishAttentionFocus(isForeground: shouldOwnLifecycle)
+    guard shouldOwnLifecycle != ownsVisibleTranscriptLifecycle else { return }
+    ownsVisibleTranscriptLifecycle = shouldOwnLifecycle
+    if shouldOwnLifecycle {
+      presentationSurface.appear(owner: presentationOwner)
+      controller.transcriptViewDidAppear()
+    } else {
+      presentationSurface.disappear(owner: presentationOwner)
+      controller.transcriptViewDidDisappear()
+    }
+  }
+
+  /// Read = focus: the foregrounded chat screen is the focused chat. The
+  /// coordinator marks it read on open and continuously while open (gated
+  /// by scene activity), and never pings for it.
+  func publishAttentionFocus(isForeground: Bool) {
+    guard let session = controller.serverSession else { return }
+    environment.attentionCoordinator.updateFocus(
+      owner: ObjectIdentifier(controller),
+      session: isForeground
+        ? SessionAttentionFocus(serverId: session.serverId, sessionId: session.id)
+        : nil
+    )
+  }
+
+  /// The watermark shows while the transcript has nothing to say at all — a
+  /// model-less draft (new-worktree chats deliberately don't connect until
+  /// first send) or an empty conversation. Equivalent to `rows.isEmpty`, but
+  /// O(1): the body re-evaluates on every streaming token, so this must not
+  /// build the row list.
+  var showsWatermark: Bool {
+    guard controller.pendingUserMessage == nil, controller.setupPhases.isEmpty else { return false }
+    guard controller.sessionErrorMessage == nil else { return false }
+    guard !controller.isLoadingInitialHistory, controller.serverWaitMessage == nil else { return false }
+    switch controller.status {
+    case .connecting, .failed: return false
+    case .idle: break
+    }
+    return controller.settledConversation.isEmpty && !controller.hasActiveItem
+  }
+
+  /// The scroll-to-bottom button only means something once there's a
+  /// conversation to scroll through.
+  var hasScrollableContent: Bool {
+    !controller.settledConversation.isEmpty || controller.hasActiveItem
+  }
+
+  var showsScrollToBottom: Bool {
+    !composerExpanded && !isAtBottom && hasScrollableContent
+  }
+
+  /// One chat surface for every connection state. The composer is mounted
+  /// exactly once — reconnects (run-location changes, harness switches)
+  /// swap only the content behind it, so drafts keep their text, focus,
+  /// and attachments, just like the macOS composer. Connecting reads as an
+  /// inline status line, never a screen takeover.
+  var chat: some View {
+    // Deliberately not wrapped in a GeometryReader: that opts the subtree
+    // out of SwiftUI's keyboard avoidance, which left the composer sitting
+    // underneath the keyboard.
+    ZStack(alignment: .bottom) {
+      transcriptExtentProbe
+      Image("hunk")
+        .resizable()
+        .renderingMode(.template)
+        .scaledToFit()
+        .frame(width: 130)
+        .foregroundStyle(Color.primary.opacity(0.08))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        // Center in the space the user can actually see — above
+        // the composer — and let keyboard avoidance (which
+        // shrinks this ZStack) float it upward, Grok-style.
+        .padding(.bottom, composerHeight + 20)
+        .allowsHitTesting(false)
+        .opacity(showsWatermark ? 1 : 0)
+        .animation(Motion.quick(reduceMotion: reduceMotion), value: showsWatermark)
+      // One always-mounted native transcript for every connection state.
+      transcript
+
+      if showsInitialLoadingSpinner, isLoadingTranscriptContent {
+        ProgressView()
+          .controlSize(.small)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+          .padding(.bottom, composerHeight)
+          .allowsHitTesting(false)
+      }
+
+      GlassEffectContainer(spacing: ComposerGlassStyle.clusterSpacing) {
+        composerCluster
+          // On a wide pane (iPad, an unfolded iPhone Duo) the composer
+          // keeps the transcript's reading column instead of spanning
+          // the window. Phone widths never reach the cap.
+          .frame(maxWidth: VirtualizedTranscriptScrollView.maxRowWidth)
+          // The jump control belongs to the same material group but
+          // not its measured vertical stack: showing it must never
+          // change transcript insets or the user's scroll position.
+          .overlay(alignment: .topTrailing) {
+            if showsScrollToBottom {
+              scrollToBottomButton
+                .offset(y: -52)
+                .glassEffectID(
+                  ComposerGlassElement.scrollToBottom.rawValue,
+                  in: composerGlassNamespace
+                )
+                // This control floats well beyond the
+                // container spacing, so Apple recommends
+                // materializing instead of seeking a nearby
+                // shape to morph from.
+                .glassEffectTransition(.materialize)
+                .transition(.opacity)
+            }
+          }
+      }
+      .animation(Motion.quick(reduceMotion: reduceMotion), value: showsScrollToBottom)
+      .padding(.horizontal, 10)
+      .padding(.bottom, Self.composerBottomMargin)
+    }
+    .onGeometryChange(for: CGFloat.self) {
+      $0.size.height
+    } action: { height in
+      availableHeight = height
+    }
+    .background {
+      ChatSurfaceBackground()
+        .ignoresSafeArea()
+    }
+    .background { chatAreaExtentProbe }
+  }
+
+  var composerCluster: some View {
+    VStack(spacing: 0) {
+      IOSComposerAccessoryStack(
+        controller: controller,
+        isComposerExpanded: composerExpanded,
+        maximumTodoHeight: max(132, min(240, availableHeight * 0.35)),
+        glassNamespace: composerGlassNamespace,
+        queueSendAnimation: queueSendAnimation
+      )
+      .onGeometryChange(for: CGFloat.self) {
+        $0.size.height
+      } action: { height in
+        if composerAccessoryHeight != height {
+          composerAccessoryHeight = height
+        }
+      }
+
+      ComposerBar(
+        controller: controller,
+        // Actionable notices remain visible while fully expanded, so
+        // reserve their measured height from the editor's upper bound.
+        maxHeight: composerMaxHeight,
+        collapsedHeight: $composerCardHeight,
+        isExpanded: $composerExpanded,
+        showsRunPickers: showsRunPickers,
+        initialFocusRequest: initialComposerFocusRequest,
+        onInitialFocusRequestFulfilled:
+          onInitialComposerFocusRequestFulfilled,
+        preservesFocusAfterSend: preservesComposerFocusOnSend,
+        textEditorHandoffRole: composerTextEditorHandoffRole,
+        textEditorHandoffID: composerTextEditorHandoffID,
+        glassNamespace: composerGlassNamespace,
+        onSendSourceFrameChange: { frame in
+          sendAnimationSourceFrame = frame
+        },
+        onWillSend: { text in
+          if controller.isSending {
+            UserSendMorphCoordinator.shared.cancelStagedProxy(for: ObjectIdentifier(controller))
+            if !reduceMotion {
+              queueSendAnimation.stage(
+                text: text,
+                queue: controller.queuedPrompts,
+                sourceFrame: sendAnimationSourceFrame ?? .zero,
+                in: UIWindow.codevisorKeyWindow
+              )
+            }
+            return
+          }
+          queueSendAnimation.cancel()
+          // The text leaves the editor as a bubble in the same frame it
+          // clears; the transcript flies this proxy into the real row.
+          if !reduceMotion {
+            UserSendMorphCoordinator.shared.stage(
+              text: text,
+              session: ObjectIdentifier(controller),
+              sourceFrame: sendAnimationSourceFrame ?? .zero,
+              bubbleColor: UIColor(theme.bubbleBackground),
+              textColor: UIColor(theme.textPrimary),
+              in: UIWindow.codevisorKeyWindow
+            )
+          }
+          onComposerWillSend?(text, sendAnimationSourceFrame ?? .zero)
+        }
+      )
+    }
+    .animation(Motion.quick(reduceMotion: reduceMotion), value: composerExpanded)
+    .onChange(of: controller.queuedPrompts) { _, queue in
+      queueSendAnimation.queueDidChange(queue)
+    }
+    .onChange(of: controller.errorMessage) { _, error in
+      if error != nil { queueSendAnimation.cancel() }
+    }
+    .onChange(of: ObjectIdentifier(controller)) { _, _ in
+      queueSendAnimation.cancel()
+    }
+    .onChange(of: controller.userSendAnimationRequest) { _, _ in
+      // The active turn may finish while attachments are uploading. A send
+      // that ends up in the transcript must release its queued presentation.
+      queueSendAnimation.cancel()
+    }
+    .onChange(of: reduceMotion) { _, reduced in
+      if reduced { queueSendAnimation.cancel() }
+    }
+    .onChange(of: scenePhase) { _, phase in
+      if phase != .active { queueSendAnimation.cancel() }
+    }
+    .onDisappear { queueSendAnimation.cancel() }
+  }
+
+  // MARK: - Native transcript
+
+}
+
+private extension SessionTranscriptView {
+  func isUser(_ item: ConversationItem) -> Bool {
+    if case .user = item { return true }
+    return false
+  }
+
+  func isAssistant(_ item: ConversationItem) -> Bool {
+    if case .assistant = item { return true }
+    return false
+  }
+}
+
+// MARK: - Bottom chrome geometry
+
+extension SessionTranscriptView {
+  /// The tallest the composer card may grow: the chat area (below the top
+  /// bar) less the card's 6pt margins top and bottom and any actionable
+  /// accessories above it.
+  var composerMaxHeight: CGFloat {
+    max(160, availableHeight - Self.composerBottomMargin - 6 - composerAccessoryHeight)
+  }
+
+  /// How far the transcript's bottom edge sits below the resting composer's
+  /// top edge: the composer, its margin, and however far the transcript
+  /// runs past the chat area — the home indicator at rest, nothing above
+  /// the keyboard. Both edges come from UIKit probes: the transcript's
+  /// platform view extends past the frame SwiftUI's geometry reports, and
+  /// safe-area insets also count the keyboard.
+  /// The transcript's real extent, measured with the same safe-area
+  /// treatment the transcript gets.
+  var transcriptExtentProbe: some View {
+    WindowFrameProbe { frame in
+      transcriptWindowBottom = frame.maxY
+    }
+    .ignoresSafeArea(.container, edges: [.top, .bottom])
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
+  }
+
+  /// The chat area the composer cluster rests on.
+  var chatAreaExtentProbe: some View {
+    WindowFrameProbe { frame in
+      chatAreaWindowBottom = frame.maxY
+    }
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
+  }
+
+  var transcriptBottomObstruction: CGFloat {
+    let belowComposer = max(0, transcriptWindowBottom - chatAreaWindowBottom)
+    return composerHeight + Self.composerBottomMargin + belowComposer
+  }
+
+  var scrollToBottomButton: some View {
+    Button {
+      followsLatest = true
+      scrollCommand.token &+= 1
+    } label: {
+      Image(systemName: "arrow.down")
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(.secondary)
+    }
+    // The same Liquid Glass treatment as the macOS transcript's button.
+    .buttonStyle(.glass)
+    .buttonBorderShape(.circle)
+    .controlSize(.large)
+    .accessibilityLabel("Scroll to bottom")
+  }
+}

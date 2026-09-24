@@ -1,0 +1,34 @@
+.DS_Store
+node_modules/
+dist/
+coverage/
+.turbo/
+.cache/
+.tmp/
+.build/
+.swiftpm/
+build/
+Build/
+DerivedData/
+*.tsbuildinfo
+*.log
+*.pid
+*.profraw
+*.xcuserstate
+*.xcscmblueprint
+xcuserdata/
+.env
+.env.*
+!.env.example
+apps/macos/Frameworks/
+.wrangler/
+# Colocated dev/test build & server state (see scripts/dev.mjs)
+tmp/
+
+# Generated per-worktree iOS dev icon (scripts/dev-ios.mjs)
+apps/ios/Codevisor/Resources/AppIconDevGenerated.icon/
+apps/macos/Codevisor/Resources/AppIconDevGenerated.icon/
+
+# apps/cloud build artifacts
+apps/cloud/src/generated/
+.dev.vars

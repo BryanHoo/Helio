@@ -1,0 +1,68 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    {
+      "path": "../../packages/adapter-acp"
+    },
+    {
+      "path": "../../packages/adapter-claude"
+    },
+    {
+      "path": "../../packages/adapter-codex"
+    },
+    {
+      "path": "../../packages/adapter-cursor"
+    },
+    {
+      "path": "../../packages/adapter-grok-build"
+    },
+    {
+      "path": "../../packages/agent-runtime"
+    },
+    {
+      "path": "../../packages/api"
+    },
+    {
+      "path": "../../packages/automation"
+    },
+    {
+      "path": "../../packages/cloud-client"
+    },
+    {
+      "path": "../../packages/db"
+    },
+    {
+      "path": "../../packages/harness-manager"
+    },
+    {
+      "path": "../../packages/mcp"
+    },
+    {
+      "path": "../../packages/plugins"
+    },
+    {
+      "path": "../../packages/skills"
+    },
+    {
+      "path": "../../packages/sync"
+    },
+    {
+      "path": "../../packages/terminal"
+    },
+    {
+      "path": "../../packages/updater"
+    },
+    {
+      "path": "../../packages/worktrees"
+    },
+    {
+      "path": "../../packages/processes"
+    }
+  ]
+}

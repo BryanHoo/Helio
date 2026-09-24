@@ -1,0 +1,111 @@
+import CodevisorClient
+import Foundation
+import Testing
+
+@testable import CodevisorCoreMac
+
+@Suite("AppUpdateHandoff")
+struct AppUpdateHandoffTests {
+  private func temporaryURL(_ name: String) -> URL {
+    FileManager.default.temporaryDirectory
+      .appendingPathComponent("app-update-handoff-\(UUID().uuidString)-\(name)")
+  }
+
+  @Test("Channel writes mirror the alpha preference")
+  func channelWrites() throws {
+    let url = temporaryURL("channel")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    AppUpdateHandoff.writeChannel(allowsAlpha: true, to: url)
+    #expect(try String(contentsOf: url, encoding: .utf8) == "alpha\n")
+    AppUpdateHandoff.writeChannel(allowsAlpha: false, to: url)
+    #expect(try String(contentsOf: url, encoding: .utf8) == "stable\n")
+  }
+
+  @Test("The feed file carries the appcast URL Sparkle installs from")
+  func feedWrites() throws {
+    let url = temporaryURL("feed")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    AppUpdateHandoff.writeFeedURL("https://updates.codevisor.dev/appcast-x64.xml", to: url)
+    #expect(try String(contentsOf: url, encoding: .utf8) == "https://updates.codevisor.dev/appcast-x64.xml\n")
+  }
+
+  @Test("Status reports carry the build being installed")
+  func statusCarriesTargetBuild() throws {
+    let url = temporaryURL("status.json")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    AppUpdateHandoff.writeStatus(
+      state: "installing", targetVersion: "0.1.102-alpha.660", targetBuildNumber: 660, to: url)
+
+    let report = try JSONDecoder().decode(ServerUpdateApplyState.self, from: Data(contentsOf: url))
+    #expect(report.targetBuildNumber == 660)
+    #expect(report.targetVersion == "0.1.102-alpha.660")
+  }
+
+  @Test("Status reports carry state, reason, target, and timestamp")
+  func statusWrites() throws {
+    let url = temporaryURL("status.json")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let date = Date(timeIntervalSince1970: 1_756_000_000)
+    AppUpdateHandoff.writeStatus(
+      state: "failed",
+      message: "Sparkle: no signature",
+      targetVersion: "0.2.0",
+      at: date,
+      to: url
+    )
+
+    let payload = try #require(
+      try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+    )
+    #expect(payload["state"] as? String == "failed")
+    #expect(payload["message"] as? String == "Sparkle: no signature")
+    #expect(payload["targetVersion"] as? String == "0.2.0")
+    #expect(payload["at"] as? String == "2025-08-24T01:46:40.000Z")
+  }
+
+  @Test("Optional fields are omitted, not encoded as null")
+  func statusOmitsAbsentFields() throws {
+    let url = temporaryURL("status.json")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    AppUpdateHandoff.writeStatus(state: "installing", to: url)
+
+    let payload = try #require(
+      try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+    )
+    #expect(payload["state"] as? String == "installing")
+    #expect(payload["at"] is String)
+    #expect(payload.keys.contains("message") == false)
+    #expect(payload.keys.contains("targetVersion") == false)
+    #expect(payload.keys.contains("targetBuildNumber") == false)
+  }
+
+  @Test("Clearing removes a previous session's report")
+  func statusClears() {
+    let url = temporaryURL("status.json")
+
+    AppUpdateHandoff.writeStatus(state: "installing", to: url)
+    #expect(FileManager.default.fileExists(atPath: url.path))
+    AppUpdateHandoff.clearStatus(at: url)
+    #expect(!FileManager.default.fileExists(atPath: url.path))
+  }
+}
+
+extension AppUpdateHandoffTests {
+  @Test("Progress survives the host file and decodes in a remote client")
+  func progressRoundTrip() throws {
+    let url = temporaryURL("progress.json")
+    defer { try? FileManager.default.removeItem(at: url) }
+    AppUpdateHandoff.writeStatus(state: "installing", message: "Downloading…", progress: 0.42, to: url)
+    let report = try JSONDecoder().decode(ServerUpdateApplyState.self, from: Data(contentsOf: url))
+    #expect(report.progress == 0.42)
+    #expect(report.message == "Downloading…")
+    AppUpdateHandoff.writeStatus(state: "installing", message: "Restarting…", to: url)
+    let restart = try JSONDecoder().decode(ServerUpdateApplyState.self, from: Data(contentsOf: url))
+    #expect(restart.progress == nil)
+  }
+}

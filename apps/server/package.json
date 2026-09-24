@@ -1,0 +1,57 @@
+{
+  "name": "@codevisor/server",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "codevisor": "./dist/cli.js",
+    "codevisor-server": "./dist/main.js",
+    "codevisor-terminal-proxy": "./dist/terminal-proxy.js"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit --tsBuildInfoFile tmp/typecheck.tsbuildinfo --pretty false && tsc -p test/tsconfig.json --pretty false",
+    "test": "vitest run --passWithNoTests",
+    "test:coverage": "vitest run --coverage",
+    "dev": "tsc -b tsconfig.json && node dist/main.js serve",
+    "start": "node dist/main.js serve"
+  },
+  "dependencies": {
+    "@codevisor/adapter-acp": "workspace:*",
+    "@codevisor/adapter-claude": "workspace:*",
+    "@codevisor/adapter-codex": "workspace:*",
+    "@codevisor/adapter-cursor": "workspace:*",
+    "@codevisor/adapter-grok-build": "workspace:*",
+    "@codevisor/agent-runtime": "workspace:*",
+    "@codevisor/api": "workspace:*",
+    "@codevisor/automation": "workspace:*",
+    "@codevisor/cloud-client": "workspace:*",
+    "@codevisor/db": "workspace:*",
+    "@codevisor/harness-manager": "workspace:*",
+    "@codevisor/mcp": "workspace:*",
+    "@codevisor/plugins": "workspace:*",
+    "@codevisor/processes": "workspace:*",
+    "@codevisor/skills": "workspace:*",
+    "@codevisor/sync": "workspace:*",
+    "@codevisor/terminal": "workspace:*",
+    "@codevisor/updater": "workspace:*",
+    "@codevisor/worktrees": "workspace:*",
+    "@effect/platform-node": "4.0.0-beta.92",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@napi-rs/canvas": "1.0.9",
+    "effect": "4.0.0-beta.92",
+    "ffmpeg-static": "5.3.0",
+    "pdfjs-dist": "6.3.289",
+    "proper-lockfile": "4.1.2",
+    "qrcode-terminal": "0.12.0",
+    "sharp": "0.35.2",
+    "ws": "8.18.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/proper-lockfile": "4.1.4",
+    "@types/qrcode-terminal": "0.12.2",
+    "@types/ws": "8.18.1",
+    "better-sqlite3": "12.9.0",
+    "vitest": "4.1.6"
+  }
+}

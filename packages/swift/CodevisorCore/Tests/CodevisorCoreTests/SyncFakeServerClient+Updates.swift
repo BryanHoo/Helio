@@ -1,0 +1,548 @@
+import ACPKit
+import Foundation
+
+@testable import CodevisorCore
+
+// MARK: - Simulated update surfaces (same file so `private` storage stays
+// reachable; a separate extension keeps the class body within size limits).
+extension SyncFakeServerClient {
+
+  var appliedUpdates: Int { lock.withLock { _appliedUpdates } }
+  var updateInfoChannels: [ServerUpdateChannel] { lock.withLock { _updateInfoChannels } }
+  var updateInfoRefreshes: [Bool] { lock.withLock { _updateInfoRefreshes } }
+  var appliedChannels: [ServerUpdateChannel] { lock.withLock { _appliedChannels } }
+
+  /// Makes the fake report an available update to `latest`.
+  func configureUpdate(
+    current: String,
+    latest: String,
+    installedVersion: String? = nil,
+    currentBuildNumber: Int? = nil,
+    targetBuildNumber: Int? = nil,
+    installedBuildNumber: Int? = nil
+  ) {
+    lock.withLock {
+      currentVersion = current
+      latestVersion = latest
+      installedVersionAfterUpdate = installedVersion
+      installedBuildNumberAfterUpdate = installedBuildNumber
+      self.currentBuildNumber = currentBuildNumber
+      self.targetBuildNumber = targetBuildNumber
+      applyFailureMessage = nil
+      lastApply = nil
+      updateApplied = false
+      bootId = "boot-before-update"
+    }
+  }
+
+  /// Makes the server boot through a data upgrade: one health report per
+  /// poll, then ready — or, with `failure`, a failed upgrade that never
+  /// recovers. `immediately` models a machine found mid-migration by a
+  /// client that did not ask for the update; otherwise the migration
+  /// begins with the next simulated restart.
+  func configureMigration(
+    reports: [ServerMigrationProgress],
+    failure: String? = nil,
+    immediately: Bool = false
+  ) {
+    lock.withLock {
+      _migrationReports = reports
+      _migrationFailure = failure
+      _migrationArmed = !immediately
+      _migrationActive = immediately
+    }
+  }
+
+  /// A migrating server refuses every route but health.
+  static let migratingFailure = CodevisorServerClientError.httpStatus(
+    503, "{\"error\":\"Server is updating its data\"}")
+
+  /// Whether the simulated boot is still inside its data upgrade. Once the
+  /// reports are spent (and no failure is configured) the real server takes
+  /// the socket over, so every route answers again — regardless of which
+  /// route a client happens to try first. Callers hold `lock`.
+  private func migrationStillRunning() -> Bool {
+    guard _migrationActive else { return false }
+    if _migrationReports.isEmpty, _migrationFailure == nil { _migrationActive = false }
+    return _migrationActive
+  }
+
+  /// How long the simulated restart stays unreachable, in `info()` probes.
+  func configureRestartDowntime(polls: Int) {
+    lock.withLock { restartDowntime = polls }
+  }
+
+  /// Makes `applyServerUpdate()` decline as busy (chats still running).
+  func configureBusy(_ value: Bool) {
+    lock.withLock { _busy = value }
+  }
+
+  /// Makes the next apply accept with `draining: true` and report a
+  /// "draining" `lastApply` for `polls` update-info reads before the
+  /// simulated restart happens.
+  func configureDrain(polls: Int) {
+    lock.withLock { _drainPollsRemaining = polls }
+  }
+
+  /// After a harness update is triggered, inventory reads report it as
+  /// still updating for `polls` reads, then as finished.
+  func configureHarnessUpdateInProgress(polls: Int) {
+    lock.withLock { _harnessLifecycleActivePolls = polls }
+  }
+
+  var harnessLifecycleReads: Int { lock.withLock { _harnessLifecycleReads } }
+
+  /// Makes the next apply accept the handoff but fail on the machine:
+  /// nothing restarts and updateInfo starts reporting the failure.
+  func configureApplyFailure(message: String) {
+    lock.withLock { applyFailureMessage = message }
+  }
+
+  // MARK: - Simulated harness / plugin inventories
+
+  /// Every mutating update operation in call order, across kinds — the
+  /// update-all ordering assertions read this.
+  var operationLog: [String] { lock.withLock { _operationLog } }
+
+  func configureHarnesses(_ harnesses: [ServerHarness]) {
+    lock.withLock { _harnesses = harnesses }
+  }
+
+  func configurePluginUpdates(_ updates: [ServerPluginUpdateStatus]) {
+    lock.withLock { _pluginUpdates = updates }
+  }
+
+  func updateHarness(id: String) async throws -> ServerHarnessOperationStarted {
+    if let harnessUpdateHandler { return try await harnessUpdateHandler(id) }
+    return lock.withLock {
+      _operationLog.append("harness.update:\(id)")
+      return ServerHarnessOperationStarted(accepted: true)
+    }
+  }
+
+  func listPluginUpdates() async throws -> [ServerPluginUpdateStatus] {
+    lock.withLock { _pluginUpdates }
+  }
+
+  func preparePluginUpdate(pluginId: String) async throws -> ServerPluginUpdatePlan {
+    if let pluginPrepareError { throw CodevisorServerClientError.httpStatus(500, pluginPrepareError) }
+    return lock.withLock {
+      _operationLog.append("plugin.prepare:\(pluginId)")
+      let review = ServerPluginUpdateReview(
+        version: "1.1.0",
+        setupCommands: [],
+        runCommand: "run",
+        panes: []
+      )
+      return ServerPluginUpdatePlan(
+        planId: "plan-1",
+        pluginId: pluginId,
+        name: pluginId,
+        resolvedCommit: "abc123",
+        expiresAt: "2026-06-30T01:00:00.000Z",
+        current: review,
+        candidate: review,
+        paneChanges: ServerPluginNamedChanges(added: [], removed: [], changed: []),
+        toolChanges: ServerPluginNamedChanges(added: [], removed: [], changed: [])
+      )
+    }
+  }
+
+  func applyPluginUpdate(pluginId: String, planId: String) async throws -> ServerPluginSummary {
+    lock.withLock {
+      _operationLog.append("plugin.apply:\(pluginId)")
+      _pluginUpdates = _pluginUpdates.map { status in
+        var next = status
+        if status.pluginId == pluginId { next.state = .current }
+        return next
+      }
+      return ServerPluginSummary(
+        id: pluginId,
+        name: pluginId,
+        version: "1.1.0",
+        source: "managed",
+        path: "/tmp/\(pluginId)",
+        state: "running"
+      )
+    }
+  }
+
+  // MARK: - Simulated config-plane replica
+
+  func seedSyncEntries(namespace: String, _ entries: [ServerSyncEntry]) {
+    lock.withLock { _syncEntries[namespace] = entries }
+  }
+
+  func syncEntries(namespace: String) -> [ServerSyncEntry] {
+    lock.withLock { _syncEntries[namespace] ?? [] }
+  }
+
+  func syncDocument(namespace: String) async throws -> ServerSyncDocument {
+    lock.withLock {
+      ServerSyncDocument(namespace: namespace, entries: _syncEntries[namespace] ?? [])
+    }
+  }
+
+  func mergeSyncDocument(
+    namespace: String,
+    entries: [ServerSyncEntry]
+  ) async throws -> ServerSyncDocument {
+    lock.withLock {
+      let result = SyncClock.merge(_syncEntries[namespace] ?? [], entries)
+      _syncEntries[namespace] = result.merged
+      if !result.changed.isEmpty {
+        _operationLog.append("sync.merge:\(namespace)")
+      }
+      return ServerSyncDocument(namespace: namespace, entries: result.merged)
+    }
+  }
+
+  /// Marks a skill this machine's replica wants; reconciles apply it once
+  /// the blob arrives.
+  func configureWantedSkill(directoryName: String, hash: String) {
+    lock.withLock { _wantedSkills.append((directoryName, hash)) }
+  }
+
+  func seedSkillBlob(hash: String, _ data: Data) {
+    lock.withLock { _skillBlobs[hash] = data }
+  }
+
+  func skillBlob(hash: String) -> Data? {
+    lock.withLock { _skillBlobs[hash] }
+  }
+
+  var appliedSkills: [String] {
+    lock.withLock {
+      _wantedSkills.filter { _appliedSkillHashes.contains($0.hash) }.map(\.directoryName)
+    }
+  }
+
+  func reconcileSkillsSync() async throws -> ServerSkillsSyncStatus {
+    lock.withLock {
+      var applied: [String] = []
+      var missing: [ServerSkillsSyncMissingBlob] = []
+      for skill in _wantedSkills {
+        if _appliedSkillHashes.contains(skill.hash) { continue }
+        if _skillBlobs[skill.hash] != nil {
+          _appliedSkillHashes.insert(skill.hash)
+          applied.append(skill.directoryName)
+        } else {
+          missing.append(
+            ServerSkillsSyncMissingBlob(
+              directoryName: skill.directoryName,
+              hash: skill.hash
+            ))
+        }
+      }
+      _operationLog.append("skills.reconcile")
+      return ServerSkillsSyncStatus(
+        published: [],
+        applied: applied,
+        removed: [],
+        missingBlobs: missing
+      )
+    }
+  }
+
+  func syncBlob(id: String) async throws -> Data {
+    try lock.withLock {
+      guard let data = _skillBlobs[id] else {
+        throw CodevisorServerClientError.invalidResponse
+      }
+      return data
+    }
+  }
+
+  func putSyncBlob(id: String, bytes: Data) async throws {
+    lock.withLock { _skillBlobs[id] = bytes }
+  }
+
+  func reconcileMcpsSync() async throws -> ServerMcpSyncStatus {
+    lock.withLock {
+      _operationLog.append("mcps.reconcile")
+      return ServerMcpSyncStatus(published: [], applied: [], removed: [])
+    }
+  }
+
+  func publishAccountsSync() async throws {
+    lock.withLock { _operationLog.append("accounts.publish") }
+  }
+
+  func reconcileHarnessesSync() async throws -> ServerHarnessSyncStatus {
+    lock.withLock {
+      _operationLog.append("harnesses.reconcile")
+      return ServerHarnessSyncStatus(
+        published: [], applied: _harnessesSyncApplied, removed: [], installing: [],
+        blocked: [])
+    }
+  }
+
+  func reconcilePluginsSync() async throws -> ServerPluginSyncStatus {
+    lock.withLock {
+      _operationLog.append("plugins.reconcile")
+      return ServerPluginSyncStatus(
+        published: [], applied: [], removed: [], installed: [], blocked: [])
+    }
+  }
+
+  func setSyncParticipation(enabled: Bool) async throws -> ServerSyncParticipation {
+    lock.withLock { _operationLog.append("sync.participation:\(enabled)") }
+    return ServerSyncParticipation(enabled: enabled)
+  }
+
+  func health() async throws -> ServerHealth {
+    lock.withLock {
+      if migrationStillRunning() {
+        if !_migrationReports.isEmpty {
+          return ServerHealth(
+            ok: false, version: currentVersion, database: "migrating", bootId: bootId,
+            buildNumber: currentBuildNumber, migration: _migrationReports.removeFirst())
+        }
+        if let failure = _migrationFailure {
+          return ServerHealth(
+            ok: false, version: currentVersion, database: "failed", bootId: bootId,
+            buildNumber: currentBuildNumber,
+            migration: ServerMigrationProgress(
+              id: "database-startup", name: "Applying update", completed: 0, total: 0, error: failure))
+        }
+      }
+      return ServerHealth(
+        ok: true,
+        version: currentVersion,
+        database: "ready",
+        bootId: bootId,
+        buildNumber: currentBuildNumber
+      )
+    }
+  }
+  func configureInfoId(_ id: String) {
+    lock.withLock { _infoId = id }
+  }
+
+  func configureInfoCloudDeviceId(_ deviceId: String?) {
+    lock.withLock { _infoCloudDeviceId = deviceId }
+  }
+
+  func configureInfoFeatures(_ features: [String]?) {
+    lock.withLock { _infoFeatures = features }
+  }
+
+  func info() async throws -> ServerInfo {
+    let (version, id): (String, String) = try lock.withLock {
+      if migrationStillRunning() { throw Self.migratingFailure }
+      if downtimeRemaining > 0 {
+        downtimeRemaining -= 1
+        throw ServerDownError()
+      }
+      return (currentVersion, _infoId)
+    }
+    let (cloudDeviceId, features) = lock.withLock { (_infoCloudDeviceId, _infoFeatures) }
+    var info = ServerInfo(
+      id: id, name: "Local", kind: "local", version: version, platform: "darwin", bindHost: "127.0.0.1")
+    info.cloudDeviceId = cloudDeviceId
+    info.features = features
+    return info
+  }
+  func updateInfo(refresh: Bool, channel: ServerUpdateChannel) async throws -> ServerUpdateInfo {
+    try lock.withLock {
+      _updateInfoChannels.append(channel)
+      _updateInfoRefreshes.append(refresh)
+      if migrationStillRunning() { throw Self.migratingFailure }
+      if applyingProgressReports {
+        if applyProgressReports.isEmpty {
+          applyingProgressReports = false
+          lastApply = nil
+          performSimulatedRestart()
+        } else {
+          lastApply = applyProgressReports.removeFirst()
+        }
+      }
+      if lastApply?.state == "draining" {
+        // Still draining for a while; the last poll performs the restart
+        // the accepted apply deferred.
+        if _drainPollsRemaining > 1 {
+          _drainPollsRemaining -= 1
+        } else {
+          _drainPollsRemaining = 0
+          lastApply = nil
+          performSimulatedRestart()
+        }
+      }
+      return ServerUpdateInfo(
+        currentVersion: currentVersion,
+        latestVersion: latestVersion,
+        updateAvailable: !updateApplied && currentVersion != latestVersion,
+        channel: channel.rawValue,
+        checkedAt: nil,
+        migrationState: "idle",
+        currentBuildNumber: currentBuildNumber,
+        latestBuildNumber: targetBuildNumber,
+        lastApply: lastApply
+      )
+    }
+  }
+  func applyServerUpdate(channel: ServerUpdateChannel) async throws -> ServerUpdateApplied {
+    lock.withLock {
+      _appliedChannels.append(channel)
+      _appliedUpdates += 1
+      if _busy {
+        return ServerUpdateApplied(accepted: false, targetVersion: currentVersion, reason: "busy")
+      }
+      guard currentVersion != latestVersion else {
+        return ServerUpdateApplied(accepted: false, targetVersion: currentVersion)
+      }
+      if let applyFailureMessage {
+        // The handoff was accepted but the machine's unattended
+        // install failed: nothing restarts, and the failure
+        // surfaces through updateInfo's lastApply.
+        lastApply = ServerUpdateApplyState(
+          state: "failed",
+          message: applyFailureMessage,
+          targetVersion: latestVersion,
+          at: "2026-06-30T00:00:01.000Z"
+        )
+        return ServerUpdateApplied(
+          accepted: true,
+          targetVersion: latestVersion,
+          targetBuildNumber: targetBuildNumber
+        )
+      }
+      _operationLog.append("server.apply")
+      let targetVersion = latestVersion
+      if _drainPollsRemaining > 0 {
+        // Chats are mid-turn: accepted, but the restart waits for them.
+        lastApply = ServerUpdateApplyState(
+          state: "draining",
+          message: "Waiting for 2 chats to finish",
+          targetVersion: targetVersion,
+          at: "2026-06-30T00:00:02.000Z"
+        )
+        return ServerUpdateApplied(
+          accepted: true,
+          targetVersion: targetVersion,
+          targetBuildNumber: targetBuildNumber,
+          draining: true
+        )
+      }
+      if applyProgressReports.isEmpty { performSimulatedRestart() } else { applyingProgressReports = true }
+      return ServerUpdateApplied(
+        accepted: true,
+        targetVersion: targetVersion,
+        targetBuildNumber: targetBuildNumber
+      )
+    }
+  }
+
+  /// The server restarts: unreachable for a few probes, then back on the
+  /// new version. Callers hold `lock`.
+  private func performSimulatedRestart() {
+    downtimeRemaining = restartDowntime
+    currentVersion = installedVersionAfterUpdate ?? latestVersion
+    if let installedBuildNumberAfterUpdate {
+      // Landed on a build of its own choosing; still "behind" when short
+      // of the target, so the next check keeps offering the update.
+      currentBuildNumber = installedBuildNumberAfterUpdate
+      updateApplied = targetBuildNumber.map { installedBuildNumberAfterUpdate >= $0 } ?? true
+    } else {
+      if let targetBuildNumber { currentBuildNumber = targetBuildNumber }
+      updateApplied = true
+    }
+    bootId = "boot-after-update"
+    if _migrationArmed {
+      // The replacement binds its port and reports its data upgrade in
+      // place of plain downtime.
+      _migrationArmed = false
+      _migrationActive = true
+      downtimeRemaining = 0
+    }
+  }
+  func issuePairingToken() async throws -> ServerPairingToken {
+    ServerPairingToken(token: "hm_test", createdAt: "2026-06-30T00:00:00.000Z")
+  }
+  func capabilities(cwd: String) async throws -> ServerCapabilities {
+    if let capabilitiesHandler { return try await capabilitiesHandler(cwd) }
+    return ServerCapabilities(harnesses: [])
+  }
+  func capabilities(
+    cwd: String,
+    harnessId: String,
+    configSelections: [String: String]
+  ) async throws -> ServerCapabilities {
+    if let resolvedCapabilitiesHandler {
+      return try await resolvedCapabilitiesHandler(cwd, harnessId, configSelections)
+    }
+    let response = try await capabilities(cwd: cwd)
+    return ServerCapabilities(
+      harnesses: response.harnesses.filter { $0.harness.id == harnessId }
+    )
+  }
+  func listHarnesses() async throws -> [ServerHarness] { lock.withLock { _harnesses } }
+
+  /// Inventory with lifecycle: while a simulated harness update is in
+  /// progress, every harness reports phase "updating".
+  func listHarnessesWithLifecycle() async throws -> [ServerHarness] {
+    lock.withLock {
+      _harnessLifecycleReads += 1
+      guard _harnessLifecycleActivePolls > 0 else { return _harnesses }
+      _harnessLifecycleActivePolls -= 1
+      return _harnesses.map { harness in
+        var updating = harness
+        updating.lifecycle = ServerHarnessLifecycleState(phase: "updating")
+        return updating
+      }
+    }
+  }
+  func setHarnessEnabled(id: String, enabled: Bool) async throws -> ServerHarness { fatalError("unused") }
+  func upsertProject(_ project: Project) async throws -> ServerProject { fatalError("unused") }
+  func updateProject(_ project: Project) async throws -> ServerProject { fatalError("unused") }
+  func deleteProject(id: UUID) async throws {}
+  func sessionDetail(id: UUID) async throws -> ServerSessionDetail { fatalError("unused") }
+  func upsertSession(_ session: ChatSession) async throws -> ServerSession {
+    lock.withLock {
+      guard
+        let index = _sessions.firstIndex(where: {
+          UUID(uuidString: $0.id) == session.id
+        })
+      else { fatalError("Missing fake session") }
+      return _sessions[index]
+    }
+  }
+  func upsertSession(_ session: ChatSession, workspaceId: UUID?) async throws -> ServerSession {
+    lock.withLock {
+      guard
+        let index = _sessions.firstIndex(where: {
+          UUID(uuidString: $0.id) == session.id
+        })
+      else { fatalError("Missing fake session") }
+      _sessions[index].workspaceId = workspaceId?.uuidString
+      if let workspaceId, _panes != nil,
+        _panes?.contains(where: {
+          $0.resourceKind == "session"
+            && $0.resourceId?.caseInsensitiveCompare(session.id.uuidString) == .orderedSame
+        }) == false
+      {
+        _panes?.append(
+          ServerWorkspacePane(
+            id: session.id.uuidString,
+            workspaceId: workspaceId.uuidString,
+            providerId: "codevisor",
+            paneType: "chat",
+            title: _sessions[index].title,
+            resourceKind: "session",
+            resourceId: session.id.uuidString,
+            createdAt: _sessions[index].createdAt
+          )
+        )
+      }
+      return _sessions[index]
+    }
+  }
+  func updateSession(_ session: ChatSession) async throws -> ServerSession { fatalError("unused") }
+  func deleteSession(id: UUID) async throws {}
+  func promptSession(id: UUID, text: String) async throws -> ServerPromptAccepted {
+    ServerPromptAccepted(accepted: true, sessionId: id.uuidString)
+  }
+  func cancelSession(id: UUID) async throws {}
+  func setSessionMode(id: UUID, modeId: String) async throws {}
+  func setSessionConfig(id: UUID, configId: String, value: String) async throws {}
+}

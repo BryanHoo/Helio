@@ -1,0 +1,120 @@
+import { apiKey } from "@better-auth/api-key"
+import { drizzleAdapter } from "@better-auth/drizzle-adapter"
+import { betterAuth } from "better-auth"
+import { bearer, deviceAuthorization } from "better-auth/plugins"
+import { oneTimeToken } from "better-auth/plugins/one-time-token"
+import { drizzle } from "drizzle-orm/d1"
+
+import { appleOptions, hasAppleAuth, revokeAppleAuthorization } from "./apple-auth.js"
+import { nativeAppleAuth } from "./apple-native.js"
+import * as schema from "./db/schema.js"
+import { emailAuthPlugin, hasEmailAuth } from "./email-auth.js"
+import { DEV_USER, isDevAuthEnabled, type CloudEnv } from "./env.js"
+
+/// Client ids accepted by the device-authorization flow. Machines are the only
+/// device-flow consumer today; native apps use email, Apple, or the browser OAuth handoff.
+export const MACHINE_CLIENT_ID = "codevisor-machine"
+
+/// D1 bindings only exist per-request, so auth must be built per request (and
+/// per DO call) rather than at module scope.
+export const createAuth = (env: CloudEnv) => {
+  const database = drizzleAdapter(drizzle(env.DB, { schema }), { provider: "sqlite" })
+  const devAuth = isDevAuthEnabled(env)
+  const secret =
+    env.BETTER_AUTH_SECRET ?? (devAuth ? "codevisor-dev-secret-not-for-production" : undefined)
+  if (secret === undefined) {
+    throw new Error("BETTER_AUTH_SECRET is required when DEV_AUTH is not enabled")
+  }
+  return betterAuth({
+    baseURL: env.PUBLIC_BASE_URL,
+    secret,
+    database,
+    socialProviders: {
+      ...(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET
+        ? { github: { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET } }
+        : {}),
+      ...(hasAppleAuth(env) ? { apple: () => appleOptions(env) } : {})
+    },
+    // Apple posts its authorization response cross-origin; state remains
+    // mandatory and bound to the browser that started the request.
+    trustedOrigins: ["https://appleid.apple.com"],
+    account: {
+      accountLinking: {
+        enabled: true,
+        disableImplicitLinking: true,
+        allowDifferentEmails: true,
+        trustedProviders: ["apple", "github"]
+      }
+    },
+    // Unlinking Apple would discard the token needed for account deletion.
+    // This release supports connecting providers and deleting the whole account.
+    disabledPaths: ["/unlink-account", "/sign-in/email-otp"],
+    user: {
+      deleteUser: {
+        enabled: true,
+        beforeDelete: async (user) => {
+          await revokeAppleAuthorization(env, user.id)
+          // Revoke machine credentials before closing sockets. No deleted
+          // account can reconnect while Better Auth removes its sessions.
+          await env.DB.batch([
+            env.DB.prepare("DELETE FROM apikey WHERE reference_id = ?").bind(user.id),
+            env.DB.prepare("DELETE FROM device_code WHERE user_id = ?").bind(user.id),
+            env.DB.prepare(
+              "DELETE FROM verification WHERE value IN (SELECT token FROM session WHERE user_id = ?)"
+            ).bind(user.id)
+          ])
+          await env.USER_HUB.get(env.USER_HUB.idFromName(user.id)).deleteAccount()
+        },
+        afterDelete: async (user) => {
+          // Also remove any key issued by a request already in flight when
+          // deletion started. Auth sessions no longer exist at this point.
+          await env.DB.prepare("DELETE FROM apikey WHERE reference_id = ?").bind(user.id).run()
+        }
+      }
+    },
+    emailAndPassword: {
+      enabled: hasEmailAuth(env) || devAuth,
+      requireEmailVerification: hasEmailAuth(env),
+      revokeSessionsOnPasswordReset: true
+    },
+    emailVerification: {
+      sendOnSignUp: true,
+      sendOnSignIn: false,
+      autoSignInAfterVerification: true
+    },
+    rateLimit: { enabled: !devAuth, storage: "database" },
+    advanced: { ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] } },
+    plugins: [
+      ...(hasEmailAuth(env) ? [emailAuthPlugin(env)] : []),
+      nativeAppleAuth(env),
+      /// Native apps hold tokens, not cookies: session token arrives in the
+      /// `set-auth-token` header and is sent back as `Authorization: Bearer`.
+      bearer(),
+      /// Browser-OAuth → native-app handoff: the /auth/handoff page generates
+      /// a single-use token the app exchanges for its session.
+      oneTimeToken(),
+      /// `codevisor auth login`: RFC 8628 device flow, approved on /device.
+      deviceAuthorization({
+        verificationUri: "/device",
+        validateClient: (clientId: string) => clientId === MACHINE_CLIENT_ID,
+        // Dev instances (and tests) poll immediately; real instances keep the
+        // RFC-friendly 5s minimum.
+        interval: devAuth ? "0s" : "5s"
+      }),
+      /// Long-lived per-machine credentials, listed/revoked from app settings.
+      /// Metadata carries the machine's deviceId + static public key.
+      ///
+      /// No per-key budget: the plugin's default limiter (10 verifications a
+      /// day, raised to 10k at launch) counts every relay handshake and
+      /// credential command a daemon makes, so a busy machine eventually
+      /// failed verification exactly like a revoked one and showed up offline
+      /// on every other client. The option overrides the per-row
+      /// `rate_limit_enabled` flag, so existing keys need no migration.
+      apiKey({ enableMetadata: true, rateLimit: { enabled: false } })
+    ]
+  })
+}
+
+export type CloudAuth = ReturnType<typeof createAuth>
+
+export const DEV_USER_CREDENTIALS = DEV_USER

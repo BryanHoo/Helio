@@ -1,0 +1,56 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/processes"
+    },
+    {
+      "path": "./packages/api"
+    },
+    {
+      "path": "./packages/db"
+    },
+    {
+      "path": "./packages/agent-runtime"
+    },
+    {
+      "path": "./packages/terminal"
+    },
+    {
+      "path": "./apps/server"
+    },
+    {
+      "path": "./packages/adapter-acp"
+    },
+    {
+      "path": "./packages/adapter-claude"
+    },
+    {
+      "path": "./packages/adapter-codex"
+    },
+    {
+      "path": "./packages/adapter-cursor"
+    },
+    {
+      "path": "./packages/adapter-grok-build"
+    },
+    {
+      "path": "./packages/skills"
+    },
+    {
+      "path": "./packages/worktrees"
+    },
+    {
+      "path": "./packages/automation"
+    },
+    {
+      "path": "./packages/harness-manager"
+    },
+    {
+      "path": "./packages/updater"
+    },
+    {
+      "path": "./packages/mcp"
+    }
+  ]
+}

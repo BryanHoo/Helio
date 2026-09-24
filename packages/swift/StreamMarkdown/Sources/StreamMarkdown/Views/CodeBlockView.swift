@@ -1,0 +1,383 @@
+import MarkdownCore
+import SwiftUI
+#if canImport(AppKit)
+  import AppKit
+#elseif canImport(UIKit)
+  import UIKit
+#endif
+
+/// Renders a fenced code block with a language label and a copy button.
+/// While streaming (`isComplete == false`) a subtle progress indicator shows.
+/// When the theme provides a `codeHighlighter`, plain text renders first and
+/// the highlighted version swaps in as it resolves (debounced mid-stream so
+/// large blocks don't re-tokenize on every chunk).
+struct CodeBlockView: View {
+  let id: String
+  let language: String?
+  let code: String
+  let isComplete: Bool
+
+  @Environment(\.markdownTheme) private var theme
+  @State private var didCopy = false
+  @State private var copyResetTask: Task<Void, Never>?
+  @State private var highlighted: CodeHighlightSnapshot?
+  /// Memoizes the plain-text fallback: `AttributedString(code)` in `body`
+  /// re-allocated attributed storage for the entire block on every body
+  /// evaluation — for a streaming block, every ~16ms flush.
+  @State private var plainMemo = PlainCodeMemo()
+  @State private var usesPreparedLayout: Bool
+  #if canImport(AppKit) || canImport(UIKit)
+    /// Memoizes the native NSAttributedString conversion: the run-by-run
+    /// rebuild is O(tokens) on the main thread and `body` re-evaluates on
+    /// every layout/measurement pass, so the same settled block re-converted
+    /// repeatedly while scrolling.
+    @State private var nativeMemo = NativeCodeMemo()
+  #endif
+
+  init(id: String, language: String?, code: String, isComplete: Bool) {
+    self.id = id
+    self.language = language
+    self.code = code
+    self.isComplete = isComplete
+    _usesPreparedLayout = State(
+      initialValue: isComplete && code.utf8.count > MarkdownLayoutPolicy.maximumSynchronousTextBytes
+    )
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack {
+        Text(language?.uppercased() ?? "CODE")
+          .font(.caption2.weight(.semibold))
+          .foregroundStyle(.secondary)
+        if !isComplete {
+          ProgressView()
+            .controlSize(.mini)
+        }
+        Spacer()
+        Button {
+          copy()
+        } label: {
+          Label {
+            Text(didCopy ? "Copied" : "Copy")
+          } icon: {
+            // Fixed box: the two glyphs have different intrinsic
+            // heights, which would otherwise resize the header.
+            Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
+              .frame(width: 13, height: 13)
+          }
+          .font(.caption2)
+          .labelStyle(.titleAndIcon)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+      }
+      .padding(.horizontal, 10)
+      .padding(.vertical, 6)
+
+      Divider()
+
+      #if canImport(AppKit)
+        if usesPreparedLayout {
+          PreparedSelectableTextView(
+            text: nativeMemo.attributed(for: renderedText, fallback: theme.codeForeground), wrapsText: false
+          )
+        } else {
+          HorizontalCodeScrollView(
+            text: renderedText,
+            foreground: theme.codeForeground
+          )
+        }
+      #elseif canImport(UIKit)
+        ScrollView(.horizontal, showsIndicators: false) {
+          if usesPreparedLayout {
+            PreparedSelectableTextView(
+              text: nativeMemo.attributed(for: renderedText, fallback: theme.codeForeground), wrapsText: false
+            ).padding(10)
+          } else {
+            SelectableTextView(
+              attributedText: nativeMemo.attributed(
+                for: renderedText,
+                fallback: theme.codeForeground
+              ),
+              fillsWidth: false
+            )
+            .padding(10)
+          }
+        }
+      #else
+        ScrollView(.horizontal, showsIndicators: false) {
+          Text(renderedText)
+            .font(.system(.caption, design: .monospaced))
+            .foregroundStyle(theme.codeForeground)
+            .padding(10)
+        }
+      #endif
+    }
+    .background(theme.codeBackground)
+    .clipShape(RoundedRectangle(cornerRadius: 8))
+    .task(id: highlightTaskKey) {
+      guard let highlighter = theme.codeHighlighter else { return }
+      // Already rendered synchronously from the shared cache.
+      if settledCacheProbe != nil { return }
+      // Mid-stream, wait out further chunks before re-tokenizing; the
+      // task(id:) cancellation makes this a trailing-edge debounce.
+      if !isComplete {
+        try? await Task.sleep(for: .milliseconds(150))
+        if Task.isCancelled { return }
+      }
+      let request = CodeHighlightRequest(
+        id: id,
+        code: code,
+        language: language,
+        isComplete: isComplete
+      )
+      if let result = await highlighter(request), !Task.isCancelled {
+        // Only settled blocks enter the shared cache: mid-stream
+        // texts change every flush and would churn the LRU.
+        if isComplete {
+          CodeHighlightResultCache.shared.store(result, for: resultCacheKey)
+        }
+        highlighted = CodeHighlightSnapshot(
+          source: code, language: language, themeKey: theme.codeThemeKey, text: result
+        )
+      }
+    }
+  }
+
+  private var resultCacheKey: CodeHighlightResultCache.Key {
+    CodeHighlightResultCache.Key(themeKey: theme.codeThemeKey, language: language, code: code)
+  }
+
+  private var renderedText: AttributedString {
+    settledCacheProbe
+      ?? highlighted?.renderedText(source: code, language: language, themeKey: theme.codeThemeKey)
+      ?? plainMemo.attributed(for: code)
+  }
+
+  /// The shared-cache lookup, gated on `isComplete`: only settled blocks are
+  /// ever stored, so a mid-stream probe is a guaranteed miss that still
+  /// hashes the whole growing code string — on every body evaluation.
+  private var settledCacheProbe: AttributedString? {
+    isComplete ? CodeHighlightResultCache.shared.value(for: resultCacheKey) : nil
+  }
+
+  private struct HighlightTaskKey: Equatable {
+    let result: CodeHighlightResultCache.Key
+    let isComplete: Bool
+  }
+
+  // Same-length replacements also need highlighting. String equality uses
+  // shared storage between unchanged view evaluations.
+  private var highlightTaskKey: HighlightTaskKey {
+    HighlightTaskKey(result: resultCacheKey, isComplete: isComplete)
+  }
+
+  private func copy() {
+    #if canImport(AppKit)
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(code, forType: .string)
+    #elseif canImport(UIKit)
+      UIPasteboard.general.string = code
+    #endif
+    didCopy = true
+    // Flash the confirmation, then settle back to "Copy" (matching the
+    // transcript's MessageCopyButton). Re-copying restarts the timer.
+    copyResetTask?.cancel()
+    copyResetTask = Task {
+      try? await Task.sleep(for: .seconds(1.5))
+      guard !Task.isCancelled else { return }
+      didCopy = false
+    }
+  }
+
+}
+
+#if canImport(AppKit) || canImport(UIKit)
+  /// Last-value memo for the native attributed-text conversion. Plain class in
+  /// `@State`: non-observable, and the `AttributedString` comparison is cheap
+  /// between evaluations that share storage — it does real work only when the
+  /// highlighted text, Dynamic Type size, or theme foreground actually changes.
+  @MainActor
+  private final class NativeCodeMemo {
+    private var text: AttributedString?
+    private var fontSize: CGFloat?
+    private var fallback: Color?
+    private var cached: NSAttributedString?
+
+    func attributed(for text: AttributedString, fallback: Color) -> NSAttributedString {
+      #if canImport(UIKit)
+        let font = UIFont.scaledMonospacedSystemFont(forTextStyle: .callout)
+      #else
+        let font = NSFont.monospacedSystemFont(
+          ofSize: NSFont.preferredFont(forTextStyle: .callout).pointSize, weight: .regular)
+      #endif
+      let size = font.pointSize
+      if let cached, text == self.text, size == fontSize, fallback == self.fallback {
+        return cached
+      }
+      let result = NSMutableAttributedString()
+      let fallbackColor = MarkdownNativeColor(fallback)
+      for run in text.runs {
+        result.append(
+          NSAttributedString(
+            string: String(text[run.range].characters),
+            attributes: [
+              .font: font,
+              .foregroundColor: run.foregroundColor.map { MarkdownNativeColor($0) }
+                ?? fallbackColor,
+            ]
+          )
+        )
+      }
+      self.text = text
+      fontSize = size
+      self.fallback = fallback
+      cached = result
+      return result
+    }
+  }
+#endif
+
+#if canImport(AppKit)
+  /// A horizontal-only code scroller that hands vertical trackpad gestures to
+  /// the transcript. SwiftUI's horizontal `ScrollView` consumes both axes on
+  /// macOS, so merely moving the pointer over a code block could stop the outer
+  /// conversation mid-scroll.
+  private struct HorizontalCodeScrollView: NSViewRepresentable {
+    let text: AttributedString
+    let foreground: Color
+
+    func makeNSView(context: Context) -> CodeScrollView {
+      let scrollView = CodeScrollView()
+      scrollView.setContent(text, foreground: foreground)
+      return scrollView
+    }
+
+    func updateNSView(_ scrollView: CodeScrollView, context: Context) {
+      scrollView.setContent(text, foreground: foreground)
+    }
+
+    func sizeThatFits(
+      _ proposal: ProposedViewSize, nsView scrollView: CodeScrollView, context: Context
+    ) -> CGSize? {
+      let contentSize = scrollView.contentFittingSize
+      let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? contentSize.width
+      return CGSize(width: width, height: contentSize.height)
+    }
+  }
+
+  @MainActor
+  private final class CodeScrollView: TranscriptHorizontalScrollView {
+    private let codeTextView: TranscriptSelectableTextView
+    private var renderedText: AttributedString?
+    private var renderedForeground: Color?
+    private(set) var contentFittingSize = CGSize(width: 1, height: 1)
+
+    override init(frame frameRect: NSRect) {
+      let textStorage = NSTextStorage()
+      let layoutManager = NSLayoutManager()
+      textStorage.addLayoutManager(layoutManager)
+      let textContainer = NSTextContainer(
+        size: NSSize(
+          width: CGFloat.greatestFiniteMagnitude,
+          height: CGFloat.greatestFiniteMagnitude
+        )
+      )
+      textContainer.lineFragmentPadding = 0
+      textContainer.widthTracksTextView = false
+      textContainer.heightTracksTextView = false
+      layoutManager.addTextContainer(textContainer)
+      codeTextView = TranscriptSelectableTextView(frame: .zero, textContainer: textContainer)
+
+      super.init(frame: frameRect)
+      drawsBackground = false
+      borderType = .noBorder
+      hasHorizontalScroller = false
+      hasVerticalScroller = false
+      horizontalScrollElasticity = .automatic
+      verticalScrollElasticity = .none
+      automaticallyAdjustsContentInsets = false
+
+      codeTextView.isEditable = false
+      codeTextView.isSelectable = true
+      codeTextView.isRichText = true
+      codeTextView.drawsBackground = false
+      codeTextView.textContainerInset = NSSize(width: 10, height: 10)
+      codeTextView.isHorizontallyResizable = true
+      codeTextView.isVerticallyResizable = true
+      codeTextView.minSize = .zero
+      codeTextView.maxSize = NSSize(
+        width: CGFloat.greatestFiniteMagnitude,
+        height: CGFloat.greatestFiniteMagnitude
+      )
+      codeTextView.focusRingType = .none
+      documentView = codeTextView
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+      fatalError("init(coder:) has not been implemented")
+    }
+
+    func setContent(_ text: AttributedString, foreground: Color) {
+      guard renderedText != text || renderedForeground != foreground else { return }
+      renderedText = text
+      renderedForeground = foreground
+
+      codeTextView.textStorage?.setAttributedString(
+        nativeCodeAttributedString(text, foreground: NSColor(foreground))
+      )
+      guard let layoutManager = codeTextView.layoutManager,
+        let textContainer = codeTextView.textContainer
+      else { return }
+      layoutManager.ensureLayout(for: textContainer)
+      let used = layoutManager.usedRect(for: textContainer)
+      let size = CGSize(
+        width: max(1, ceil(used.width) + 20),
+        height: max(1, ceil(used.height) + 20)
+      )
+      contentFittingSize = size
+      if codeTextView.frame.size != size {
+        codeTextView.setFrameSize(size)
+        reflectScrolledClipView(contentView)
+      }
+    }
+
+  }
+#endif
+
+/// Last-value memo for the un-highlighted fallback text. Plain class in
+/// `@State`: non-observable, and the `code` comparison is O(1) between
+/// flushes (same String storage) — it does real work only when the block
+/// actually grows.
+@MainActor
+private final class PlainCodeMemo {
+  private var code: String?
+  private var cached: AttributedString?
+
+  func attributed(for code: String) -> AttributedString {
+    if let cached, code == self.code { return cached }
+    let attributed = AttributedString(code)
+    self.code = code
+    cached = attributed
+    return attributed
+  }
+}
+
+#Preview("Complete") {
+  CodeBlockView(id: "preview", language: "swift", code: "let x = 1\nprint(x)", isComplete: true)
+    .padding()
+    .frame(width: 360)
+}
+
+#Preview("Streaming") {
+  CodeBlockView(
+    id: "preview",
+    language: "python",
+    code: "def main():\n    return",
+    isComplete: false
+  )
+  .padding()
+  .frame(width: 360)
+}

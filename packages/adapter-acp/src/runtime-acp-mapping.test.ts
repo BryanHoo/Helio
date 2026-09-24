@@ -1,0 +1,302 @@
+import { describe, expect, it } from "vitest"
+
+import {
+  acpClientCapabilities,
+  acpConfigSelection,
+  acpPermissionOutcome,
+  acpPermissionQuestion,
+  extractPiStartupInfo,
+  isPiStartupInfoNotification,
+  normalizeAcpConfigOptions,
+  normalizeModeState,
+  piAssistantErrorFromSessionJsonl,
+  runtimeEventFromNotification
+} from "./index.js"
+
+describe("@codevisor/agent-runtime", () => {
+  it("advertises only provider-neutral ACP client capabilities", () => {
+    expect(acpClientCapabilities(true)).toEqual({
+      plan: {},
+      terminal: true
+    })
+    expect(acpClientCapabilities(false)).toEqual({
+      plan: {},
+      terminal: false
+    })
+  })
+
+  it("passes generic ACP configuration selections through", () => {
+    expect(acpConfigSelection("speed", "fast")).toEqual({
+      configId: "speed",
+      value: "fast"
+    })
+  })
+
+  it("attaches diff stats to tool-call updates carrying diff content", () => {
+    const event = runtimeEventFromNotification({
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "tool-1",
+        status: "completed",
+        content: [
+          {
+            type: "diff",
+            path: "/tmp/a.txt",
+            oldText: "one\ntwo\n",
+            newText: "one\nthree\nfour\n"
+          }
+        ]
+      }
+    } as never)
+
+    expect(event.kind).toBe("session.output")
+    expect(event.payload).toMatchObject({
+      toolCallId: "tool-1",
+      diffStats: [{ added: 2, path: "/tmp/a.txt", removed: 1 }]
+    })
+
+    const plain = runtimeEventFromNotification({
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "tool-2",
+        title: "Read file"
+      }
+    } as never)
+    expect(plain.payload).not.toHaveProperty("diffStats")
+  })
+
+  it("recognizes pi-acp startup info without matching ordinary agent output", () => {
+    const startupInfo = "pi v0.80.9\n\nSkills\n\n- /tmp/SKILL.md\n"
+    const response = {
+      _meta: { piAcp: { startupInfo } },
+      sessionId: "pi-session-1"
+    }
+    const startupNotification = {
+      sessionId: "pi-session-1",
+      update: {
+        content: { text: startupInfo, type: "text" },
+        sessionUpdate: "agent_message_chunk"
+      }
+    } as never
+    const ordinaryNotification = {
+      sessionId: "pi-session-1",
+      update: {
+        content: { text: "Here is the answer.", type: "text" },
+        sessionUpdate: "agent_message_chunk"
+      }
+    } as never
+
+    expect(extractPiStartupInfo(response)).toBe(startupInfo)
+    expect(isPiStartupInfoNotification(startupNotification, startupInfo)).toBe(true)
+    expect(isPiStartupInfoNotification(ordinaryNotification, startupInfo)).toBe(false)
+    expect(extractPiStartupInfo({ _meta: { piAcp: { startupInfo: null } } })).toBeUndefined()
+  })
+
+  it("recovers Pi provider errors that pi-acp reports as empty turns", () => {
+    const providerError = JSON.stringify({
+      type: "message",
+      message: {
+        role: "assistant",
+        content: [],
+        stopReason: "error",
+        errorMessage: '400 {"type":"error","error":{"message":"Add extra usage and try again."}}'
+      }
+    })
+    const successfulAssistant = JSON.stringify({
+      type: "message",
+      message: { role: "assistant", content: [{ type: "text", text: "Done" }], stopReason: "stop" }
+    })
+
+    expect(piAssistantErrorFromSessionJsonl(`{"type":"session"}\n${providerError}\n`)).toBe(
+      "Add extra usage and try again."
+    )
+    expect(
+      piAssistantErrorFromSessionJsonl(`{"type":"session"}\n${successfulAssistant}\n`)
+    ).toBeUndefined()
+    expect(
+      piAssistantErrorFromSessionJsonl('{"type":"message","message":{"role":"user"}}\n')
+    ).toBeUndefined()
+  })
+
+  it("strips effort suffixes on streamed config_option_update the same as session metadata", () => {
+    const event = runtimeEventFromNotification({
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "config_option_update",
+        configOptions: [
+          {
+            category: "thought_level",
+            currentValue: "high",
+            id: "reasoning_effort",
+            name: "Reasoning Effort",
+            options: [
+              { name: "Extra High Effort", value: "xhigh" },
+              { name: "High Effort", value: "high" },
+              { name: "Medium Effort", value: "medium" },
+              { name: "Low Effort", value: "low" }
+            ],
+            type: "select"
+          },
+          {
+            category: "model",
+            currentValue: "grok-4.6",
+            id: "model",
+            name: "Model",
+            options: [{ name: "Grok 4.6", value: "grok-4.6" }],
+            type: "select"
+          }
+        ]
+      }
+    } as never)
+
+    expect(event).toEqual({
+      kind: "session.output",
+      subjectId: "session-1",
+      payload: {
+        sessionUpdate: "config_option_update",
+        configOptions: [
+          {
+            category: "thought_level",
+            currentValue: "high",
+            id: "reasoning_effort",
+            name: "Reasoning",
+            options: [
+              { name: "Extra High", value: "xhigh" },
+              { name: "High", value: "high" },
+              { name: "Medium", value: "medium" },
+              { name: "Low", value: "low" }
+            ]
+          },
+          {
+            category: "model",
+            currentValue: "grok-4.6",
+            id: "model",
+            name: "Model",
+            options: [{ name: "Grok 4.6", value: "grok-4.6" }]
+          }
+        ]
+      }
+    })
+  })
+
+  it("removes redundant prefixes and effort suffixes from ACP reasoning choices only", () => {
+    const options = normalizeAcpConfigOptions([
+      {
+        category: "thought_level",
+        currentValue: "high",
+        id: "reasoning_effort",
+        name: "Reasoning Effort",
+        options: [
+          { name: "Thinking: off", value: "off" },
+          { name: "Thinking: low", value: "low" },
+          { name: "Reasoning: high", value: "high" },
+          { name: "High Effort", value: "high_effort" },
+          { name: "Extra High Effort", value: "xhigh" },
+          { name: "Effort", value: "default" }
+        ],
+        type: "select"
+      },
+      {
+        category: "model",
+        currentValue: "thinking-model",
+        id: "model",
+        name: "Model",
+        options: [{ name: "Thinking: model", value: "thinking-model" }],
+        type: "select"
+      }
+    ] as never)
+
+    expect(options[0]?.name).toBe("Reasoning")
+    expect(options[0]?.options.map((option) => option.name)).toEqual([
+      "off",
+      "low",
+      "high",
+      "High",
+      "Extra High",
+      "Effort"
+    ])
+    expect(options[1]?.options.map((option) => option.name)).toEqual(["Thinking: model"])
+  })
+
+  it("maps ACP permission requests onto questions and answers back onto option ids", () => {
+    const params = {
+      options: [
+        { kind: "allow_once", name: "Yes, and manually approve edits", optionId: "default" },
+        { kind: "reject_once", name: "No, keep planning", optionId: "plan" }
+      ],
+      sessionId: "session-1",
+      toolCall: {
+        content: [{ content: { text: "# The Plan\n\n1. Do it", type: "text" }, type: "content" }],
+        kind: "switch_mode",
+        title: "Ready to code?",
+        toolCallId: "exit-plan-1"
+      }
+    }
+    const question = acpPermissionQuestion(params)
+    expect(question?.sessionId).toBe("session-1")
+    expect(question?.planDocument).toBe("# The Plan\n\n1. Do it")
+    expect(question?.spec).toEqual({
+      allowsOther: false,
+      id: "permission",
+      options: [{ label: "Yes, and manually approve edits" }, { label: "No, keep planning" }],
+      question: "Ready to code?"
+    })
+
+    const optionIds = question!.optionIds
+    expect(
+      acpPermissionOutcome(optionIds, {
+        answers: { permission: { answers: ["No, keep planning"] } },
+        outcome: "answered"
+      })
+    ).toEqual({ outcome: { optionId: "plan", outcome: "selected" } })
+    expect(acpPermissionOutcome(optionIds, { outcome: "cancelled" })).toEqual({
+      outcome: { outcome: "cancelled" }
+    })
+    // Unknown labels degrade to cancelled rather than guessing.
+    expect(
+      acpPermissionOutcome(optionIds, {
+        answers: { permission: { answers: ["Nonsense"] } },
+        outcome: "answered"
+      })
+    ).toEqual({ outcome: { outcome: "cancelled" } })
+
+    // Requests without options (or malformed ones) auto-cancel.
+    expect(acpPermissionQuestion({ options: [], sessionId: "s" })).toBeUndefined()
+    expect(acpPermissionQuestion("nope")).toBeUndefined()
+    // Non-plan tool calls carry no plan document and fall back to a generic
+    // question when untitled.
+    const generic = acpPermissionQuestion({
+      options: [{ kind: "allow_once", name: "Allow", optionId: "ok" }],
+      sessionId: "s",
+      toolCall: { kind: "execute", toolCallId: "t1" }
+    })
+    expect(generic?.planDocument).toBeUndefined()
+    expect(generic?.spec.question).toBe("Allow the agent to proceed?")
+  })
+
+  it("maps agent-defined ACP modes onto the canonical vocabulary heuristically", () => {
+    const state = normalizeModeState({
+      currentModeId: "default",
+      availableModes: [
+        { id: "default", name: "Default" },
+        { id: "plan", name: "Plan mode", description: "think first" },
+        { id: "readOnly", name: "Read Only" },
+        { id: "acceptEdits", name: "Accept Edits" },
+        { id: "yolo", name: "YOLO" },
+        { id: "goal", name: "Goal mode" }
+      ]
+    })
+    expect(state.availableModes.map((mode) => mode.canonicalId)).toEqual([
+      "ask",
+      "plan",
+      "readOnly",
+      "autoEdit",
+      "fullAccess",
+      undefined
+    ])
+    // Descriptions still pass through untouched.
+    expect(state.availableModes[1]?.description).toBe("think first")
+  })
+})

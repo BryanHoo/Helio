@@ -1,0 +1,40 @@
+---
+title: Get started
+description: Install Codevisor and choose how your clients and machines connect.
+icon: Rocket
+---
+
+Codevisor Server runs coding agents and owns machine-local project state. Codevisor clients connect
+to one or more servers. The macOS app includes a local server; Linux installations run it directly.
+
+<Cards>
+  <Card
+    title="Install Codevisor"
+    description="Install the macOS app or a standalone Linux server."
+    href="/docs/installation"
+  />
+  <Card
+    title="Connect a remote machine"
+    description="Run setup, issue a connection token, and pair a client."
+    href="/docs/quickstart"
+  />
+  <Card
+    title="Extend Codevisor"
+    description="Add plugins, MCP servers, skills, or ACP-compatible agents."
+    href="/docs/extensions"
+  />
+  <Card
+    title="Codevisor Server"
+    description="Read the server guides and generated API reference."
+    href="/docs/server"
+  />
+</Cards>
+
+## How the pieces fit together
+
+- A **machine** runs Codevisor Server and the coding-agent CLIs installed on that machine.
+- A **client** connects to one or more machines and presents their projects, sessions, and panes.
+- **Extensions** such as MCP servers, skills, plugins, and custom agents are managed by that server.
+
+If you are integrating your own client, continue with [Codevisor Server](/docs/server) and the
+[API reference](/docs/api-reference).

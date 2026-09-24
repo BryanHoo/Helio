@@ -1,0 +1,216 @@
+import CodevisorCore
+import CodevisorUI
+import SwiftUI
+import UIKit
+
+/// Opening chats, workspace routing, disclosure expansion, and the
+/// no-machine / empty states.
+extension HomeView {
+  #if DEBUG || NAVIGATION_DIAGNOSTICS
+    func openDiagnosticSession(_ id: UUID) {
+      guard
+        let session = projectList.sessions.first(where: {
+          $0.serverId == environment.defaultComposerServerId && $0.id == id
+        })
+      else { return }
+      IOSNavigationDiagnostics.record(
+        "home.diagnosticOpenSession",
+        "session=\(shortID(id))"
+      )
+      openChat(session)
+    }
+  #endif
+
+  /// Agent rows always open the agent itself, never the terminal or sibling
+  /// chat that happened to be selected when the workspace was last left.
+  func openChat(_ session: ChatSession) {
+    // Existing sessions take the O(1) index path. Only a legacy session
+    // without a workspace pays the synchronous one-time backfill before
+    // a routable destination id exists.
+    let workspaceId =
+      environment.workspaces.workspaceId(forSession: session.id)
+      ?? ensureWorkspace(for: session).id
+    IOSNavigationDiagnostics.record(
+      "home.openChat",
+      "workspace=\(shortID(workspaceId)) session=\(shortID(session.id)) pathBefore=\(navigationPathSummary(path))"
+    )
+    // Push first. Workspace pane selection, controller creation, history,
+    // and transcript projection all begin from the destination's tasks.
+    openRoute(
+      .workspace(
+        serverId: session.serverId,
+        workspaceId: workspaceId,
+        anchorSessionId: session.id,
+        preferredChatSessionId: session.id
+      )
+    )
+  }
+
+  func ensureWorkspace(for session: ChatSession) -> Workspace {
+    let project = projectList.projects.first {
+      $0.serverId == session.serverId && $0.id == session.projectId
+    }
+    return environment.workspaces.ensureWorkspace(
+      for: WorkspaceSessionSeed(
+        sessionId: session.id,
+        initialName: session.worktreeName ?? project?.name ?? "Workspace",
+        serverId: session.serverId,
+        projectId: session.projectId,
+        rootDirectory: session.cwd ?? project?.folderURL.path,
+        worktreeName: session.worktreeName,
+        assignedWorkspaceId: projectList.workspaceAssignments(for: session.serverId)[session.id]
+      ),
+      legacyGroups: environment.paneGroups
+    )
+  }
+
+  func backfillWorkspacesIfNeeded() {
+    let sessionsById = Dictionary(
+      activeSessions.map { ($0.id, $0) },
+      uniquingKeysWith: { first, _ in first }
+    )
+    // Before workspaces were represented in the iOS navigator, sibling
+    // chats lived only in the original chat's local pane payload. Process
+    // the broadest layouts first so their shared workspace claims every
+    // child before ordinary one-chat backfill runs.
+    let legacyLayouts = activeSessions.compactMap { session -> (ChatSession, [UUID])? in
+      guard let state = WorkspacePaneStore.shared.existingState(for: session.id) else {
+        return nil
+      }
+      var seen: Set<UUID> = []
+      let chatIds = state.panes.compactMap { pane -> UUID? in
+        guard pane.kind == .chat,
+          let id = pane.chatSessionId,
+          sessionsById[id] != nil,
+          seen.insert(id).inserted
+        else { return nil }
+        return id
+      }
+      guard chatIds.count > 1, chatIds.contains(session.id) else { return nil }
+      return (session, chatIds)
+    }
+    .sorted { $0.1.count > $1.1.count }
+
+    for (anchor, chatIds) in legacyLayouts {
+      var workspace = ensureWorkspace(for: anchor)
+      var changed = false
+      for chatId in chatIds where workspace.tabId(containingChat: chatId) == nil {
+        workspace.centerTabs.append(
+          WorkspaceTab(root: .leaf(.centerInitial(sessionId: chatId)))
+        )
+        changed = true
+      }
+      if changed { environment.workspaces.save(workspace) }
+    }
+
+    for session in activeSessions {
+      _ = ensureWorkspace(for: session)
+    }
+    workspaceRevision += 1
+  }
+
+  /// Shared Core policy decides whether the current route remains valid,
+  /// moves to a surviving sibling chat, or leaves the workspace entirely.
+  var presentedWorkspaceDisposition: WorkspaceRouteDisposition {
+    _ = environment.workspaceSync.revision
+    guard case let .workspace(serverId, workspaceId, anchorSessionId, _, _, _)? = path.last else {
+      return .keep
+    }
+    guard let anchorSessionId else {
+      guard let workspace = environment.workspaces.workspace(id: workspaceId),
+        workspace.serverId == serverId, !workspace.isArchived
+      else { return .dismiss }
+      return .keep
+    }
+    return environment.workspaceSync.routeDisposition(
+      workspaceId: workspaceId,
+      anchorSessionId: anchorSessionId,
+      serverId: serverId
+    )
+  }
+
+  func applyPresentedWorkspaceDisposition(_ disposition: WorkspaceRouteDisposition) {
+    guard case let .workspace(serverId, workspaceId, anchorSessionId, _, _, _)? = path.last else {
+      return
+    }
+    IOSNavigationDiagnostics.record(
+      "home.routeDisposition",
+      "value=\(routeDispositionSummary(disposition)) workspace=\(shortID(workspaceId)) anchor=\(anchorSessionId.map(shortID) ?? "nil") pathBefore=\(navigationPathSummary(path))"
+    )
+    switch disposition {
+    case .keep:
+      break
+    case let .selectSession(sessionId):
+      guard sessionId != anchorSessionId else { return }
+      navigation.replaceTop(
+        with: .workspace(
+          serverId: serverId,
+          workspaceId: workspaceId,
+          anchorSessionId: sessionId,
+          preferredChatSessionId: sessionId
+        )
+      )
+    case .dismiss:
+      // WorkspaceScreen may currently have a pane cover above it;
+      // clearing the owning stack closes the whole workspace and
+      // returns to the navigation list in one state transition.
+      newChatFlow = nil
+      if layoutMode == .split {
+        selectDetail(nil)
+      } else {
+        path.removeAll()
+      }
+    }
+  }
+
+  /// The chat's project name for its row; nil for a no-project chat, whose
+  /// scratch folder's generated name says nothing about it.
+  func projectName(for session: ChatSession) -> String? {
+    guard
+      let project = projectList.projects.first(where: {
+        $0.serverId == session.serverId && $0.id == session.projectId
+      }),
+      !project.isScratch
+    else { return nil }
+    return project.name
+  }
+
+  /// Fallback SF symbol from the machine's cached capabilities, for
+  /// harnesses without a bundled brand icon.
+  func harnessSymbol(for session: ChatSession) -> String {
+    environment.configCache.capabilities(forServer: session.serverId)
+      .first { $0.harness.id == session.harnessId }?
+      .harness.symbolName ?? "cpu"
+  }
+
+  /// No machine paired (all machines removed): everything routes back
+  /// into the onboarding connect page.
+  var noMachineState: some View {
+    ContentUnavailableView {
+      Label {
+        Text("No Machine Connected")
+      } icon: {
+        Image("hunk")
+          .resizable()
+          .scaledToFit()
+          .frame(width: 52, height: 52)
+          .foregroundStyle(.tertiary)
+      }
+    } description: {
+      Text("Codevisor runs coding agents on your own Mac or Linux machine and streams them here.")
+    } actions: {
+      Button {
+        onboardingStart = .connect
+        onboardingDismissed = false
+      } label: {
+        Text("Connect a Machine")
+          .font(.body.weight(.semibold))
+          .foregroundStyle(.white)
+          .padding(.horizontal, 14)
+          .padding(.vertical, 4)
+      }
+      .buttonStyle(.borderedProminent)
+      .buttonBorderShape(.capsule)
+    }
+  }
+}

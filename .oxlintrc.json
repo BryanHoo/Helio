@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    ".repos/**",
+    "apps/macos/**",
+    "packages/swift/**",
+    "**/routeTree.gen.ts",
+    "**/worker-configuration.d.ts"
+  ],
+  "plugins": ["typescript", "import", "unicorn", "oxc"],
+  "categories": {
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "rules": {
+    "no-console": "warn",
+    "typescript/no-explicit-any": "error",
+    "max-lines": [
+      "error",
+      {
+        "max": 500
+      }
+    ],
+    "unicorn/filename-case": [
+      "error",
+      {
+        "case": "kebabCase"
+      }
+    ],
+    "no-unsafe-optional-chaining": "warn",
+    "preserve-caught-error": "warn",
+    "no-useless-escape": "warn",
+    "no-control-regex": "warn",
+    "no-new": "warn",
+    "import/no-named-as-default": "warn",
+    "unicorn/consistent-function-scoping": "warn",
+    "unicorn/no-array-sort": "warn",
+    "unicorn/no-array-reverse": "warn",
+    "unicorn/no-useless-spread": "warn",
+    "unicorn/prefer-add-event-listener": "warn",
+    "unicorn/require-module-specifiers": "warn"
+  }
+}

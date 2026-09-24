@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 3,
+  "packageManager": "bun",
+  "packages": [
+    { "name": "root", "layers": ["shared"] },
+    { "name": "apps/server", "layers": ["backend"] },
+    { "name": "apps/cloud", "layers": ["frontend", "backend"] },
+    { "name": "apps/www", "layers": ["frontend"] },
+    { "name": "apps/macos", "layers": ["frontend"] },
+    { "name": "apps/ios", "layers": ["frontend"] },
+    { "name": "apps/pixelbook", "layers": ["frontend"] },
+    { "name": "apps/shared", "layers": ["shared"] },
+    { "name": "apps/screen-sharing-rig", "layers": ["backend", "shared"] },
+    { "name": "packages/adapter-acp", "layers": ["backend"] },
+    { "name": "packages/adapter-claude", "layers": ["backend"] },
+    { "name": "packages/adapter-codex", "layers": ["backend"] },
+    { "name": "packages/adapter-cursor", "layers": ["backend"] },
+    { "name": "packages/adapter-grok-build", "layers": ["backend"] },
+    { "name": "packages/agent-runtime", "layers": ["backend"] },
+    { "name": "packages/api", "layers": ["shared"] },
+    { "name": "packages/automation", "layers": ["backend"] },
+    { "name": "packages/cloud-client", "layers": ["shared"] },
+    { "name": "packages/cloud-crypto", "layers": ["shared"] },
+    { "name": "packages/db", "layers": ["backend"] },
+    { "name": "packages/harness-manager", "layers": ["backend"] },
+    { "name": "packages/mcp", "layers": ["backend"] },
+    { "name": "packages/plugins", "layers": ["backend"] },
+    { "name": "packages/processes", "layers": ["backend"] },
+    { "name": "packages/skills", "layers": ["backend"] },
+    { "name": "packages/swift", "layers": ["frontend", "shared"] },
+    { "name": "packages/sync", "layers": ["shared"] },
+    { "name": "packages/terminal", "layers": ["backend"] },
+    { "name": "packages/updater", "layers": ["backend"] },
+    { "name": "packages/worktrees", "layers": ["backend"] }
+  ],
+  "artifactPaths": {
+    "designs": ".superwork/prd",
+    "plans": ".superwork/plans",
+    "specs": ".superwork/spec"
+  },
+  "verification": [
+    "bun run check:js",
+    "bun run swift:format:check",
+    "bun run swift:lint",
+    "bun run swift:test",
+    "bun run swift:test:macos-transcript",
+    "bun run swift:build:ios"
+  ]
+}

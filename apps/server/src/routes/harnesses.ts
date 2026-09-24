@@ -1,0 +1,411 @@
+import type { IncomingMessage, ServerResponse } from "node:http"
+import { tmpdir } from "node:os"
+
+import type { Harness, HarnessCapability } from "@codevisor/api"
+import { UpdateHarnessRequest as UpdateHarnessRequestSchema } from "@codevisor/api"
+import { parseCustomHarnessDocument } from "@codevisor/harness-manager"
+import { latestSyncTimestamp, nextSyncTimestamp } from "@codevisor/sync"
+
+import {
+  decorateHarnessSettings,
+  HARNESSES_SYNC_NAMESPACE,
+  setHarnessPreference
+} from "../infra/harness-preferences.js"
+import {
+  appendAndPublish,
+  existingDirectory,
+  HttpFailure,
+  matchRoute,
+  readJson,
+  readSchema,
+  run,
+  swallowError,
+  writeJson
+} from "../server-context.js"
+import type {
+  CodevisorServerConfig,
+  CodevisorServerServices,
+  EventFanout
+} from "../server-context.js"
+import { routeHarnessAuth } from "./harness-auth-routes.js"
+
+export const routeHarnesses = async (
+  services: CodevisorServerServices,
+  config: CodevisorServerConfig,
+  fanout: EventFanout,
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL
+): Promise<boolean> => {
+  if (await routeHarnessAuth(services, request, response, url)) {
+    return true
+  }
+
+  /// Every desired-state mutation on this machine writes the fleet catalog
+  /// (the one document Settings renders) and publishes the change so open
+  /// clients see the row move without waiting for a sync sweep.
+  const writeCatalog = async (
+    harnessId: string,
+    preference: { readonly enabled: boolean; readonly installed: boolean }
+  ): Promise<void> => {
+    const definition = services.agents.catalog.find((item) => item.id === harnessId)
+    /* v8 ignore next -- PATCH answers 404 and the lifecycle manager 409 for unknown ids before this runs. */
+    if (definition === undefined) throw new HttpFailure(404, "Harness not found")
+    // Every write stamps a fresh timestamp, so the merge always reports a
+    // change worth publishing.
+    const changed = await setHarnessPreference(
+      services.db,
+      config.id,
+      { id: definition.id, name: definition.name, symbolName: definition.symbolName },
+      preference
+    )
+    void appendAndPublish(services.db, fanout, "sync.changed", HARNESSES_SYNC_NAMESPACE, {
+      namespace: HARNESSES_SYNC_NAMESPACE,
+      entries: changed
+    }).catch(swallowError)
+  }
+
+  const uninstallId = matchRoute(url.pathname, "/v1/harnesses/:id/uninstall")
+  if (uninstallId !== undefined && (request.method === "GET" || request.method === "POST")) {
+    if (services.lifecycle === undefined) throw new HttpFailure(501, "Uninstall unavailable")
+    try {
+      if (request.method === "GET") {
+        writeJson(response, 200, await services.lifecycle.uninstallInfo(uninstallId))
+      } else {
+        const outcome = await services.lifecycle.beginUninstall(uninstallId)
+        await writeCatalog(uninstallId, { installed: false, enabled: false })
+        writeJson(response, 202, { accepted: true, ...outcome })
+      }
+    } catch (cause) {
+      throw conflictFrom(cause)
+    }
+    return true
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/harnesses") {
+    const includeLifecycle = url.searchParams.get("include") === "lifecycle"
+    writeJson(response, 200, await discoverHarnesses(services, false, undefined, includeLifecycle))
+    return true
+  }
+
+  // Re-resolves the runtime's PATH (login-shell probe) before re-detecting,
+  // so a CLI installed after server start is found without a restart.
+  if (request.method === "POST" && url.pathname === "/v1/harnesses/rescan") {
+    await run(services.agents.refreshEnvironment)
+    writeJson(response, 200, await discoverHarnesses(services, true, undefined, true))
+    return true
+  }
+
+  // Forced latest-version check for every installed harness, then the
+  // refreshed list (blocking rescan pattern — checks are cheap fetches).
+  if (request.method === "POST" && url.pathname === "/v1/harnesses/check-updates") {
+    if (services.lifecycle === undefined)
+      throw new HttpFailure(501, "Harness update checks unavailable")
+    await services.lifecycle.checkForUpdates(true)
+    writeJson(response, 200, await discoverHarnesses(services, false, undefined, true))
+    return true
+  }
+
+  // One-click install: 202-ack, work runs in the background, progress via
+  // harness.lifecycle.updated events + the attachable output terminal.
+  const installHarnessId = matchRoute(url.pathname, "/v1/harnesses/:id/install")
+  if (installHarnessId !== undefined && request.method === "POST") {
+    if (services.lifecycle === undefined) throw new HttpFailure(501, "Harness install unavailable")
+    const body = (await readJson(request)) as { readonly methodId?: string }
+    const methodId = typeof body.methodId === "string" ? body.methodId : undefined
+    try {
+      const { terminalId } = await services.lifecycle.beginInstall(installHarnessId, methodId)
+      await writeCatalog(installHarnessId, { installed: true, enabled: true })
+      writeJson(response, 202, { accepted: true, terminalId })
+    } catch (cause) {
+      throw conflictFrom(cause)
+    }
+    return true
+  }
+
+  // Dual-install: the bundled desktop app's version/update state, computed
+  // on demand (detail sheet), and its explicit update action.
+  const bundledAppHarnessId = matchRoute(url.pathname, "/v1/harnesses/:id/bundled-app")
+  if (bundledAppHarnessId !== undefined && request.method === "GET") {
+    if (services.lifecycle === undefined)
+      throw new HttpFailure(501, "Harness update checks unavailable")
+    const info = await services.lifecycle.bundledAppInfo(bundledAppHarnessId).catch(swallowError)
+    if (info === undefined) throw new HttpFailure(404, "No bundled desktop app")
+    writeJson(response, 200, info)
+    return true
+  }
+  const bundledAppUpdateHarnessId = matchRoute(url.pathname, "/v1/harnesses/:id/bundled-app/update")
+  if (bundledAppUpdateHarnessId !== undefined && request.method === "POST") {
+    if (services.lifecycle === undefined)
+      throw new HttpFailure(501, "Harness update checks unavailable")
+    try {
+      await services.lifecycle.beginBundledAppUpdate(bundledAppUpdateHarnessId)
+      writeJson(response, 202, { accepted: true })
+    } catch (cause) {
+      throw conflictFrom(cause)
+    }
+    return true
+  }
+
+  // Pending-update controls: "Update Now" skips the idle wait; DELETE
+  // disarms a queued update entirely.
+  const pendingApplyHarnessId = matchRoute(url.pathname, "/v1/harnesses/:id/update/pending/apply")
+  if (pendingApplyHarnessId !== undefined && request.method === "POST") {
+    if (services.lifecycle === undefined) throw new HttpFailure(501, "Harness update unavailable")
+    try {
+      await services.lifecycle.forcePendingUpdate(pendingApplyHarnessId)
+      writeJson(response, 202, { accepted: true })
+    } catch (cause) {
+      throw conflictFrom(cause)
+    }
+    return true
+  }
+  const pendingCancelHarnessId = matchRoute(url.pathname, "/v1/harnesses/:id/update/pending")
+  if (pendingCancelHarnessId !== undefined && request.method === "DELETE") {
+    if (services.lifecycle === undefined) throw new HttpFailure(501, "Harness update unavailable")
+    try {
+      await services.lifecycle.cancelPendingUpdate(pendingCancelHarnessId)
+      writeJson(response, 204, undefined)
+    } catch (cause) {
+      throw conflictFrom(cause)
+    }
+    return true
+  }
+
+  // One-click update for CLI harnesses (origin-matched vendor flow).
+  const updateHarnessId = matchRoute(url.pathname, "/v1/harnesses/:id/update")
+  if (updateHarnessId !== undefined && request.method === "POST") {
+    if (services.lifecycle === undefined) throw new HttpFailure(501, "Harness update unavailable")
+    try {
+      const outcome = await services.lifecycle.beginUpdate(updateHarnessId)
+      writeJson(response, 202, { accepted: true, ...outcome })
+    } catch (cause) {
+      throw conflictFrom(cause)
+    }
+    return true
+  }
+
+  // User-defined custom ACP harnesses (~/.codevisor/harnesses.json).
+  if (
+    url.pathname === "/v1/harnesses/custom" &&
+    (request.method === "GET" || request.method === "PUT")
+  ) {
+    if (services.customHarnesses === undefined)
+      throw new HttpFailure(501, "Custom harnesses unavailable")
+    if (request.method === "GET") {
+      writeJson(response, 200, { harnesses: await services.customHarnesses.list() })
+      return true
+    }
+    // Whole-list replace: the file is the source of truth and stays
+    // hand-editable, so the API rewrites it rather than patching entries.
+    {
+      const body = await readJson(request)
+      const parsed = parseCustomHarnessDocument(body, "request body")
+      if (parsed.warnings.length > 0) {
+        // Reject instead of skipping: the API must never persist entries the
+        // next boot would drop.
+        throw new HttpFailure(400, parsed.warnings.join("; "))
+      }
+      const before = await services.customHarnesses.list()
+      const overrides = await run(services.db.getSyncEntries("local.harness-custom-overrides"))
+      const changed = [...new Set([...before, ...parsed.specs].map((item) => item.id))].filter(
+        (id) =>
+          JSON.stringify(before.find((item) => item.id === id)) !==
+          JSON.stringify(parsed.specs.find((item) => item.id === id))
+      )
+      await services.customHarnesses.replace(parsed.specs)
+      await run(
+        services.db.mergeSyncEntries(
+          "local.harness-custom-overrides",
+          changed.map((id) => ({
+            key: id,
+            value: true,
+            timestamp: nextSyncTimestamp("local", latestSyncTimestamp(overrides), Date.now())
+          }))
+        )
+      )
+      writeJson(response, 200, await discoverHarnesses(services, true, undefined, true))
+      return true
+    }
+  }
+
+  // One-shot ACP initialize handshake for a (possibly unsaved) custom spec —
+  // the "Test Connection" action. Blocking with the store's own timeout.
+  if (request.method === "POST" && url.pathname === "/v1/harnesses/custom/test") {
+    if (services.customHarnesses === undefined)
+      throw new HttpFailure(501, "Custom harnesses unavailable")
+    const body = await readJson(request)
+    const parsed = parseCustomHarnessDocument([body], "request body")
+    const spec = parsed.specs[0]
+    if (spec === undefined) {
+      /* v8 ignore next -- the single-entry wrapper always yields a warning when the spec is invalid. */
+      throw new HttpFailure(400, parsed.warnings.join("; ") || "Invalid custom harness spec")
+    }
+    writeJson(response, 200, await services.customHarnesses.test(spec))
+    return true
+  }
+
+  // Sessions from the harness's own on-disk store (run before/outside
+  // Codevisor) — onboarding workspace suggestions and chat import read these,
+  // NOT Codevisor's sessions table (empty on a fresh install by definition).
+  const agentSessionsHarnessId = matchRoute(url.pathname, "/v1/harnesses/:id/agent-sessions")
+  if (agentSessionsHarnessId !== undefined && request.method === "GET") {
+    const account = await services.auth?.activeAccountContext(agentSessionsHarnessId)
+    writeJson(
+      response,
+      200,
+      await run(services.agents.listAgentSessions(agentSessionsHarnessId, account))
+    )
+    return true
+  }
+
+  const harnessId = matchRoute(url.pathname, "/v1/harnesses/:id")
+  if (harnessId !== undefined && request.method === "PATCH") {
+    const payload = await readSchema(request, UpdateHarnessRequestSchema)
+    if (!services.agents.catalog.some((item) => item.id === harnessId))
+      throw new HttpFailure(404, "Harness not found")
+    // Disabling never uninstalls: the row keeps `installed` as authored (or
+    // true when this machine is the one introducing it to the catalog).
+    const current = (await run(services.db.getSyncEntries(HARNESSES_SYNC_NAMESPACE))).find(
+      (entry) => entry.key === harnessId && !entry.deleted
+    )
+    const installed =
+      payload.enabled ||
+      (typeof current?.value === "object" &&
+        current.value !== null &&
+        (current.value as Record<string, unknown>).installed !== false)
+    await writeCatalog(harnessId, { enabled: payload.enabled, installed })
+    await run(services.db.setHarnessEnabled(harnessId, payload.enabled))
+    const harness = (await discoverHarnesses(services)).find(
+      (candidate) => candidate.id === harnessId
+    )
+    if (harness === undefined) {
+      throw new HttpFailure(404, `Harness not found: ${harnessId}`)
+    }
+    writeJson(response, 200, harness)
+    return true
+  }
+
+  return false
+}
+
+export const discoverCapabilities = async (
+  services: CodevisorServerServices,
+  url: URL
+): Promise<{ readonly harnesses: ReadonlyArray<HarnessCapability> }> => {
+  const cwd = existingDirectory(url.searchParams.get("cwd")) ?? tmpdir()
+  // Existing chats already know their harness. Filtering before auth
+  // decoration and inspection is important: both stages can start real CLI
+  // processes, so inspecting the whole catalog would put unrelated agents on
+  // the resumed chat's critical path.
+  const requestedHarnessId = url.searchParams.get("harnessId")?.trim() || undefined
+  const requestedConfigSelections = Object.fromEntries(
+    [...url.searchParams.entries()].flatMap(([key, value]) =>
+      key.startsWith("config.") && key.length > "config.".length
+        ? [[key.slice("config.".length), value] as const]
+        : []
+    )
+  )
+  const harnesses = await discoverHarnesses(services, false, requestedHarnessId)
+  const readyHarnesses = harnesses.filter(
+    (harness) => harness.enabled && harness.readiness.state === "ready"
+  )
+  // Fleet-enabled harnesses blocked on sign-in ride along as capability
+  // entries with no options and NO inspection (inspection spawns the CLI).
+  // The composer renders them as "sign in required" rows; older clients
+  // already filter on harness.enabled and never see them.
+  const signInPending = harnesses.filter(
+    (harness) =>
+      !harness.enabled && harness.desiredEnabled === true && harness.readiness.state === "ready"
+  )
+  const pendingCapabilities = signInPending.map((harness) => ({
+    harness,
+    configOptions: []
+  }))
+  return {
+    harnesses: await Promise.all(
+      readyHarnesses.map(async (harness) => {
+        try {
+          const account = await services.auth?.activeAccountContext(harness.id)
+          const metadata = await run(
+            services.agents.inspectHarness(
+              harness.id,
+              cwd,
+              account,
+              requestedHarnessId === harness.id ? requestedConfigSelections : undefined
+            )
+          )
+          return {
+            harness,
+            ...(metadata.modes === undefined ? {} : { modes: metadata.modes }),
+            configOptions: metadata.configOptions,
+            ...(metadata.supportsGoals === undefined
+              ? {}
+              : { supportsGoals: metadata.supportsGoals })
+          }
+        } catch (cause) {
+          // The picker hides a harness with no model option, so a swallowed
+          // failure here looks exactly like "not enabled" to the user. Say why.
+          console.error(
+            `[harnesses] inspecting ${harness.id} failed; it will be missing from the model picker: ${conflictFrom(cause).message}`
+          )
+          return {
+            harness,
+            configOptions: []
+          }
+        }
+      })
+    ).then((inspected) => [...inspected, ...pendingCapabilities])
+  }
+}
+
+/// Lifecycle route failures surface as conflicts with the manager's reason.
+const conflictFrom = (cause: unknown): HttpFailure =>
+  new HttpFailure(409, cause instanceof Error ? cause.message : String(cause))
+
+const discoverHarnessesWithAuthMode = async (
+  services: CodevisorServerServices,
+  authMode: "passive" | "force" | "stored",
+  harnessId?: string,
+  /// Lifecycle decoration (update knowledge, install methods) rides only on
+  /// requests that render it — Settings, rescans, update checks. The plain
+  /// list stays as light as possible for the composer's harness picker.
+  includeLifecycle = false
+): Promise<ReadonlyArray<Harness>> => {
+  const discovered = await decorateHarnessSettings(
+    services.db,
+    await run(services.db.applyHarnessSettings(await run(services.agents.discoverHarnesses)))
+  )
+  const filtered =
+    harnessId === undefined ? discovered : discovered.filter((harness) => harness.id === harnessId)
+  const harnesses =
+    includeLifecycle && services.lifecycle !== undefined
+      ? await services.lifecycle.decorateHarnesses(filtered)
+      : filtered
+  return services.auth === undefined
+    ? harnesses
+    : authMode === "stored"
+      ? services.auth.decorateHarnessesFromStoredState(harnesses)
+      : services.auth.decorateHarnesses(harnesses, authMode === "force")
+}
+
+export const discoverHarnesses = (
+  services: CodevisorServerServices,
+  forceAuth = false,
+  harnessId?: string,
+  includeLifecycle = false
+): Promise<ReadonlyArray<Harness>> =>
+  discoverHarnessesWithAuthMode(
+    services,
+    forceAuth ? "force" : "passive",
+    harnessId,
+    includeLifecycle
+  )
+
+/// Readiness is derived in response to auth events, so it must only read the
+/// state that caused the event. Starting another passive probe here turns one
+/// probe failure into a feedback loop.
+export const discoverHarnessesFromStoredAuthState = (
+  services: CodevisorServerServices
+): Promise<ReadonlyArray<Harness>> =>
+  discoverHarnessesWithAuthMode(services, "stored", undefined, true)

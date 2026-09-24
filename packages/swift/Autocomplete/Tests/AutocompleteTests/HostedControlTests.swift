@@ -1,0 +1,280 @@
+#if canImport(AppKit)
+  import AppKit
+  import CodevisorTestSupport
+  import SwiftUI
+  import Testing
+  @testable import Autocomplete
+
+  @Suite("Autocomplete hosted controls")
+  @MainActor
+  struct HostedControlTests {
+    private func field(in view: NSView) -> NSSearchField? {
+      if let field = view as? NSSearchField { return field }
+      return view.subviews.lazy.compactMap { field(in: $0) }.first
+    }
+    private func window(_ root: some View) -> FocusTestWindow {
+      _ = NSApplication.shared
+      let window = FocusTestWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 300, height: 250),
+        styleMask: [.borderless], backing: .buffered, defer: false)
+      window.contentView = NSHostingView(
+        rootView: AnyView(root.environment(\.locale, Locale(identifier: "en_US_POSIX"))))
+      window.contentView?.layoutSubtreeIfNeeded()
+      return window
+    }
+
+    @Test("An inherited SwiftUI disabled environment prevents Return from invoking a row")
+    func inheritedDisabled() {
+      var accepted = 0
+      let window = window(
+        Autocomplete.Suggestions {
+          Autocomplete.Action("Match") { accepted += 1 }
+        }.disabled(true))
+      defer { window.contentView = nil }
+      guard let view = window.contentView, let field = field(in: view),
+        let coordinator = field.delegate as? Autocomplete.InputField.Coordinator
+      else { Issue.record("Search field did not mount"); return }
+      #expect(!field.isEnabled)
+      #expect(
+        !coordinator.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertNewline(_:))))
+      window.contentView?.layoutSubtreeIfNeeded()
+      #expect(accepted == 0)
+    }
+
+    @Test("Enabled hosted controls route Return through their current semantic action")
+    func enabledReturn() {
+      var accepted = 0
+      let window = window(Autocomplete.Suggestions { Autocomplete.Action("Match") { accepted += 1 } })
+      defer { window.contentView = nil }
+      guard let view = window.contentView, let field = field(in: view),
+        let coordinator = field.delegate as? Autocomplete.InputField.Coordinator
+      else { Issue.record("Search field did not mount"); return }
+      #expect(coordinator.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertNewline(_:))))
+      #expect(accepted == 1)
+    }
+
+    @Test("Native search layout updates its font and icon columns in place")
+    func inputConfiguration() {
+      var metrics = Autocomplete.Metrics()
+      let container = Autocomplete.InputCapsuleView(metrics: metrics, showsCheckmarks: false, showsIcons: false)
+      let field = container.searchField
+      metrics.fontSize = 22
+      metrics.inputHeight = 40
+      container.configure(metrics: metrics, showsCheckmarks: true, showsIcons: true)
+      #expect(container.searchField === field)
+      #expect(field.font?.pointSize == 22)
+      #expect(container.intrinsicContentSize.height == 40)
+      container.userInterfaceLayoutDirection = .rightToLeft
+      container.configure(metrics: metrics, showsCheckmarks: false, showsIcons: true)
+      #expect(container.userInterfaceLayoutDirection == .rightToLeft)
+    }
+
+    @Test("An early focus request remains pending until attachment")
+    func pendingFocus() {
+      _ = NSApplication.shared
+      let container = Autocomplete.InputCapsuleView(metrics: .xcodeMenu, showsCheckmarks: false, showsIcons: false)
+      var focused = false
+      container.requestFocus = { [weak container] in
+        guard let container, let window = container.window else { return }
+        focused = window.makeFirstResponder(container.searchField)
+        if focused { container.requestFocus = nil }
+      }
+      container.requestFocus?()
+      #expect(!focused)
+      #expect(container.requestFocus != nil)
+      let window = FocusTestWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 280, height: 50),
+        styleMask: [.borderless], backing: .buffered, defer: false)
+      window.contentView = container
+      window.contentView?.layoutSubtreeIfNeeded()
+      #expect(focused)
+      #expect(container.requestFocus == nil)
+      window.contentView = nil
+    }
+
+    @Test("The native field handles a favorite key equivalent once without selecting or dismissing")
+    func favoriteKeyEquivalent() {
+      let selection = SelectionStore("Other")
+      let favorites = SelectionStore<[String]>([])
+      let window = window(
+        Autocomplete.Suggestions {
+          Autocomplete.Picker("Projects", selection: selection.binding) {
+            Autocomplete.Choice("Demo", value: "Demo")
+          }.favorites(favorites.binding)
+        })
+      defer { window.contentView = nil }
+      guard let view = window.contentView, let field = field(in: view) else {
+        Issue.record("Search field did not mount"); return
+      }
+      #expect(window.makeFirstResponder(field))
+      let event = NSEvent.keyEvent(
+        with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: 0,
+        windowNumber: window.windowNumber, context: nil, characters: "F",
+        charactersIgnoringModifiers: "F", isARepeat: false, keyCode: 3)!
+      #expect(field.performKeyEquivalent(with: event))
+      #expect(favorites.value == ["Demo"])
+      #expect(selection.value == "Other")
+      window.contentView?.layoutSubtreeIfNeeded()
+      #expect(field.performKeyEquivalent(with: event))
+      #expect(favorites.value.isEmpty)
+      #expect(selection.value == "Other")
+      let editor = window.firstResponder as! NSTextView
+      editor.setMarkedText(
+        "ni", selectedRange: NSRange(location: 2, length: 0),
+        replacementRange: NSRange(location: NSNotFound, length: 0))
+      #expect(!(field as! Autocomplete.SearchField).onKeyEquivalent(event))
+      #expect(favorites.value.isEmpty)
+    }
+
+    @Test("Control-J/K in the native search field changes what Return accepts without editing the query")
+    func vimSearchNavigation() {
+      let query = SelectionStore("Match")
+      var accepted: [String] = []
+      let window = window(
+        Autocomplete.Suggestions(query: query.binding) {
+          Autocomplete.Action("Match A") { accepted.append("A") }
+          Autocomplete.Action("Match B") { accepted.append("B") }
+          Autocomplete.Action("Match C") { accepted.append("C") }
+        })
+      defer { window.contentView = nil }
+      guard let view = window.contentView, let field = field(in: view),
+        let coordinator = field.delegate as? Autocomplete.InputField.Coordinator
+      else { Issue.record("Search field did not mount"); return }
+      #expect(window.makeFirstResponder(field))
+      guard let editor = window.firstResponder as? NSTextView else { Issue.record("Missing field editor"); return }
+      for (key, code, characters): (String, UInt16, String) in [("j", 38, "\u{0A}"), ("k", 40, "\u{0B}")] {
+        let event = NSEvent.keyEvent(
+          with: .keyDown, location: .zero, modifierFlags: .control, timestamp: 0,
+          windowNumber: window.windowNumber, context: nil, characters: characters,
+          charactersIgnoringModifiers: key, isARepeat: false, keyCode: code)!
+        let acceptedBeforeNavigation = accepted
+        #expect(field.performKeyEquivalent(with: event))
+        #expect(accepted == acceptedBeforeNavigation)
+        #expect(query.value == "Match")
+        #expect(editor.string == "Match")
+        #expect(coordinator.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertNewline(_:))))
+      }
+      #expect(accepted == ["B", "A"])
+    }
+
+    @Test("A pane's deferred search focus is discarded after navigation")
+    func supersededPaneFocus() throws {
+      let focus = Autocomplete.InputFocus()
+      var isCurrent = true
+      focus.focus(ifCurrent: { isCurrent })
+      let host = NSHostingView(
+        rootView: Autocomplete.Suggestions(focus: focus) { Autocomplete.Action("Match") {} }
+          .environment(\.locale, Locale(identifier: "en_US_POSIX")))
+      host.frame = NSRect(x: 0, y: 0, width: 300, height: 250)
+      host.layoutSubtreeIfNeeded()
+      let field = try #require(self.field(in: host))
+      let container = try #require(field.superview as? Autocomplete.InputCapsuleView)
+      // Hold attachment until the pane is no longer the destination.
+      _ = try #require(container.requestFocus)
+      isCurrent = false
+      let window = FocusTestWindow(
+        contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+      defer { window.contentView = nil }
+      window.contentView = host
+      host.layoutSubtreeIfNeeded()
+      #expect((window.firstResponder as? NSTextView)?.delegate !== field)
+      #expect(container.requestFocus == nil)
+    }
+
+    @Test("Tab reaches the highlighted favorite and Space toggles it without selecting")
+    func keyboardFavoriteFocus() async {
+      let selection = SelectionStore("Other")
+      let favorites = SelectionStore<[String]>([])
+      let window = window(
+        Autocomplete.Suggestions {
+          Autocomplete.Picker("Projects", selection: selection.binding) {
+            Autocomplete.Choice("Demo", value: "Demo")
+          }.favorites(favorites.binding)
+        })
+      defer { window.contentView = nil }
+      guard let view = window.contentView, let field = field(in: view),
+        let coordinator = field.delegate as? Autocomplete.InputField.Coordinator
+      else { Issue.record("Search field did not mount"); return }
+      #expect(window.makeFirstResponder(field))
+      #expect(
+        coordinator.control(
+          field, textView: window.firstResponder as! NSTextView,
+          doCommandBy: #selector(NSResponder.insertTab(_:))))
+      window.contentView?.layoutSubtreeIfNeeded()
+      await window.waitForResponder {
+        guard let responder = $0 else { return false }
+        return (responder as? NSTextView)?.delegate !== field && responder !== window
+      }
+      #expect((window.firstResponder as? NSTextView)?.delegate !== field)
+      for type in [NSEvent.EventType.keyDown, .keyUp] {
+        window.sendEvent(
+          NSEvent.keyEvent(
+            with: type, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ",
+            isARepeat: false, keyCode: 49)!)
+      }
+      await awaitObserved { favorites.value == ["Demo"] }
+      #expect(favorites.value == ["Demo"])
+      #expect(selection.value == "Other")
+    }
+
+    @Test("A focus binding can focus, relinquish, and refocus an attached field")
+    func focusBinding() async {
+      var focused: Binding<Bool>!
+      let window = window(FocusFixture { focused = $0 })
+      defer { window.contentView = nil }
+      guard let view = window.contentView, let field = field(in: view) else {
+        Issue.record("Search field did not mount"); return
+      }
+      func isEditing() -> Bool {
+        return (window.firstResponder as? NSTextView)?.delegate === field
+      }
+      #expect(!isEditing())
+      focused.wrappedValue = true
+      window.contentView?.layoutSubtreeIfNeeded()
+      await window.waitForResponder { ($0 as? NSTextView)?.delegate === field }
+      #expect(isEditing())
+      focused.wrappedValue = false
+      window.contentView?.layoutSubtreeIfNeeded()
+      await window.waitForResponder { ($0 as? NSTextView)?.delegate !== field }
+      #expect(!isEditing())
+      focused.wrappedValue = true
+      window.contentView?.layoutSubtreeIfNeeded()
+      await window.waitForResponder { ($0 as? NSTextView)?.delegate === field }
+      #expect(isEditing())
+    }
+
+    private struct FocusFixture: View {
+      @State private var focused = false
+      let capture: (Binding<Bool>) -> Void
+      var body: some View {
+        Autocomplete.Suggestions { Autocomplete.Action("Match") {} }
+          .autocompleteSearchFocused($focused)
+          .onAppear { capture($focused) }
+      }
+    }
+
+    @Test("Only a visually bottom-aligned final row receives concentric corners")
+    func bottomCorners() {
+      let coordinateSpace = UUID()
+      let edge = Autocomplete.BottomEdge(isLast: true, height: 300, inset: 4, coordinateSpace: coordinateSpace)
+      #expect(edge.contains(bottom: 296))
+      #expect(edge.contains(bottom: 295.5))
+      #expect(!edge.contains(bottom: 88))
+      #expect(!edge.contains(bottom: 320))
+      #expect(
+        !Autocomplete.BottomEdge(isLast: false, height: 300, inset: 4, coordinateSpace: coordinateSpace).contains(
+          bottom: 296))
+      #expect(
+        !Autocomplete.BottomEdge(isLast: true, height: 0, inset: 4, coordinateSpace: coordinateSpace).contains(
+          bottom: -4))
+    }
+
+    @Test("Small layout bounds never produce negative heights")
+    func constrainedSize() {
+      var metrics = Autocomplete.Metrics()
+      metrics.maximumHeight = 8
+      #expect(metrics.listHeight(itemCount: 10) == 0)
+    }
+  }
+#endif

@@ -1,0 +1,58 @@
+#!/bin/bash
+set -euo pipefail
+
+resources_dir="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+case "$(uname -m)" in
+  arm64) target="darwin-arm64" ;;
+  x86_64) target="darwin-x64" ;;
+  *) exit 78 ;;
+esac
+
+runtime_dir="$resources_dir/server/$target"
+node_bin="$runtime_dir/bin/node"
+entrypoint="$runtime_dir/main.js"
+data_dir="$HOME/.codevisor/data"
+logs_dir="$HOME/.codevisor/logs"
+database_path="$data_dir/codevisor-server.sqlite"
+upgrade_status_path="$data_dir/data-upgrade.json"
+update_request_path="$data_dir/app-update-request.json"
+
+mkdir -p "$data_dir" "$logs_dir"
+exec >>"$logs_dir/server.log" 2>&1
+
+# Every step of the agent script lands in the same timeline the app and the
+# server write to, so a boot that never reaches `node` is still explained.
+log() {
+  printf '[%s] [agent %s] %s\n' "$(/bin/date -u +%FT%TZ)" "$$" "$*"
+}
+log "agent script started from $resources_dir"
+
+if [[ ! -x "$node_bin" || ! -f "$entrypoint" ]]; then
+  printf '[%s] Bundled Codevisor server runtime is incomplete: %s\n' "$(/bin/date -u +%FT%TZ)" "$runtime_dir"
+  exit 78
+fi
+
+# The LaunchAgent can be resolved from a Sparkle installation bundle that is
+# moved or deleted after startup. Keep the daemon and every child process
+# anchored in durable application data instead of that transient bundle.
+cd "$data_dir"
+# The server resolves the user's shell environment asynchronously. Shell rc
+# files must never hold launchd's process open before Node can report progress.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.bun/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+log "starting with fallback PATH; shell discovery runs in the server"
+export CODEVISOR_APP_HOSTED=1
+export CODEVISOR_APP_UPDATE_REQUEST_PATH="$update_request_path"
+
+computer_name="$(/usr/sbin/scutil --get ComputerName 2>/dev/null || /bin/hostname)"
+log "exec node $entrypoint (port 49361)"
+printf '[%s] Starting bundled Codevisor server\n' "$(/bin/date -u +%FT%TZ)"
+exec -a codevisor-server "$node_bin" "$entrypoint" serve \
+  --host 0.0.0.0 \
+  --port 49361 \
+  --db "$database_path" \
+  --upgrade-status "$upgrade_status_path" \
+  --auth token \
+  --kind local \
+  --name "$computer_name" \
+  --boot-id "$(/usr/bin/uuidgen)" \
+  --service-managed 1

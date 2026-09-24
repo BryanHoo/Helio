@@ -1,0 +1,43 @@
+---
+title: Configuration
+description: Configure server identity, networking, authentication, and storage.
+icon: Settings
+---
+
+Codevisor Server currently uses command-line flags rather than a configuration file.
+
+```bash
+codevisor-server serve \
+  --host 0.0.0.0 \
+  --port 49361 \
+  --auth token \
+  --serverId build-box \
+  --name "Build box" \
+  --kind remote
+```
+
+| Flag               | Description                   | Default                                           |
+| ------------------ | ----------------------------- | ------------------------------------------------- |
+| `--host`           | Bind address                  | `127.0.0.1`                                       |
+| `--port`           | HTTP, SSE, and WebSocket port | `49361`                                           |
+| `--auth`           | `none` or `token`             | `none` for `127.0.0.1`; otherwise `token`         |
+| `--serverId`       | Protocol-facing server ID     | `local`                                           |
+| `--name`           | Human-readable machine name   | `Local Codevisor` on loopback; hostname otherwise |
+| `--kind`           | `local` or `remote`           | `local` for `127.0.0.1`; otherwise `remote`       |
+| `--db`             | SQLite database path          | `~/.codevisor/data/codevisor-server.sqlite`       |
+| `--upgrade-status` | Data-migration status file    | `data-upgrade.json` beside the database           |
+
+`CODEVISOR_DATA_DIR` changes the default data directory. An explicit `--db` wins. The canonical
+layout is:
+
+| Path                          | Contents                                 |
+| ----------------------------- | ---------------------------------------- |
+| `~/.codevisor/data`           | SQLite, attachments, keys, sidecar state |
+| `~/.codevisor/server`         | Standalone installed runtime             |
+| `~/.codevisor/logs`           | Logs for non-systemd background runs     |
+| `~/.codevisor/plugins`        | Managed and linked plugins               |
+| `~/.codevisor/repos`          | Codevisor-managed Git clones             |
+| `~/.codevisor/harnesses.json` | Custom ACP harness definitions           |
+
+The CLI also accepts app-lifecycle flags such as `--boot-id`, `--app-owned`, and `--owner-pid`.
+They coordinate a bundled desktop server and are not normal deployment settings.

@@ -1,0 +1,232 @@
+import SwiftUI
+import CodevisorCore
+import CodevisorTheming
+import CodevisorUI
+import os
+
+/// The sidebar: a New Chat action and fleet-wide workspaces with their tabs.
+///
+/// Built on `ScrollView` + `VStack` (not `List`), because the sidebar-styled
+/// `List` outline coordinator crashes on the current macOS SDK.
+struct SidebarView: View {
+  @Environment(AppEnvironment.self) var environment
+  @Environment(\.accessibilityReduceMotion) var reduceMotion
+  @Binding var selection: SidebarSelection?
+  var store: SessionStore? = nil
+  var publishesSceneActions = true
+
+  @State private var addProjectFlow = AddProjectFlow()
+  @State private var showingRemoteMachine = false
+  @State private var pendingImport: PendingSessionImport?
+  @State var renamingWorkspace: Workspace?
+  @State var workspaceRenameTitle = ""
+  @State var renamingTab: SidebarTabRenameRequest?
+  @State var tabRenameTitle = ""
+  /// Bumped after workspace mutations (backfill sweep, renames) so the
+  /// non-observable repository is re-read.
+  @State var workspaceRevision = 0
+  @State var workspaceDrag: SidebarWorkspaceDrag?
+  @State var workspaceGeometry = SidebarWorkspaceGeometryStore()
+  /// Collapsed by default: the archive is a place you go looking for
+  /// something, not something that should crowd the live list.
+  /// Page state is deliberately NOT persisted: reopening the archive should
+  /// start at the newest page rather than restoring a deep scroll.
+  /// The item a click is asking to restore, driving the confirmation alert.
+
+  var list: ProjectListModel { environment.projectList }
+  var isReordering: Bool { workspaceDrag != nil }
+  var itemTitleFont: Font { .body }
+
+  var isNewChatSelected: Bool {
+    switch selection {
+    case .newChat, .none: true
+    case .session, .workspace: false
+    }
+  }
+
+  var body: some View {
+    sidebarConfiguredView
+  }
+
+  private var sidebarContent: some View {
+    VStack(spacing: 0) {
+      // Development identity and New chat stay pinned; workspace
+      // sections scroll together with their tabs.
+      VStack(alignment: .leading, spacing: 1) {
+        if CodevisorAppVariant.isDevelopment {
+          SidebarDevelopmentWorktreeRow()
+        }
+
+        SidebarActionRow(
+          title: "New chat",
+          systemImage: "square.and.pencil",
+          isSelected: isNewChatSelected,
+          isHoverEnabled: !isReordering
+        ) {
+          selection = .newChat(nil)
+        }
+      }
+      .padding(.horizontal, 8)
+      .padding(.top, 8)
+
+      ScrollView {
+        // A plain VStack: lazy row materialization re-measures the
+        // content mid-bounce, which reads as random overscroll snaps.
+        VStack(alignment: .leading, spacing: 1) {
+          // `.geometryGroup()` makes each section translate as one
+          // rigid unit during reflows. Without it a row whose
+          // content changes in the same transaction as its move
+          // (the state change that reorders a chat also restyles
+          // its leading icon) animates each subview's position
+          // independently, which reads as shearing/jitter.
+          ForEach(workspaceItems) { item in
+            workspaceSection(item)
+              .geometryGroup()
+              .transition(.identity)
+          }
+
+        }
+        .padding(.horizontal, 8)
+        .padding(.bottom, 8)
+        .animation(Motion.listReflow(reduceMotion: reduceMotion), value: workspaceItems.map(\.id))
+        .animation(Motion.listReflow(reduceMotion: reduceMotion), value: workspaceTabRowIDs)
+      }
+      .scrollContentBackground(.hidden)
+      .scrollBounceBehavior(.basedOnSize)
+
+      SidebarUpdateFooter(center: environment.updateCenter)
+    }
+    // Section frames and the reorder ghost share this space, so the ghost
+    // can be placed over whichever row it was lifted from or lands on.
+    .coordinateSpace(.named(Self.reorderSpace))
+    .overlay(alignment: .topLeading) { workspaceReorderGhost }
+    .task(id: settlingWorkspaceID) { await finishSettledWorkspaceDrag() }
+  }
+
+  private var sidebarInteractionView: some View {
+    sidebarContent
+      .themedSurface(.sidebar)
+      .contentShape(Rectangle())
+      .addProjectFlow(addProjectFlow) { project in
+        selection = .newChat(NewChatTarget(project))
+        offerSessionImport(for: project)
+      }
+  }
+
+  private var sidebarAlertsView: some View {
+    sidebarInteractionView
+      .modifier(
+        SidebarAlertsModifier(
+          pendingImport: $pendingImport,
+          renamingWorkspace: $renamingWorkspace,
+          workspaceRenameTitle: $workspaceRenameTitle,
+          onImport: { environment.importSessions($0.sessions, into: $0.project) },
+          onRenameWorkspace: { renamed in
+            environment.workspaceSync.renameWorkspace(
+              renamed, client: environment.machines.client(for: renamed.serverId)
+            )
+            workspaceRevision += 1
+          },
+        )
+      )
+      .modifier(
+        SidebarTabRenameAlert(
+          request: $renamingTab,
+          title: $tabRenameTitle,
+          onRename: { renameTab($0, to: $1) }
+        ))
+  }
+
+  private var sidebarChangeObserversView: some View {
+    sidebarAlertsView
+      // Keyed on assignments as well as ids: a chat created elsewhere can
+      // arrive before the server's workspace membership does, and the
+      // backfill must run again once it lands to re-home the chat.
+      .onChange(of: sessionWorkspaceAssignments) { _, _ in
+        ensureSessionWorkspaces()
+      }
+  }
+
+  private var sidebarSheetsView: some View {
+    sidebarChangeObserversView
+      .modifier(
+        SidebarSheetsModifier(
+          showingRemoteMachine: $showingRemoteMachine,
+          onAddRemoteMachine: { host, name, token, syncConfig in
+            do {
+              let machine = try await environment.machines.addRemoteValidating(
+                host: host, name: name, token: token, syncConfig: syncConfig)
+              environment.composerDefaults.rememberNewWorkspaceServer(
+                serverId: machine.id
+              )
+              selection = .newChat(nil)
+              return nil
+            } catch {
+              Log.machines.error(
+                "Adding remote machine failed: \(String(describing: error), privacy: .public)")
+              if case CodevisorServerClientError.httpStatus(401, _) = error {
+                return "That connection token was rejected by the machine."
+              }
+              return serverErrorMessage(error)
+            }
+          }
+        ))
+  }
+
+  private var sidebarConfiguredView: some View {
+    sidebarSheetsView
+      .onAppear(perform: ensureSessionWorkspaces)
+      // The docked sidebar answers ⇧⌘[ / ⇧⌘] (the drawer copy
+      // stays passive so there is exactly one owner of the step).
+      .task(id: store.map(ObjectIdentifier.init)) {
+        guard publishesSceneActions else { return }
+        store?.sidebarTabStepHandler = { offset in stepSidebarTab(offset) }
+      }
+      .onDisappear {
+        if publishesSceneActions { store?.sidebarTabStepHandler = nil }
+      }
+      .focusedSceneValue(
+        \.sidebarActions,
+        // Navigation captures the store; wait until it is available before
+        // publishing the closures retained by the scene's focused value.
+        publishesSceneActions && store != nil
+          ? SidebarActions(
+            newChat: { selection = .newChat(nil) },
+            newProject: { startAddProject() },
+            addRemoteMachine: { showingRemoteMachine = true },
+            stepTab: { _ = stepSidebarTab($0) }
+          )
+          : nil
+      )
+  }
+
+  /// One shared flow: pick a folder on the machine or clone a repository.
+  private func startAddProject() {
+    addProjectFlow.begin()
+  }
+
+  /// After a project is added, look for existing harness sessions in its
+  /// folder and — only when some are found — offer to import them.
+  private func offerSessionImport(for project: Project) {
+    Task {
+      let importable = await environment.findImportableSessions(
+        for: project.folderURL,
+        serverId: project.serverId
+      )
+      guard !importable.isEmpty else { return }
+      pendingImport = PendingSessionImport(project: project, sessions: importable)
+    }
+  }
+
+}
+
+#Preview {
+  @Previewable @State var selection: SidebarSelection?
+  return NavigationSplitView {
+    SidebarView(selection: $selection)
+      .environment(AppEnvironment.preview())
+  } detail: {
+    Text("Detail")
+  }
+  .frame(width: 900, height: 600)
+}

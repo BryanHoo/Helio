@@ -1,0 +1,519 @@
+import CoreGraphics
+import CodevisorProtocol
+import Foundation
+
+/// A cheap version token. Copying `TranscriptProjectionInput` is copy-on-write;
+/// this key lets SwiftUI cancel stale preparations without comparing the transcript.
+public struct TranscriptProjectionKey: Hashable, Sendable {
+  public let sessionID: UUID
+  public let controllerRevision: UInt64
+  public let modelRevision: UInt64
+  public let activityMessage: String?
+
+  public init(sessionID: UUID, controllerRevision: UInt64, modelRevision: UInt64, activityMessage: String? = nil) {
+    self.sessionID = sessionID
+    self.controllerRevision = controllerRevision
+    self.modelRevision = modelRevision
+    self.activityMessage = activityMessage
+  }
+}
+
+public struct TranscriptProjectionOptions: Hashable, Sendable {
+  /// iOS presents the initial connection message inline. macOS keeps its
+  /// existing quiet connection treatment while sharing every other row.
+  public let includesConnectingRow: Bool
+  /// Platform composer geometry. Supplying it here keeps the final O(n)
+  /// array materialization on the projection actor too.
+  public let bottomSpacerHeight: CGFloat?
+
+  public init(includesConnectingRow: Bool, bottomSpacerHeight: CGFloat? = nil) {
+    self.includesConnectingRow = includesConnectingRow
+    self.bottomSpacerHeight = bottomSpacerHeight
+  }
+}
+
+public struct TranscriptProjectionRequest: Hashable, Sendable {
+  public let key: TranscriptProjectionKey
+  public let options: TranscriptProjectionOptions
+
+  public init(key: TranscriptProjectionKey, options: TranscriptProjectionOptions) {
+    self.key = key
+    self.options = options
+  }
+}
+
+/// Stable, immutable rows shared by both native transcript virtualizers.
+public struct TranscriptPresentationRow: Identifiable, Equatable, Sendable {
+  public enum ID: Hashable, Sendable {
+    case message(UUID)
+    case assistantPlanning(UUID)
+    case activePlanning(UUID)
+    case plan(UUID)
+    case planHeader(UUID)
+    case activePlanHeader(UUID)
+    case planMarkdown(UUID, ordinal: Int, fragment: String?)
+    case activePlanMarkdown(UUID, ordinal: Int, fragment: String?)
+    case assistantResult(UUID)
+    case activeResult(UUID)
+    case assistantWorkedHeader(UUID, TranscriptWorkedSectionKind)
+    case activeWorkedHeader(UUID, TranscriptWorkedSectionKind)
+    case assistantWorkedItem(UUID, TranscriptWorkedSectionKind, itemID: String)
+    case activeWorkedItem(UUID, TranscriptWorkedSectionKind, itemID: String)
+    case assistantChrome(UUID, TranscriptAssistantChromeSlice)
+    case activeChrome(UUID, TranscriptAssistantChromeSlice)
+    case assistantMarkdown(UUID, sourceID: String, ordinal: Int, fragment: String?)
+    case activeMarkdown(UUID, sourceID: String, ordinal: Int, fragment: String?)
+    case assistantAttachment(UUID, sourceID: String, ordinal: Int)
+    case activeAttachment(UUID, sourceID: String, ordinal: Int)
+    case active(UUID)
+    case setup
+    /// The optimistic first send's "Waiting on harness…" line, shown before
+    /// the model exists and replaced in place by the real active row.
+    case startingAgent
+    case backgroundTask
+    case updateGate
+    case connecting
+    case serverWait
+    case error
+    case statusError
+    case bottomSpacer
+
+    public var layoutKey: String {
+      switch self {
+      case let .message(id): "message:\(id.uuidString)"
+      case let .assistantPlanning(id), let .activePlanning(id):
+        "message:\(id.uuidString):planning"
+      case let .plan(id): "message:\(id.uuidString):plan"
+      case let .planHeader(id), let .activePlanHeader(id):
+        "message:\(id.uuidString):plan:header"
+      case let .planMarkdown(id, ordinal, fragment),
+        let .activePlanMarkdown(id, ordinal, fragment):
+        "message:\(id.uuidString):plan:markdown:\(ordinal)\(fragmentComponent(fragment))"
+      case let .assistantResult(id), let .activeResult(id):
+        "message:\(id.uuidString):result"
+      case let .assistantWorkedHeader(id, section),
+        let .activeWorkedHeader(id, section):
+        "message:\(id.uuidString):worked:\(section.layoutComponent):header"
+      case let .assistantWorkedItem(id, section, itemID),
+        let .activeWorkedItem(id, section, itemID):
+        "message:\(id.uuidString):worked:\(section.layoutComponent):item:\(itemID)"
+      case let .assistantChrome(id, slice), let .activeChrome(id, slice):
+        "message:\(id.uuidString):chrome:\(slice.layoutComponent)"
+      case let .assistantMarkdown(id, sourceID, ordinal, fragment),
+        let .activeMarkdown(id, sourceID, ordinal, fragment):
+        "message:\(id.uuidString):markdown:\(sourceID):\(ordinal)\(fragmentComponent(fragment))"
+      case let .assistantAttachment(id, sourceID, ordinal),
+        let .activeAttachment(id, sourceID, ordinal):
+        "message:\(id.uuidString):attachment:\(sourceID):\(ordinal)"
+      // An ordinary assistant keeps the same native host and measurement
+      // when it moves from the live slot into settled history.
+      case let .active(id): "message:\(id.uuidString)"
+      case .setup: "special:setup"
+      case .startingAgent: "special:starting-agent"
+      case .backgroundTask: "special:background"
+      case .updateGate: "special:update-gate"
+      case .connecting: "special:connecting"
+      case .serverWait: "special:server-wait"
+      case .error: "special:error"
+      case .statusError: "special:status-error"
+      case .bottomSpacer: "special:bottom-spacer"
+      }
+    }
+
+    private func fragmentComponent(_ fragment: String?) -> String {
+      fragment.map { ":fragment:\($0)" } ?? ""
+    }
+
+    public var isCacheableSettledRow: Bool {
+      switch self {
+      case .message, .assistantPlanning, .plan, .planHeader, .planMarkdown,
+        .assistantResult, .assistantWorkedHeader, .assistantWorkedItem,
+        .assistantChrome, .assistantMarkdown, .assistantAttachment:
+        true
+      case .active, .activePlanning, .activePlanHeader, .activePlanMarkdown,
+        .activeResult, .activeWorkedHeader, .activeWorkedItem, .activeChrome,
+        .activeMarkdown, .activeAttachment, .setup, .startingAgent,
+        .backgroundTask, .updateGate, .connecting, .serverWait, .error,
+        .statusError, .bottomSpacer:
+        false
+      }
+    }
+
+    public var isPlanDocument: Bool {
+      if case .plan = self { true } else { false }
+    }
+
+    public var isActiveRow: Bool {
+      switch self {
+      case .active, .activePlanning, .activePlanHeader, .activePlanMarkdown,
+        .activeResult, .activeWorkedHeader, .activeWorkedItem, .activeChrome,
+        .activeMarkdown, .activeAttachment:
+        true
+      default: false
+      }
+    }
+
+    /// True only after the aggregate active slot has been replaced by the
+    /// block projection that owns its final row geometry. The aggregate
+    /// `.active` row is intentionally excluded: it is a short-lived bridge
+    /// whose identity and measured height can change when the server adopts
+    /// the assistant message id. Send presentation must not use that bridge
+    /// as its destination layout.
+    public var isPreciselyProjectedActiveRow: Bool {
+      switch self {
+      case .activePlanning, .activePlanHeader, .activePlanMarkdown,
+        .activeResult, .activeWorkedHeader, .activeWorkedItem, .activeChrome,
+        .activeMarkdown, .activeAttachment:
+        true
+      case .active, .message, .assistantPlanning, .plan, .planHeader,
+        .planMarkdown, .assistantResult, .assistantWorkedHeader,
+        .assistantWorkedItem, .assistantChrome, .assistantMarkdown,
+        .assistantAttachment, .setup, .startingAgent, .backgroundTask, .updateGate,
+        .connecting, .serverWait, .error, .statusError, .bottomSpacer:
+        false
+      }
+    }
+
+    public var messageID: UUID? {
+      switch self {
+      case let .message(id), let .assistantPlanning(id), let .activePlanning(id),
+        let .plan(id), let .planHeader(id), let .activePlanHeader(id),
+        let .planMarkdown(id, _, _), let .activePlanMarkdown(id, _, _),
+        let .assistantResult(id), let .activeResult(id), let .active(id):
+        id
+      case let .assistantWorkedHeader(id, _), let .activeWorkedHeader(id, _),
+        let .assistantWorkedItem(id, _, _), let .activeWorkedItem(id, _, _):
+        id
+      case let .assistantChrome(id, _), let .activeChrome(id, _),
+        let .assistantMarkdown(id, _, _, _), let .activeMarkdown(id, _, _, _),
+        let .assistantAttachment(id, _, _), let .activeAttachment(id, _, _):
+        id
+      case .setup, .startingAgent, .backgroundTask, .updateGate, .connecting, .serverWait,
+        .error, .statusError, .bottomSpacer:
+        nil
+      }
+    }
+  }
+
+  public enum Content: Equatable, Sendable {
+    case message(ConversationItem, waitingOnBackgroundTask: String?)
+    case assistantPlanning(AssistantMessage)
+    case planDocument(String)
+    case planHeader(lifecycle: TranscriptBlockLifecycle)
+    case assistantResult(AssistantMessage, waitingOnBackgroundTask: String?)
+    case assistantWorkedHeader(TranscriptWorkedSectionHeader)
+    case activeWorkedHeader(TranscriptActiveWorkedSectionHeader)
+    case assistantWorkedItem(TranscriptSettledWorkedItem)
+    case activeWorkedItem(TranscriptWorkedItemReference)
+    case assistantChrome(
+      AssistantMessage,
+      slice: TranscriptAssistantChromeSlice,
+      waitingOnBackgroundTask: String?
+    )
+    case markdownChunk(TranscriptMarkdownChunk)
+    case assistantAttachment(TranscriptAssistantAttachment)
+    case active(ConversationItem)
+    case setup([SessionSetupPhase])
+    case optimistic(UserMessage)
+    case startingAgent
+    case backgroundTask(String)
+    case updateGate(String)
+    case connecting(String)
+    case serverWait(String)
+    case error(String)
+    case bottomSpacer(CGFloat)
+  }
+
+  public let id: ID
+  public let content: Content
+  public let estimatedHeight: CGFloat
+  public let measurementRevision: Int
+  public let layoutKey: String
+  /// Overrides ordinary message spacing for adjacent blocks in one document.
+  public let spacingAfter: CGFloat?
+  public let workedSection: TranscriptWorkedSectionMembership?
+  /// The completed assistant item represented by this visible slice. The
+  /// active slot can carry this after generation ends without changing its
+  /// stable row identity.
+  public let finishedResponseItemId: UUID?
+
+  public var isUserMessage: Bool {
+    switch content {
+    case let .message(item, waitingOnBackgroundTask: _):
+      if case .user = item { return true }
+      return false
+    case .optimistic:
+      return true
+    default:
+      return false
+    }
+  }
+
+  public init(
+    id: ID,
+    content: Content,
+    estimatedHeight: CGFloat,
+    measurementRevision: Int = 0,
+    spacingAfter: CGFloat? = nil,
+    workedSection: TranscriptWorkedSectionMembership? = nil,
+    finishedResponseItemId: UUID? = nil
+  ) {
+    self.id = id
+    self.content = content
+    self.estimatedHeight = estimatedHeight
+    self.measurementRevision = measurementRevision
+    self.spacingAfter = spacingAfter
+    self.workedSection = workedSection
+    layoutKey = id.layoutKey
+    if let finishedResponseItemId {
+      self.finishedResponseItemId = finishedResponseItemId
+    } else {
+      self.finishedResponseItemId =
+        switch content {
+        case let .message(item, waitingOnBackgroundTask: _):
+          if case let .assistant(message) = item { message.id } else { nil }
+        case let .assistantResult(message, waitingOnBackgroundTask: _):
+          message.id
+        case let .assistantChrome(message, slice, waitingOnBackgroundTask: _):
+          slice == .epilogue && !message.turn.isGenerating ? message.id : nil
+        case .assistantWorkedHeader, .activeWorkedHeader, .assistantWorkedItem,
+          .activeWorkedItem, .planHeader, .markdownChunk, .assistantAttachment:
+          nil
+        case let .active(item):
+          if case let .assistant(message) = item, !message.turn.isGenerating {
+            message.id
+          } else {
+            nil
+          }
+        default:
+          nil
+        }
+    }
+  }
+}
+
+/// Serializes and caches transcript projection away from the UI actor. A
+/// cache hit makes revisiting a chat O(1); cancellation checks stop a rapid
+/// sequence of sidebar taps from finishing obsolete transcript work.
+public actor TranscriptRowProjectionCache {
+  public static let shared = TranscriptRowProjectionCache()
+
+  private struct CacheKey: Hashable {
+    public let projection: TranscriptProjectionKey
+    public let options: TranscriptProjectionOptions
+  }
+
+  private let capacity: Int
+  private var rowsByKey: [CacheKey: [TranscriptPresentationRow]] = [:]
+  private var recency: [CacheKey] = []
+
+  public init(capacity: Int = 24) {
+    self.capacity = max(1, capacity)
+  }
+
+  public func rows(
+    for key: TranscriptProjectionKey,
+    input: TranscriptProjectionInput,
+    options: TranscriptProjectionOptions
+  ) throws -> [TranscriptPresentationRow] {
+    let cacheKey = CacheKey(projection: key, options: options)
+    if let cached = rowsByKey[cacheKey] {
+      touch(cacheKey)
+      return cached
+    }
+
+    let projected = try Self.project(input, options: options)
+    guard !Task.isCancelled else { throw CancellationError() }
+    rowsByKey[cacheKey] = projected
+    touch(cacheKey)
+    while recency.count > capacity {
+      rowsByKey.removeValue(forKey: recency.removeFirst())
+    }
+    return projected
+  }
+
+  private func touch(_ key: CacheKey) {
+    recency.removeAll { $0 == key }
+    recency.append(key)
+  }
+
+  public static func project(
+    _ input: TranscriptProjectionInput,
+    options: TranscriptProjectionOptions
+  ) throws -> [TranscriptPresentationRow] {
+    var rows: [TranscriptPresentationRow] = []
+    rows.reserveCapacity(input.settledConversation.count + 6)
+    let settled = input.settledConversation
+    let hasSetup = !input.setupPhases.isEmpty && input.activityMessage == nil
+    let pendingMessage = input.pendingUserMessage.flatMap { pending in
+      settled.contains(where: { item in
+        if case let .user(message) = item { return message.id == pending.id }
+        return false
+      }) ? nil : pending
+    }
+    let pendingIsOpeningRow = settled.isEmpty && !input.hasActiveItem
+    let waitingDescription = input.activityMessage == nil ? input.waitingBackgroundTaskDescription : nil
+    let waitingAssistantID: UUID? = {
+      guard !input.hasActiveItem,
+        waitingDescription != nil,
+        case let .assistant(message)? = settled.last,
+        message.turn.finalText != nil
+      else { return nil }
+      return message.id
+    }()
+
+    if settled.isEmpty, !input.hasActiveItem {
+      if let message = pendingMessage {
+        rows.append(
+          .init(
+            id: .message(message.id),
+            content: .optimistic(message),
+            estimatedHeight: 90,
+            measurementRevision: TranscriptAssistantRowProjection.optimisticMeasurementRevision(
+              for: message
+            )
+          ))
+      }
+      if hasSetup {
+        rows.append(
+          .init(
+            id: .setup,
+            content: .setup(input.setupPhases),
+            estimatedHeight: 80
+          ))
+      }
+      if pendingMessage != nil, showsOptimisticAgentActivity(input) {
+        rows.append(
+          .init(
+            id: .startingAgent,
+            content: .startingAgent,
+            estimatedHeight: TranscriptAssistantRowProjection.activityRowEstimatedHeight
+          ))
+      }
+      if !input.isLoadingInitialHistory, pendingMessage == nil, input.activityMessage == nil {
+        if let message = input.serverWaitMessage {
+          rows.append(
+            .init(
+              id: .serverWait,
+              content: .serverWait(message),
+              estimatedHeight: 32
+            ))
+        } else if options.includesConnectingRow,
+          case let .connecting(message) = input.status
+        {
+          rows.append(
+            .init(
+              id: .connecting,
+              content: .connecting(message),
+              estimatedHeight: 32
+            ))
+        }
+      }
+    }
+
+    // A failure is only actionable on the latest turn (retry, sign in,
+    // switch account). Older turns' stop details are not presented at
+    // all; a live active item makes every settled turn "older".
+    let latestSettledAssistantID: UUID? =
+      input.hasActiveItem
+      ? nil
+      : settled.last(where: TranscriptAssistantRowProjection.isAssistant)?.id
+
+    for (index, item) in settled.enumerated() {
+      if index.isMultiple(of: 32), Task.isCancelled { throw CancellationError() }
+      if index == 0, hasSetup, TranscriptAssistantRowProjection.isAssistant(item) {
+        rows.append(
+          .init(
+            id: .setup,
+            content: .setup(input.setupPhases),
+            estimatedHeight: 80
+          ))
+      }
+      TranscriptAssistantRowProjection.appendSettled(
+        item,
+        waitingOnBackgroundTask: item.id == waitingAssistantID
+          ? waitingDescription
+          : nil,
+        presentsStopDetail: item.id == latestSettledAssistantID,
+        to: &rows
+      )
+      if index == 0, hasSetup, TranscriptAssistantRowProjection.isUser(item) {
+        rows.append(
+          .init(
+            id: .setup,
+            content: .setup(input.setupPhases),
+            estimatedHeight: 80
+          ))
+      }
+    }
+
+    if settled.isEmpty, input.hasActiveItem, hasSetup {
+      rows.append(
+        .init(
+          id: .setup,
+          content: .setup(input.setupPhases),
+          estimatedHeight: 80
+        ))
+    }
+    if let activeItem = input.activeItem {
+      rows.append(
+        .init(
+          id: .active(activeItem.id),
+          content: .active(activeItem),
+          estimatedHeight: TranscriptAssistantRowProjection.activeFallbackEstimatedHeight(
+            for: activeItem
+          )
+        ))
+    }
+    if !pendingIsOpeningRow, let message = pendingMessage {
+      rows.append(
+        .init(
+          id: .message(message.id),
+          content: .optimistic(message),
+          estimatedHeight: 90,
+          measurementRevision: TranscriptAssistantRowProjection.optimisticMeasurementRevision(
+            for: message
+          )
+        ))
+    }
+    if let waitingDescription, waitingAssistantID == nil, !input.hasActiveItem {
+      rows.append(
+        .init(
+          id: .backgroundTask,
+          content: .backgroundTask(waitingDescription),
+          estimatedHeight: 32
+        ))
+    }
+    if let name = input.waitingHarnessUpdateName, input.activityMessage == nil {
+      rows.append(.init(id: .updateGate, content: .updateGate(name), estimatedHeight: 32))
+    }
+    if (!settled.isEmpty || input.hasActiveItem), let message = input.serverWaitMessage, input.activityMessage == nil {
+      rows.append(.init(id: .serverWait, content: .serverWait(message), estimatedHeight: 32))
+    }
+    if let message = input.activityMessage {
+      rows.append(
+        .init(
+          id: .connecting, content: .connecting(message), estimatedHeight: 32,
+          measurementRevision: message.hashValue))
+    }
+    if let message = input.sessionErrorMessage {
+      rows.append(.init(id: .error, content: .error(message), estimatedHeight: 56))
+    }
+    if case let .failed(message) = input.status,
+      message != input.sessionErrorMessage
+    {
+      rows.append(.init(id: .statusError, content: .error(message), estimatedHeight: 56))
+    }
+    if let requestedHeight = options.bottomSpacerHeight {
+      let height = max(1, requestedHeight)
+      rows.append(
+        .init(
+          id: .bottomSpacer,
+          content: .bottomSpacer(height),
+          estimatedHeight: height
+        ))
+    }
+    return rows
+  }
+
+}

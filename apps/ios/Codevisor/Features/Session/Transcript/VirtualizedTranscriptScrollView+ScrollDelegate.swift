@@ -1,0 +1,87 @@
+import CodevisorCore
+import CodevisorUI
+import QuartzCore
+import StreamMarkdown
+import SwiftUI
+import TranscriptKit
+import UIKit
+
+// MARK: - ScrollDelegate
+
+extension VirtualizedTranscriptScrollView {
+  func scrollViewWillBeginDragging(_: UIScrollView) {
+    cancelDisclosureViewportAnchor()
+    bottomJumpGate.cancel()
+    lockedRestoreDistance = nil
+    isExplicitUserScroll = false
+  }
+
+  func scrollViewShouldScrollToTop(_: UIScrollView) -> Bool {
+    cancelDisclosureViewportAnchor()
+    bottomJumpGate.cancel()
+    lockedRestoreDistance = nil
+    isExplicitUserScroll = true
+    return false
+  }
+
+  func scrollViewDidScroll(_: UIScrollView) {
+    guard !isDetaching else { return }
+    let previousDistance = lastDistanceFromBottom
+    let distance = currentDistanceFromBottom()
+    lastDistanceFromBottom = distance
+    // Every offset/inset/content-size mutation owned by the virtualizer is
+    // inside a position transaction. At a stable viewport size, movement
+    // outside that transaction is native input, including accessibility
+    // paging and selection scrolling that bypass touch delegate callbacks.
+    let isNativeMovement =
+      initialPositionApplied && !isApplyingPosition && lastViewportSize == bounds.size
+    let isUserMovement =
+      isTracking || isDragging || isDecelerating
+      || isExplicitUserScroll || isNativeMovement
+    if let lastObservedContentOffsetY, isUserMovement {
+      pendingWindowScrollDelta += contentOffset.y - lastObservedContentOffsetY
+    } else if !isApplyingPosition {
+      pendingWindowScrollDelta = 0
+    }
+    lastObservedContentOffsetY = contentOffset.y
+    if initialPositionApplied {
+      if isUserMovement {
+        requestMountedRowsUpdate()
+      } else {
+        updateMountedRows()
+      }
+    }
+
+    let atBottom = distance <= Self.atBottomThreshold
+    publishBottomState(atBottom)
+    if !isApplyingPosition, isUserMovement,
+      distance > previousDistance + 0.5, followsLatest
+    {
+      followsLatest = false
+      onFollowStateChange?(false)
+    } else if !isApplyingPosition, isUserMovement, atBottom, !followsLatest {
+      followsLatest = true
+      onFollowStateChange?(true)
+    }
+    if !isApplyingPosition, isUserMovement {
+      lockedRestoreDistance = nil
+      emitViewportSnapshot()
+    }
+    checkForHistoryPrefetch()
+  }
+
+  func scrollViewDidEndDragging(
+    _: UIScrollView,
+    willDecelerate decelerate: Bool,
+  ) {
+    if !decelerate { finishNativeScrollInteraction() }
+  }
+
+  func scrollViewDidEndDecelerating(_: UIScrollView) {
+    finishNativeScrollInteraction()
+  }
+
+  func scrollViewDidEndScrollingAnimation(_: UIScrollView) {
+    finishNativeScrollInteraction()
+  }
+}
