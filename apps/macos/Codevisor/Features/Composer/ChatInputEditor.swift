@@ -114,18 +114,21 @@ struct ChatInputEditor: NSViewRepresentable {
     if let clipView = scrollView.contentView as? GrowingTextClipView {
       clipView.maximumGrowingHeight = maxHeight
     }
-    if textView.string != text {
-      textView.string = text
-    }
-    if let selection {
-      let length = (textView.string as NSString).length
-      let location = min(selection.wrappedValue.location, length)
-      let clamped = NSRange(
-        location: location,
-        length: min(selection.wrappedValue.length, length - location)
-      )
-      if textView.selectedRange() != clamped {
-        textView.setSelectedRange(clamped)
+    // 拼音等输入法的 marked text 尚未提交时，回写文本或选区会取消组合态。
+    if !textView.hasMarkedText() {
+      if textView.string != text {
+        textView.string = text
+      }
+      if let selection {
+        let length = (textView.string as NSString).length
+        let location = min(selection.wrappedValue.location, length)
+        let clamped = NSRange(
+          location: location,
+          length: min(selection.wrappedValue.length, length - location)
+        )
+        if textView.selectedRange() != clamped {
+          textView.setSelectedRange(clamped)
+        }
       }
     }
     // Change-driven: this runs on EVERY SwiftUI invalidation of the

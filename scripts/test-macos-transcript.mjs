@@ -21,12 +21,20 @@ const excluded = new Set([
   "TranscriptRowLeaves+macOS.swift"
 ])
 const transcript = join(root, "apps/macos/Codevisor/Features/Session/Transcript")
+const composer = join(root, "apps/macos/Codevisor/Features/Composer/ChatInputEditor.swift")
 await Promise.all(
   (await readdir(transcript))
     .filter((name) => name.endsWith(".swift") && !excluded.has(name))
     .map((name) => cp(join(transcript, name), join(sources, name)))
 )
 await cp(join(root, "apps/macos/Tests/Transcript"), tests, { recursive: true })
+await cp(composer, join(sources, "ChatInputEditor.swift"))
+await cp(join(root, "apps/macos/Tests/Composer"), tests, { recursive: true })
+// 图片粘贴不在此测试目标内；主应用提供对应实现。
+await writeFile(
+  join(sources, "ComposerImageStub.swift"),
+  "import Foundation\nnonisolated func pngData(from imageData: Data) -> Data? { nil }\n"
+)
 await writeFile(
   join(harness, "Package.swift"),
   `// swift-tools-version: 6.2
