@@ -97,7 +97,7 @@ export const handleRequest = async (
     // Tokenless on purpose: clients probe network peers (e.g. tailnet members)
     // with this manifest to discover Codevisor servers before pairing. Keep the
     // payload minimal — nothing here may reveal projects, sessions, or tokens.
-    if (request.method === "GET" && url.pathname === "/v1/discovery") {
+    if (!config.appOwned && request.method === "GET" && url.pathname === "/v1/discovery") {
       writeJson(response, 200, {
         serverId: config.id,
         machineId: await run(services.db.getOrCreateInstanceId),
@@ -162,6 +162,17 @@ export const handleRequest = async (
     }
 
     await authorize(services.db, config, request)
+
+    // App 托管模式不签发远端凭据，也不暴露云端连接和网络发现入口。
+    if (
+      config.appOwned &&
+      (url.pathname === "/v1/tailnet/peers" ||
+        url.pathname.startsWith("/v1/auth/") ||
+        url.pathname === "/v1/cloud" ||
+        url.pathname.startsWith("/v1/cloud/"))
+    ) {
+      throw new HttpFailure(404, "Route not found")
+    }
 
     if (await routeTranscriptStress(services, fanout, routeState, request, response, url)) return
 

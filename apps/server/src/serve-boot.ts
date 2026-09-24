@@ -58,11 +58,25 @@ export const resolveServeModes = (
   readonly directPathMode: "enabled" | "disabled"
   readonly resolvedKind: "local" | "remote"
 } => {
+  const appOwned = args["app-owned"] === "1" || args["service-managed"] === "1"
+  // App 托管的服务只接受本机访问，禁用远端鉴权和 LAN 直连。
+  if (appOwned && host !== "127.0.0.1") {
+    throw new Error("An app-owned server must bind to the loopback address")
+  }
+  if (appOwned && args.auth !== undefined && args.auth !== "none") {
+    throw new Error("An app-owned server cannot enable remote auth")
+  }
+  if (appOwned && args["direct-path"] === "enabled") {
+    throw new Error("An app-owned server cannot enable direct paths")
+  }
+  if (appOwned && args.kind === "remote") {
+    throw new Error("An app-owned server must be local")
+  }
   const authMode = args.auth ?? (host === "127.0.0.1" ? "none" : "token")
   if (authMode !== "none" && authMode !== "token") {
     throw new Error("--auth must be either none or token")
   }
-  const directPathMode = args["direct-path"] ?? "enabled"
+  const directPathMode = args["direct-path"] ?? (appOwned ? "disabled" : "enabled")
   if (directPathMode !== "enabled" && directPathMode !== "disabled") {
     throw new Error("--direct-path must be either enabled or disabled")
   }

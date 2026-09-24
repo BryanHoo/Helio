@@ -43,6 +43,17 @@ describe("directHosts", () => {
 })
 
 describe("routeNetDirect", () => {
+  it("does not publish a direct path for app-owned servers", () => {
+    const { response } = captureJson()
+    expect(
+      routeNetDirect(
+        makeConfig({ appOwned: true }),
+        { method: "GET" } as never,
+        response,
+        new URL("http://x/v1/net/direct")
+      )
+    ).toBe(false)
+  })
   it("reports the direct pipe's coordinates for a cloud-registered machine", () => {
     const { response, body } = captureJson()
     const handled = routeNetDirect(
@@ -176,6 +187,42 @@ describe("direct pipe on a running server", () => {
           cloud,
           directPathEnabled: false,
           id: "server-relay-only",
+          port: 0
+        })
+      )
+    )
+    runningServers.push(server)
+
+    const outcome = await new Promise<"error" | "open">((resolve) => {
+      const socket = new WebSocket(`${server.url.replace("http:", "ws:")}/v1/direct`)
+      socket.on("open", () => resolve("open"))
+      socket.on("error", () => resolve("error"))
+    })
+    expect(outcome).toBe("error")
+    expect(accepted).toBe(false)
+  })
+
+  it("rejects /v1/direct for an app-owned server even with a direct bridge", async () => {
+    const { services } = await makeServices("app-owned-direct")
+    let accepted = false
+    const server = await run(
+      startCodevisorServer(
+        services,
+        defaultServerConfig({
+          appOwned: true,
+          cloud: {
+            deviceId: () => "app-device",
+            state: () => "connected" as const,
+            managedBy: () => "external" as const,
+            connect: () => Promise.resolve("app-device"),
+            disconnect: () => Promise.resolve(),
+            acceptDirect: () => {
+              accepted = true
+              return true
+            }
+          },
+          directPathEnabled: true,
+          id: "app-owned-direct",
           port: 0
         })
       )

@@ -234,16 +234,20 @@ export const runServe = (
     startup.checkpoint("initializingServices")
     const backgroundTerminals = yield* Effect.promise(() => backgroundTerminalIntegration(terminal))
     // 旧凭据仍留在磁盘供用户自行处理，但本地版不会自动建立云端连接。
-    const cloudBridgeOptions = {
-      credentialsPath: join(dirname(databasePath), "cloud.json"),
-      machineName: args.name ?? hostname(),
-      appVersion: version ?? "unknown",
-      localBaseUrl: `http://127.0.0.1:${port}`,
-      terminal,
-      env: process.env,
-      log: (line: string) => console.error(line)
-    }
-    const cloudControl = makeCloudServerControl(cloudBridgeOptions, undefined)
+    const cloudControl = appOwned
+      ? undefined
+      : makeCloudServerControl(
+          {
+            credentialsPath: join(dirname(databasePath), "cloud.json"),
+            machineName: args.name ?? hostname(),
+            appVersion: version ?? "unknown",
+            localBaseUrl: `http://127.0.0.1:${port}`,
+            terminal,
+            env: process.env,
+            log: (line: string) => console.error(line)
+          },
+          undefined
+        )
     // Start resolving the GUI process's minimal environment without delaying
     // server boot. The first Git operation awaits this shared result so
     // checkout hooks and filters can find user-installed tools such as
@@ -384,12 +388,8 @@ export const runServe = (
       defaultServerConfig({
         host,
         id: serverId,
-        // The app launches its own server bound to 0.0.0.0 so remote clients
-        // can connect; --kind lets it stay "local" despite the network bind.
         kind: resolvedKind,
-        // Network-bound servers advertise the machine's hostname so client
-        // machine lists and tailnet discovery show something recognizable,
-        // not the default "local" server id.
+        // 独立部署的网络服务仍使用其原有身份信息。
         name: args.name ?? (host === "127.0.0.1" ? "Local Helio" : hostname()),
         port,
         directPathEnabled: directPathMode === "enabled",
@@ -405,9 +405,7 @@ export const runServe = (
         ...buildMetadata,
         ...(version === undefined ? {} : { version }),
         auth: {
-          // Same-machine clients (the app that launched this server, the
-          // terminal proxy) are trusted without a token; only connections
-          // arriving over the network must present one.
+          // App 托管的回环连接无需配对 token；独立网络服务仍验证远端请求。
           allowLocalhostWithoutAuth: authMode === "token",
           requireBearerToken: authMode === "token"
         },

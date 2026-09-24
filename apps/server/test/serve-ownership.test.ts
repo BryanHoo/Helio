@@ -1,8 +1,20 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest"
 
+import { resolveServeModes } from "../src/serve-boot.js"
 import { monitorAppOwner } from "../src/serve.js"
 
 describe("app-owned server lifecycle", () => {
+  it("rejects network binds and remote authentication for app-owned servers", () => {
+    expect(() => resolveServeModes({ "app-owned": "1" }, "0.0.0.0")).toThrow(/loopback/)
+    expect(() => resolveServeModes({ "service-managed": "1", auth: "token" }, "127.0.0.1")).toThrow(
+      /auth/
+    )
+    expect(resolveServeModes({ "app-owned": "1" }, "127.0.0.1")).toMatchObject({
+      authMode: "none",
+      directPathMode: "disabled",
+      resolvedKind: "local"
+    })
+  })
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
   it("releases the database lease before stopping when its app exits", async () => {

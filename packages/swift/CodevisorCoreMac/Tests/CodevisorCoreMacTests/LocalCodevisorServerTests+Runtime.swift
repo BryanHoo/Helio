@@ -12,7 +12,7 @@ extension LocalCodevisorServerTests {
       entrypoint: URL(fileURLWithPath: "/tmp/codevisor-server/main.js"),
       databasePath: "/tmp/codevisor.sqlite",
       logURL: URL(fileURLWithPath: "/tmp/codevisor-server.log"),
-      host: "0.0.0.0",
+      host: "127.0.0.1",
       port: 49362,
       name: "Test Mac",
       environment: [:]
@@ -36,6 +36,8 @@ extension LocalCodevisorServerTests {
     #expect(configuration.arguments.contains("test-boot"))
     #expect(configuration.arguments.contains("--app-owned"))
     #expect(configuration.arguments.contains("--owner-pid"))
+    #expect(!configuration.arguments.contains("--auth"))
+    #expect(configuration.arguments.firstIndex(of: "--host").map { configuration.arguments[$0 + 1] } == "127.0.0.1")
   }
 
   @Test("Launch command preserves PATH lookup when Node falls back to env")

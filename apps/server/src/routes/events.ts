@@ -75,6 +75,7 @@ export const handleUpgrade = async (
     if (
       request.method === "GET" &&
       url.pathname === "/v1/direct" &&
+      !config.appOwned &&
       config.directPathEnabled &&
       config.cloud?.acceptDirect !== undefined
     ) {

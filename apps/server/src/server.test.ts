@@ -28,6 +28,34 @@ import {
 vi.mock("./infra/tailnet.js", () => ({ readTailnetPeers: vi.fn() }))
 
 describe("@codevisor/server", () => {
+  it("does not publish discovery for an app-owned local server", async () => {
+    const { services } = await makeServices("app-owned")
+    const server = await run(
+      startCodevisorServer(
+        services,
+        defaultServerConfig({
+          appOwned: true,
+          id: "app-owned",
+          port: 0
+        })
+      )
+    )
+    runningServers.push(server)
+    expect((await jsonRequest(server, "/v1/discovery")).status).toBe(404)
+    expect((await jsonRequest(server, "/v1/health")).status).toBe(200)
+    expect((await jsonRequest(server, "/v1/tailnet/peers")).status).toBe(404)
+    expect((await jsonRequest(server, "/v1/auth/connection-token")).status).toBe(404)
+    expect(
+      (await jsonRequest(server, "/v1/auth/connection-token/rotate", { method: "POST" })).status
+    ).toBe(404)
+    expect((await jsonRequest(server, "/v1/auth/pairing-token", { method: "POST" })).status).toBe(
+      404
+    )
+    expect((await jsonRequest(server, "/v1/cloud")).status).toBe(404)
+    expect(
+      (await jsonRequest(server, "/v1/cloud/connect", { method: "POST", body: "{}" })).status
+    ).toBe(404)
+  })
   it("holds host sleep only while at least one session is active", async () => {
     const { services } = await makeServices("server-a")
     const fanout = await run(makeEventFanout)

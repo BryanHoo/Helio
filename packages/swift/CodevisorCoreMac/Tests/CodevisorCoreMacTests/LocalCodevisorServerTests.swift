@@ -76,7 +76,7 @@ struct LocalCodevisorServerTests {
     #expect(state == .started)
     #expect(launches.first?.entrypoint == entrypoint)
     #expect(launches.first?.databasePath == "/tmp/codevisor.sqlite")
-    #expect(launches.first?.host == "0.0.0.0")
+    #expect(launches.first?.host == "127.0.0.1")
     #expect(launches.first?.name == CodevisorMachine.local.name)
     #expect(launches.first?.port == CodevisorServerConfig.localPort)
     #expect(launches.first?.environment["PATH"] == "/opt/homebrew/bin:/usr/bin")

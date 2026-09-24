@@ -47,11 +47,10 @@ computer_name="$(/usr/sbin/scutil --get ComputerName 2>/dev/null || /bin/hostnam
 log "exec node $entrypoint (port 49361)"
 printf '[%s] Starting bundled Codevisor server\n' "$(/bin/date -u +%FT%TZ)"
 exec -a codevisor-server "$node_bin" "$entrypoint" serve \
-  --host 0.0.0.0 \
+  --host 127.0.0.1 \
   --port 49361 \
   --db "$database_path" \
   --upgrade-status "$upgrade_status_path" \
-  --auth token \
   --kind local \
   --name "$computer_name" \
   --boot-id "$(/usr/bin/uuidgen)" \

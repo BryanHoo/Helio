@@ -44,10 +44,6 @@ extension LocalCodevisorServer {
         "--host", request.host,
         "--port", String(request.port),
         "--db", request.databasePath,
-        // Network binds require a token from remote clients (loopback is
-        // exempt), and --kind keeps the server identifying as this
-        // machine's local server despite the 0.0.0.0 bind.
-        "--auth", "token",
         "--kind", "local",
         "--name", request.name,
         "--boot-id", request.bootId,

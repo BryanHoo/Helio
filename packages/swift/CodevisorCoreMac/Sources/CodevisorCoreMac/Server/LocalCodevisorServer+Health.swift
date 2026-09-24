@@ -61,14 +61,10 @@ extension LocalCodevisorServer {
     }
   }
 
-  /// The server binds every interface so paired remote clients can reach it;
-  /// only same-machine connections are exempt from its token auth. The app's
-  /// own client still talks to it over loopback (`config.baseURL`).
-  static let bindHost = "0.0.0.0"
+  /// App 托管的服务只在本机回环地址接受连接。
+  static let bindHost = "127.0.0.1"
 
-  /// The server's advertised display name: the Mac's name, so a remote
-  /// client's machine list shows "George's MacBook Pro 0.2.0" rather than a
-  /// generic label.
+  /// 本机选择器仍使用 Mac 的设备名称。
   nonisolated static func serverDisplayName() -> String {
     CodevisorMachine.local.name
   }

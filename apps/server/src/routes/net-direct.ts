@@ -46,7 +46,7 @@ export const routeNetDirect = (
   response: ServerResponse,
   url: URL
 ): boolean => {
-  if (request.method !== "GET" || url.pathname !== "/v1/net/direct") return false
+  if (config.appOwned || request.method !== "GET" || url.pathname !== "/v1/net/direct") return false
   const deviceId =
     (config.cloud === undefined ? config.cloudDeviceId : config.cloud.deviceId()) ?? null
   const info: DirectPathInfo = {
