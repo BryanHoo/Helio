@@ -186,7 +186,7 @@ public final class UpdateCenter {
         machineId: CodevisorMachine.local.id,
         machineName: machineName(for: CodevisorMachine.local.id),
         subjectId: "",
-        title: "Codevisor",
+        title: "Helio",
         installedVersion: appUpdate.displayedCurrentVersion,
         latestVersion: release?.version,
         updateAvailable: release != nil,
@@ -229,7 +229,7 @@ public final class UpdateCenter {
         machineName: machine.name,
         subjectId: "",
         // The machine's Codevisor, whatever form it takes there.
-        title: "Codevisor",
+        title: "Helio",
         installedVersion: info.map {
           AppUpdateModel.displayedVersion(
             $0.currentVersion,
@@ -488,7 +488,7 @@ public final class UpdateCenter {
         }
         if let failure = firstFailure(in: snapshot) {
           updateAllNotice =
-            "Codevisor was not restarted because \(failure.title) on \(failure.machineName) failed to update. Fix that, then update again."
+            "Helio was not restarted because \(failure.title) on \(failure.machineName) failed to update. Fix that, then update again."
           clearSession()
           return
         }

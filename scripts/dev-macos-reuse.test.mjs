@@ -1,7 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { parseDevelopmentRunnerArguments } from "./dev-arguments.mjs"
 import { requestsMacOSBuildReuse, verifyReusableMacOSApp } from "./dev-macos-reuse.mjs"
 
 function fixture(overrides = {}) {
@@ -78,9 +77,7 @@ for (const [name, overrides, message] of [
   })
 }
 
-test("reuse is explicit and rejected by combined or iOS runners", () => {
-  assert.equal(requestsMacOSBuildReuse(["--no-ios"]), false)
-  assert.equal(requestsMacOSBuildReuse(["--no-ios", "--reuse-macos-build"]), true)
-  assert.throws(() => requestsMacOSBuildReuse(["--reuse-macos-build"]), /only by dev:macos/)
-  assert.throws(() => parseDevelopmentRunnerArguments(["--reuse-macos-build"]), /Unknown/)
+test("reuse is explicit in the Mac-only runner", () => {
+  assert.equal(requestsMacOSBuildReuse([]), false)
+  assert.equal(requestsMacOSBuildReuse(["--reuse-macos-build"]), true)
 })

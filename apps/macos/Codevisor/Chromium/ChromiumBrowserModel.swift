@@ -379,7 +379,7 @@ extension ChromiumBrowserModel: RetainedBrowserPage {
 
 private enum BrowserError: LocalizedError {
   case serverUpdateRequired
-  var errorDescription: String? { "Update the Codevisor server on this machine to use Chromium browser panes." }
+  var errorDescription: String? { "Update the Helio server on this machine to use Chromium browser panes." }
 }
 
 extension CVBrowserLinkDestination {

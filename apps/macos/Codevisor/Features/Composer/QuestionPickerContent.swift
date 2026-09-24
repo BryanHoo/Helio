@@ -39,7 +39,6 @@ struct QuestionPickerContent: View {
   @State var notes: [String: String] = [:]
   @State var notesHeight: CGFloat = 24
   @State var highlighted = 0
-  @State var didOpenBrowserExtensions = false
   /// Weak handles to the picker's AppKit focus targets: the key anchor
   /// (option list) and the notes editor's text view, so explicit moves —
   /// question navigation, Escape out of the notes editor, option clicks,
@@ -76,21 +75,17 @@ struct QuestionPickerContent: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       if let question {
-        if isBrowserExtensionPresentation(question) {
-          browserExtensionSetup(question)
-        } else {
-          if let message = request.message, !message.isEmpty {
-            Text(message)
-              .font(.callout)
-              .foregroundStyle(.secondary)
-          }
-          header(question)
-          optionList(question)
-          if question.presentation != .browserChoice {
-            notesEditor(question)
-          }
-          footer(question)
+        if let message = request.message, !message.isEmpty {
+          Text(message)
+            .font(.callout)
+            .foregroundStyle(.secondary)
         }
+        header(question)
+        optionList(question)
+        if question.presentation != .browserChoice {
+          notesEditor(question)
+        }
+        footer(question)
       }
     }
     .disabled(isResolving)
@@ -125,7 +120,6 @@ struct QuestionPickerContent: View {
       selections = [:]
       notes = [:]
       highlighted = 0
-      didOpenBrowserExtensions = false
       didStartResolving = false
       focusPicker()
     }
@@ -133,44 +127,4 @@ struct QuestionPickerContent: View {
     .accessibilityLabel("Agent question")
   }
 
-  // MARK: - Sections
-
-  func isBrowserExtensionPresentation(_ question: QuestionSpec) -> Bool {
-    question.presentation == .browserExtensionSetup
-      || question.presentation == .browserExtensionWaiting
-  }
-
-  /// Chrome setup can manipulate AppKit and Chrome only when this app owns
-  /// the server running the chat. Remote machines keep the same durable
-  /// question, but render a handoff that the host Mac can finish.
-  var canInstallBrowserExtensionLocally: Bool {
-    controller.project.serverId == CodevisorMachine.local.id
-  }
-
-  private func browserExtensionSetup(_ question: QuestionSpec) -> some View {
-    BrowserExtensionQuestionContent(
-      controller: controller,
-      question: question,
-      canInstallLocally: canInstallBrowserExtensionLocally,
-      didOpenBrowserExtensions: $didOpenBrowserExtensions,
-      cancel: { cancel() },
-      submitBack: { submitDirectAnswer(question, label: $0) },
-      performSetupAction: performBrowserSetupAction,
-      showDragStage: showBrowserExtensionDragStage
-    )
-  }
-
-  func performBrowserSetupAction(_ action: String) {
-    if action == "Open Extensions" {
-      showBrowserExtensionDragStage(true)
-    }
-    Task {
-      await controller.performBrowserExtensionSetupAction(action)
-    }
-  }
-
-  func showBrowserExtensionDragStage(_ isVisible: Bool) {
-    didOpenBrowserExtensions = isVisible
-    focusPicker()
-  }
 }

@@ -61,7 +61,7 @@ struct ServerDataUpgradePresentationState: Equatable {
     switch progress.state {
     case "failed":
       self.progress = progress
-      failureMessage = progress.error ?? "Codevisor couldn't finish updating the server's data."
+      failureMessage = progress.error ?? "Helio couldn't finish updating the server's data."
     case "running":
       self.progress = progress
       if case let .unavailable(message) = serverState {
@@ -130,7 +130,7 @@ struct ServerDataUpgradeSheet: View {
           if let checkForUpdates {
             Button("Check for Updates…", action: checkForUpdates)
               .buttonStyle(.bordered)
-              .help("Opens Settings › Updates. A newer Codevisor may fix this.")
+              .help("Opens Settings › Updates. A newer Helio may fix this.")
           }
         }
       }
@@ -143,8 +143,8 @@ struct ServerDataUpgradeSheet: View {
   private var message: String {
     if let failureMessage { return failureMessage }
     return progress.name.isEmpty
-      ? "Your cached workspaces are safe. Codevisor will continue when the update finishes."
-      : "\(progress.name)\nYour cached workspaces are safe. Codevisor will continue automatically."
+      ? "Your cached workspaces are safe. Helio will continue when the update finishes."
+      : "\(progress.name)\nYour cached workspaces are safe. Helio will continue automatically."
   }
 }
 

@@ -64,7 +64,7 @@ public struct CodevisorMachine: Identifiable, Sendable, Codable, Equatable {
 
   private static var localDisplayName: String {
     #if os(macOS)
-      Host.current().localizedName ?? "Local Codevisor"
+      Host.current().localizedName ?? "Local Helio"
     #else
       ProcessInfo.processInfo.hostName
     #endif

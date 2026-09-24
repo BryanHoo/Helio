@@ -82,7 +82,7 @@ public final class RemoteDirectoryCreationModel {
   public static func guidance(code: String?, fallback: String, machineName: String) -> String {
     switch code {
     case "permission_denied":
-      return "Codevisor on \(machineName) isn't allowed to create a folder here. "
+      return "Helio on \(machineName) isn't allowed to create a folder here. "
         + "Choose another location or adjust its permissions."
     case "not_a_directory":
       return "A file is in the way. Choose a different folder name or location."

@@ -31,7 +31,7 @@ private struct CopyConnectionTokenMenuItem: View {
       } catch {
         let alert = NSAlert()
         alert.messageText = "Couldn't issue a connection token"
-        alert.informativeText = "This Mac's Codevisor server isn't running."
+        alert.informativeText = "This Mac's Helio server isn't running."
         alert.alertStyle = .warning
         alert.runModal()
       }

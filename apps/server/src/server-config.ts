@@ -6,7 +6,7 @@ export const defaultServerConfig = (
   overrides: Partial<CodevisorServerConfig> = {}
 ): CodevisorServerConfig => ({
   id: overrides.id ?? "local",
-  name: overrides.name ?? "Local Codevisor",
+  name: overrides.name ?? "Local Helio",
   version: overrides.version ?? "0.1.0",
   bootId: overrides.bootId ?? "test-boot",
   processId: overrides.processId ?? process.pid,

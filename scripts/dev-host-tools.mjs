@@ -1,13 +1,13 @@
 import { execFileSync, spawn } from "node:child_process"
 import { X509Certificate } from "node:crypto"
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
-import { join, resolve } from "node:path"
+import { join } from "node:path"
 import process from "node:process"
 
 import { describeExit, waitForExit } from "./dev-shared.mjs"
 
 /// Host-side tooling the dev runner shells out to: command runners, the
-/// per-worktree app icon, browser extension icons, signing identities, and
+/// per-worktree app icon, signing identities, and
 /// the surgical termination of a previously launched dev app.
 
 export function makeCommandRunner(repoRoot) {
@@ -40,45 +40,6 @@ export function makeCommandRunner(repoRoot) {
   return { capture, run }
 }
 
-// Locate apps/cloud/.dev.vars: this worktree first, then the main clone (via
-// git's common dir), so per-developer cloud config is created once and shared
-// by every worktree — including app-created ones. Returns {} when absent or
-// git is unavailable; the cloud runs fine on dev login alone.
-export async function readCloudDevVariables(repoRoot) {
-  const candidates = [join(repoRoot, "apps/cloud/.dev.vars")]
-  try {
-    const commonDir = execFileSync("git", ["rev-parse", "--git-common-dir"], {
-      cwd: repoRoot,
-      encoding: "utf8"
-    }).trim()
-    const mainRoot = resolve(repoRoot, commonDir, "..")
-    if (mainRoot !== repoRoot) candidates.push(join(mainRoot, "apps/cloud/.dev.vars"))
-  } catch {
-    // Not a git checkout (or git missing): worktree-local file only.
-  }
-  for (const candidate of candidates) {
-    let content
-    try {
-      content = await readFile(candidate, "utf8")
-    } catch {
-      continue
-    }
-    const variables = {}
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim()
-      if (trimmed === "" || trimmed.startsWith("#")) continue
-      const separator = trimmed.indexOf("=")
-      if (separator === -1) continue
-      variables[trimmed.slice(0, separator).trim()] = trimmed
-        .slice(separator + 1)
-        .trim()
-        .replace(/^"(.*)"$/, "$1")
-    }
-    return variables
-  }
-  return {}
-}
-
 export async function createDevelopmentAppIcon(repoRoot, developmentIconColor) {
   const templateDirectory = join(
     repoRoot,
@@ -106,28 +67,6 @@ export async function createDevelopmentAppIcon(repoRoot, developmentIconColor) {
     join(generatedDirectory, "Assets", "icon-v2.svg")
   )
   return generatedDirectory
-}
-
-export async function createDevelopmentBrowserExtensionIcons({
-  appName,
-  derivedDataPath,
-  layout,
-  run
-}) {
-  const iconsetDirectory = join(layout.build.generated, "BrowserExtensionDev.iconset")
-  const compiledIcon = join(
-    derivedDataPath,
-    "Build",
-    "Products",
-    "Debug",
-    `${appName}.app`,
-    "Contents",
-    "Resources",
-    "AppIconDevGenerated.icns"
-  )
-  await rm(iconsetDirectory, { recursive: true, force: true })
-  await run("iconutil", ["--convert", "iconset", "--output", iconsetDirectory, compiledIcon])
-  return iconsetDirectory
 }
 
 export function terminateExactDevelopmentApp(executable) {

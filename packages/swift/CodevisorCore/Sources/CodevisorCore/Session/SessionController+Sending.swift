@@ -219,7 +219,7 @@ extension SessionController {
   /// transition or restores New Chat.
   func createWorktree(showsSetupPhase: Bool) async -> String? {
     guard let serverClient else {
-      return "Worktrees need the Codevisor server. Start it and try again."
+      return "Worktrees need the Helio server. Start it and try again."
     }
     let worktreeId = UUID().uuidString.lowercased()
     if showsSetupPhase { beginSetupPhase(.worktree()) }
@@ -281,7 +281,7 @@ extension SessionController {
   /// draft at it. Returns the failure message, nil on success.
   func materializeScratchProject() async -> String? {
     guard let serverClient else {
-      return "Starting a chat needs the Codevisor server. Start it and try again."
+      return "Starting a chat needs the Helio server. Start it and try again."
     }
     status = .connecting("Preparing folder…")
     do {

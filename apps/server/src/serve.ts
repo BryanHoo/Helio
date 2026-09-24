@@ -40,7 +40,7 @@ import {
   type BootListener
 } from "./boot-listener.js"
 import { makeActiveWorkSleepInhibitor } from "./infra/active-work-sleep-inhibitor.js"
-import { makeCloudServerControl, startCloudBridge } from "./infra/cloud-bridge.js"
+import { makeCloudServerControl } from "./infra/cloud-bridge.js"
 import { makeCustomHarnessStore } from "./infra/custom-harness-store.js"
 import { canonicalDatabasePaths, codevisorRoot, resolveServerDataLayout } from "./infra/data-dir.js"
 import { migrateLegacyLayout, migrateTmpDataDir } from "./infra/legacy-layout.js"
@@ -234,10 +234,7 @@ export const runServe = (
     restoreTerminalPersistence(dirname(databasePath), terminal, startup)
     startup.checkpoint("initializingServices")
     const backgroundTerminals = yield* Effect.promise(() => backgroundTerminalIntegration(terminal))
-    // Cloud relay: when this machine is connected to a Codevisor Cloud
-    // account (`codevisor auth login`, or dev auto-provisioning), hold a
-    // presence connection to the user's hub and serve end-to-end encrypted
-    // terminal channels. Optional — local operation never depends on it.
+    // 旧凭据仍留在磁盘供用户自行处理，但本地版不会自动建立云端连接。
     const cloudBridgeOptions = {
       credentialsPath: join(dirname(databasePath), "cloud.json"),
       machineName: args.name ?? hostname(),
@@ -247,12 +244,7 @@ export const runServe = (
       env: process.env,
       log: (line: string) => console.error(line)
     }
-    const cloudBridge = yield* Effect.promise(() =>
-      initializeOptionalServerFeatureAsync("Cloud connection", async () =>
-        startCloudBridge(cloudBridgeOptions)
-      )
-    )
-    const cloudControl = makeCloudServerControl(cloudBridgeOptions, cloudBridge)
+    const cloudControl = makeCloudServerControl(cloudBridgeOptions, undefined)
     // Start resolving the GUI process's minimal environment without delaying
     // server boot. The first Git operation awaits this shared result so
     // checkout hooks and filters can find user-installed tools such as
@@ -428,7 +420,7 @@ export const runServe = (
         // Network-bound servers advertise the machine's hostname so client
         // machine lists and tailnet discovery show something recognizable,
         // not the default "local" server id.
-        name: args.name ?? (host === "127.0.0.1" ? "Local Codevisor" : hostname()),
+        name: args.name ?? (host === "127.0.0.1" ? "Local Helio" : hostname()),
         port,
         directPathEnabled: directPathMode === "enabled",
         worktreeNameStyle,

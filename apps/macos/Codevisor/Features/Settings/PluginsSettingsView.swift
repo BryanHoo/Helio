@@ -13,13 +13,7 @@ struct PluginsSettingsView: View {
 
   private enum PluginsRootSheet: Identifiable {
     case install(initialSource: String?)
-    case browse
-    var id: String {
-      switch self {
-      case .install: "install"
-      case .browse: "browse"
-      }
-    }
+    var id: String { "install" }
   }
 
   /// Fleet-level installs land on the local machine; registry plugins
@@ -34,12 +28,6 @@ struct PluginsSettingsView: View {
         PluginMachinePane(machine: machine)
       } footer: {
         SettingsListActions(message: actionError) {
-          Button {
-            activeSheet = .browse
-          } label: {
-            Label("Browse Plugins…", systemImage: "magnifyingglass")
-          }
-          .settingsActionTint(theme)
           Button {
             activeSheet = .install(initialSource: nil)
           } label: {
@@ -69,16 +57,6 @@ struct PluginsSettingsView: View {
               actionError = ErrorReporter.userFacingMessage(for: error)
               throw error
             }
-          }
-        )
-      case .browse:
-        PluginRegistryBrowseSheet(
-          fetchRegistry: { try await localClient.fetchPluginRegistry(query: nil) },
-          installedIds: [],
-          onInstall: { entry in
-            // The registry only discovers; installing goes
-            // through the consent flow with the entry's repo.
-            activeSheet = .install(initialSource: entry.repo)
           }
         )
       }

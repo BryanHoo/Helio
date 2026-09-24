@@ -90,7 +90,7 @@ extension OnboardingView {
     case .account: return "Continue"
     case .harnesses: return "Continue"
     case .permissions: return "Continue"
-    case .project: return "Continue"
+    case .project: return "Finish"
     case .analytics: return "Finish"
     }
   }
@@ -171,10 +171,8 @@ extension OnboardingView {
       environment.settings.setPermissionsSetupSkipped(false)
       navigate(to: .project, back: false)
     case .project:
-      navigate(to: .analytics, back: false)
+      finish()
     case .analytics:
-      environment.setShareAnalytics(shareAnalytics)
-      environment.setShareCrashReports(shareCrashReports)
       finish()
     }
   }

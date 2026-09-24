@@ -25,18 +25,14 @@ test("standalone Xcode operations omit incompatible build flags", () => {
   const exportArguments = [
     "-exportArchive",
     "-archivePath",
-    "/repo/codevisor/tmp/build/ios/Codevisor.xcarchive",
+    "/repo/codevisor/tmp/build/macos/Helio.xcarchive",
     "-exportOptionsPlist",
-    "/repo/codevisor/tmp/build/ios/ExportOptions.plist",
+    "/repo/codevisor/tmp/build/macos/ExportOptions.plist",
     "-exportPath",
-    "/repo/codevisor/tmp/build/ios/export"
+    "/repo/codevisor/tmp/build/macos/export"
   ]
 
-  assert.deepEqual(xcodebuildArguments(layout, "ios", exportArguments), exportArguments)
-  assert.deepEqual(xcodebuildArguments(layout, "ios", ["-downloadPlatform", "iOS"]), [
-    "-downloadPlatform",
-    "iOS"
-  ])
+  assert.deepEqual(xcodebuildArguments(layout, "macos", exportArguments), exportArguments)
 })
 
 test("xcodebuild arguments reject unknown platforms", () => {

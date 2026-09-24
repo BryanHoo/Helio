@@ -239,7 +239,7 @@ private final class ChromiumAutomationConnection {
     case "Target.createTarget":
       guard let group = bridge.group(session),
         let model = group.createBrowserTab?(params["url"] as? String ?? "about:blank")
-      else { throw ChromiumProtocolError("This workspace is no longer open in Codevisor") }
+      else { throw ChromiumProtocolError("This workspace is no longer open in Helio") }
       bridge.register(model)
       _ = try await model.readyView()
       return ["targetId": model.paneId.uuidString.lowercased()]
@@ -276,7 +276,7 @@ private final class ChromiumAutomationConnection {
       }
       return [:]
     case "Browser.getVersion": return ["product": "Codevisor/Chromium", "protocolVersion": "1.3"]
-    case "Browser.close": throw ChromiumProtocolError("Automation cannot quit the Codevisor app")
+    case "Browser.close": throw ChromiumProtocolError("Automation cannot quit the Helio app")
     default:
       guard method == "Browser.setDownloadBehavior" else {
         throw ChromiumProtocolError("Attach a browser tab before using this protocol method")

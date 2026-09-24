@@ -16,7 +16,6 @@ struct SidebarView: View {
   var publishesSceneActions = true
 
   @State private var addProjectFlow = AddProjectFlow()
-  @State private var showingRemoteMachine = false
   @State private var pendingImport: PendingSessionImport?
   @State var renamingWorkspace: Workspace?
   @State var workspaceRenameTitle = ""
@@ -94,7 +93,6 @@ struct SidebarView: View {
       .scrollContentBackground(.hidden)
       .scrollBounceBehavior(.basedOnSize)
 
-      SidebarUpdateFooter(center: environment.updateCenter)
     }
     // Section frames and the reorder ghost share this space, so the ghost
     // can be placed over whichever row it was lifted from or lands on.
@@ -147,34 +145,8 @@ struct SidebarView: View {
       }
   }
 
-  private var sidebarSheetsView: some View {
-    sidebarChangeObserversView
-      .modifier(
-        SidebarSheetsModifier(
-          showingRemoteMachine: $showingRemoteMachine,
-          onAddRemoteMachine: { host, name, token, syncConfig in
-            do {
-              let machine = try await environment.machines.addRemoteValidating(
-                host: host, name: name, token: token, syncConfig: syncConfig)
-              environment.composerDefaults.rememberNewWorkspaceServer(
-                serverId: machine.id
-              )
-              selection = .newChat(nil)
-              return nil
-            } catch {
-              Log.machines.error(
-                "Adding remote machine failed: \(String(describing: error), privacy: .public)")
-              if case CodevisorServerClientError.httpStatus(401, _) = error {
-                return "That connection token was rejected by the machine."
-              }
-              return serverErrorMessage(error)
-            }
-          }
-        ))
-  }
-
   private var sidebarConfiguredView: some View {
-    sidebarSheetsView
+    sidebarChangeObserversView
       .onAppear(perform: ensureSessionWorkspaces)
       // The docked sidebar answers ⇧⌘[ / ⇧⌘] (the drawer copy
       // stays passive so there is exactly one owner of the step).
@@ -193,7 +165,6 @@ struct SidebarView: View {
           ? SidebarActions(
             newChat: { selection = .newChat(nil) },
             newProject: { startAddProject() },
-            addRemoteMachine: { showingRemoteMachine = true },
             stepTab: { _ = stepSidebarTab($0) }
           )
           : nil

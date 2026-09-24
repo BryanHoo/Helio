@@ -29,7 +29,7 @@ public struct CodableRepository<Element: Codable & Sendable>: Sendable {
         data: data,
         error: error,
         reportTitle: corruptionTitle,
-        reportMessage: "The file was unreadable. A backup was saved in Codevisor's data folder."
+        reportMessage: "The file was unreadable. A backup was saved in Helio's data folder."
       )
       return []
     }

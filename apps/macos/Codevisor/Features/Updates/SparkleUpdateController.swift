@@ -275,8 +275,8 @@ final class SparkleUpdateController: NSObject, SPUUpdaterDelegate {
       guard others == 0 else {
         self.failInstall(
           others == 1
-            ? "Another copy of Codevisor is running. Quit it, then update again."
-            : "\(others) other copies of Codevisor are running. Quit them, then update again."
+            ? "Another copy of Helio is running. Quit it, then update again."
+            : "\(others) other copies of Helio are running. Quit them, then update again."
         )
         return
       }
@@ -288,7 +288,7 @@ final class SparkleUpdateController: NSObject, SPUUpdaterDelegate {
       }
       guard prepared else {
         self.failInstall(
-          "The Codevisor server could not be stopped safely. Restart Codevisor and try the update again."
+          "The Helio server could not be stopped safely. Restart Helio and try the update again."
         )
         return
       }
@@ -299,8 +299,8 @@ final class SparkleUpdateController: NSObject, SPUUpdaterDelegate {
       guard lateOthers == 0 else {
         self.failInstall(
           lateOthers == 1
-            ? "Another copy of Codevisor started while preparing the update. Quit it, then update again."
-            : "\(lateOthers) other copies of Codevisor started while preparing the update. Quit them, then update again."
+            ? "Another copy of Helio started while preparing the update. Quit it, then update again."
+            : "\(lateOthers) other copies of Helio started while preparing the update. Quit them, then update again."
         )
         return
       }
@@ -310,7 +310,7 @@ final class SparkleUpdateController: NSObject, SPUUpdaterDelegate {
         )
       } catch {
         self.failInstall(
-          "Codevisor could not protect the app while installing the update: \(error.localizedDescription)"
+          "Helio could not protect the app while installing the update: \(error.localizedDescription)"
         )
         return
       }

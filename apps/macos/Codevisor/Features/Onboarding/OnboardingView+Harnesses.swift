@@ -30,7 +30,7 @@ extension OnboardingView {
         VStack(spacing: 12) {
           Label {
             VStack(alignment: .leading, spacing: 2) {
-              Text("Can't reach the Codevisor server").fontWeight(.medium)
+              Text("Can't reach the Helio server").fontWeight(.medium)
               Text(message)
                 .font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -195,6 +195,6 @@ extension OnboardingView {
     if case let .unavailable(message) = environment.localServer?.state {
       return message
     }
-    return "The Codevisor server didn't respond. Try again, or check Settings → Machines."
+    return "The Helio server didn't respond. Try again, or check Settings → Machines."
   }
 }

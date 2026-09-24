@@ -7,18 +7,21 @@ import UserNotifications
 import CodevisorUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-  case general, account, updates, appearance, notifications
+  case general, updates, appearance, notifications
   case shortcuts
   // Fleet-synced config planes: the panes render the app's selected
   // machine, whose content converges with every other machine.
   case agents, mcps, skills, plugins
   case projects, machines
 
+  static var allCases: [SettingsTab] {
+    [.general, .appearance, .notifications, .shortcuts, .agents, .mcps, .skills, .plugins, .projects, .machines]
+  }
+
   var id: String { rawValue }
 
   var title: String {
     switch self {
-    case .account: "Account"
     case .updates: "Updates"
     case .general: "General"
     case .appearance: "Appearance"
@@ -35,7 +38,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
   var systemImage: String {
     switch self {
-    case .account: "person.crop.circle"
     case .updates: "arrow.down.circle"
     case .general: "gear"
     case .appearance: "paintpalette"
@@ -276,11 +278,11 @@ struct SettingsView: View {
       // fixed navigation list on a plain ScrollView as well.
       ScrollView {
         VStack(spacing: 2) {
-          ForEach(SettingsTab.allCases.filter { $0 != .account }) { tab in
+          ForEach(SettingsTab.allCases) { tab in
             SettingsSidebarRow(
               tab: tab,
               isSelected: router.selectedTab == tab,
-              badgeCount: tab == .updates ? environment.updateCenter.availableCount : 0
+              badgeCount: 0
             ) {
               selectSidebarTab(tab)
             }
@@ -374,9 +376,6 @@ struct SettingsView: View {
     case .projects:
       ProjectsSettingsView()
         .navigationTitle("Projects")
-    case .account:
-      CloudSettingsView()
-        .navigationTitle("Account")
     case .machines:
       MachinesSettingsView()
         .navigationTitle("Machines")
@@ -477,19 +476,6 @@ struct GeneralSettingsView: View {
         Text("Shows a confirmation when you press ⌘Q, so a stray keystroke can't close every session at once.")
       }
 
-      Section {
-        Toggle("Share usage analytics", isOn: shareAnalytics)
-          .toggleStyle(.switch)
-        Toggle("Send crash and error reports", isOn: shareCrashReports)
-          .toggleStyle(.switch)
-      } header: {
-        Text("Privacy")
-      } footer: {
-        Text(
-          "Anonymous. Prompts, responses, code, file paths, browser content, and terminal commands are never included."
-        )
-      }
-
       Section("Data") {
         HStack(alignment: .center, spacing: 16) {
           VStack(alignment: .leading, spacing: 3) {
@@ -510,7 +496,7 @@ struct GeneralSettingsView: View {
     }
     .settingsPaneFormStyle(theme)
     .confirmationDialog(
-      "Delete all Codevisor data?",
+      "Delete all Helio data?",
       isPresented: $showingConfirmation,
       titleVisibility: .visible
     ) {
@@ -529,20 +515,6 @@ struct GeneralSettingsView: View {
     Binding(
       get: { environment.settings.confirmBeforeQuitting },
       set: { environment.settings.setConfirmBeforeQuitting($0) }
-    )
-  }
-
-  private var shareAnalytics: Binding<Bool> {
-    Binding(
-      get: { environment.settings.shareAnalytics },
-      set: { environment.setShareAnalytics($0) }
-    )
-  }
-
-  private var shareCrashReports: Binding<Bool> {
-    Binding(
-      get: { environment.settings.shareCrashReports },
-      set: { environment.setShareCrashReports($0) }
     )
   }
 

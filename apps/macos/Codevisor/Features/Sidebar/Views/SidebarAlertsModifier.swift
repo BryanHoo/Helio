@@ -55,6 +55,6 @@ struct SidebarAlertsModifier: ViewModifier {
     let count = pending.sessions.count
     let chats = count == 1 ? "1 existing agent chat" : "\(count) existing agent chats"
     return
-      "Codevisor found \(chats) in “\(pending.project.name)”. Import them to continue those conversations here."
+      "Helio found \(chats) in “\(pending.project.name)”. Import them to continue those conversations here."
   }
 }

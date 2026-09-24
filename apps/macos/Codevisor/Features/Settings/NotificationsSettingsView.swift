@@ -47,7 +47,7 @@ struct NotificationsSettingsView: View {
       }
 
       Section {
-        Toggle("Show notifications when Codevisor isn't active", isOn: systemNotificationsEnabled)
+        Toggle("Show notifications when Helio isn't active", isOn: systemNotificationsEnabled)
           .toggleStyle(.switch)
           .controlSize(.small)
           .disabled(!settings.notificationsEnabled)
@@ -377,7 +377,7 @@ struct NotificationsSettingsView: View {
 
   private var authorizationDescription: String {
     switch authorizationStatus {
-    case .notDetermined: "Codevisor hasn't asked for permission yet."
+    case .notDetermined: "Helio hasn't asked for permission yet."
     case .denied: "Off in System Settings."
     case .authorized, .provisional: "Allowed by macOS."
     @unknown default: "Managed by macOS."

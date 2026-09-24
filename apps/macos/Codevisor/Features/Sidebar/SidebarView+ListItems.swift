@@ -2,11 +2,10 @@ import CodevisorCore
 import Foundation
 
 extension SidebarView {
-  /// Active fleet sessions provide workspace ownership and routing. Their
-  /// order never controls the workspace list.
+  /// Only local sessions contribute to the Mac workspace list.
   var activeSessionItems: [SidebarSessionListItem] {
     let projects = list.projects.filter {
-      environment.machines.machine(for: $0.serverId) != nil
+      $0.serverId == CodevisorMachine.local.id
     }
     let projectsByID = Dictionary(
       projects.map { ($0.sidebarFleetItemID, $0) },
@@ -22,8 +21,7 @@ extension SidebarView {
 
   /// Shared positions own the list order, including empty workspaces.
   var workspaceItems: [SidebarWorkspaceListItem] {
-    // Repository writes are not observable; local and remote layout writes
-    // invalidate these tokens so the sidebar re-reads the tabs.
+    // Repository writes are not observable; these tokens trigger a re-read.
     _ = workspaceRevision
     _ = environment.workspaceSync.revision
     _ = store?.workspaceLayoutRevision
@@ -32,7 +30,7 @@ extension SidebarView {
       uniquingKeysWith: { first, _ in first }
     )
     let workspaces = environment.workspaces.loadAll()
-      .filter { !$0.isArchived && environment.machines.machine(for: $0.serverId) != nil }
+      .filter { !$0.isArchived && $0.serverId == CodevisorMachine.local.id }
       .sorted(by: WorkspaceSidebarOrder.precedes)
     let items = workspaces.compactMap { workspace -> SidebarWorkspaceListItem? in
       let routedSessionIDs = workspace.chatSessionIds.filter {

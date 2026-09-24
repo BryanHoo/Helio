@@ -36,7 +36,7 @@ struct McpImportCandidateRow: View {
         .settingsActionTint(theme)
         .controlSize(.small)
         .disabled(importDisabled)
-        .help("Add to Codevisor's managed MCP servers")
+        .help("Add to Helio's managed MCP servers")
       }
     }
     .accessibilityElement(children: .contain)

@@ -1,9 +1,9 @@
+import { createHash } from "node:crypto"
 import { realpath } from "node:fs/promises"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { bootstrapDevelopment } from "./dev-bootstrap.mjs"
-import { iosDevelopmentBundleIdentifier } from "./dev-layout.mjs"
 import { createCapture } from "./screenshots-capture.mjs"
 import { parseCaptureOptions, selectedAppearances } from "./screenshots-lib.mjs"
 
@@ -15,7 +15,8 @@ if (options.help) {
 }
 if (process.platform !== "darwin") throw new Error("macOS screenshots require macOS and Xcode.")
 await bootstrapDevelopment(root, { ghostty: true })
-const bundle = `${iosDevelopmentBundleIdentifier(root)}.macos-screenshots`
+const instanceHash = createHash("sha256").update(root).digest("hex").slice(0, 10)
+const bundle = `com.851labs.Codevisor.Development.${instanceHash}.macos-screenshots`
 const { output, command, build, exportImages, finish } = await createCapture(root, "macos", {
   ...options,
   bundleIdentifier: bundle
@@ -27,8 +28,8 @@ const baseArguments = [
   "Screenshots",
   "-configuration",
   "Debug",
-  "CODEVISOR_DEV_PRODUCT_NAME=Codevisor",
-  "CODEVISOR_DEV_DISPLAY_NAME=Codevisor",
+  "CODEVISOR_DEV_PRODUCT_NAME=Helio",
+  "CODEVISOR_DEV_DISPLAY_NAME=Helio",
   `CODEVISOR_DEV_BUNDLE_IDENTIFIER=${bundle}`,
   "CODE_SIGN_IDENTITY=-",
   "CODE_SIGNING_ALLOWED=YES",
@@ -54,7 +55,7 @@ for (const appearance of selectedAppearances(options)) {
   await exportImages(
     result,
     "macos",
-    { name: "Codevisor window", width: 1280, height: 820, scales: [1, 2] },
+    { name: "Helio window", width: 1280, height: 820, scales: [1, 2] },
     appearance
   )
 }

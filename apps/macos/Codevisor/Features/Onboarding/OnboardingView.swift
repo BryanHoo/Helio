@@ -8,7 +8,7 @@ import CodevisorUI
 
 /// First-launch onboarding, presented as a short paginated flow:
 /// 1. Welcome, 2. Choose your harnesses, 3. System permissions,
-/// 4. Choose your projects, 5. Analytics and crash-report sharing.
+/// 4. Choose your projects.
 /// The project step is a multi-select over suggested folders; completing it
 /// adds every selected folder as a project and opens a new chat in the first.
 struct OnboardingView: View {
@@ -26,7 +26,7 @@ struct OnboardingView: View {
     case welcome, harnesses, permissions, project, analytics, account
 
     /// The order steps are shown in.
-    static let flow: [Step] = [.welcome, .harnesses, .permissions, .project, .analytics]
+    static let flow: [Step] = [.welcome, .harnesses, .permissions, .project]
 
     var position: Int { Self.flow.firstIndex(of: self) ?? 0 }
     var next: Step? { Self.flow.indices.contains(position + 1) ? Self.flow[position + 1] : nil }
@@ -66,7 +66,7 @@ struct OnboardingView: View {
   static func resumeStep(from settings: AppSettingsModel) -> Step {
     let saved = settings.onboardingStep.flatMap(Step.init(rawValue:)) ?? .welcome
     // 旧版本若停在登录页，恢复时直接进入本机 harness 配置。
-    return saved == .account ? .harnesses : saved
+    return saved == .account ? .harnesses : saved == .analytics ? .project : saved
   }
 
   @State var step: Step
@@ -87,10 +87,6 @@ struct OnboardingView: View {
   @State var showingFolderPicker = false
   @State var showingGitClone = false
   @State var isFinishing = false
-  /// Sharing is selected initially, but nothing is persisted or sent until
-  /// the user continues past the final onboarding step.
-  @State var shareAnalytics = true
-  @State var shareCrashReports = true
   /// Computer Use permission status; previews auto-grant so the flow is
   /// navigable without touching real TCC state.
   @State var permissions = ComputerUsePermissionsModel(
@@ -184,12 +180,6 @@ struct OnboardingView: View {
 
 #Preview("Project") {
   OnboardingView(initialStep: .project) { _ in }
-    .environment(AppEnvironment.preview(hasOnboarded: false))
-    .frame(width: 900, height: 700)
-}
-
-#Preview("Analytics") {
-  OnboardingView(initialStep: .analytics) { _ in }
     .environment(AppEnvironment.preview(hasOnboarded: false))
     .frame(width: 900, height: 700)
 }

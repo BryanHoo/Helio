@@ -173,14 +173,14 @@ public struct ServerAvailabilityView: View {
   }
 
   private var title: String {
-    if appUpdateInProgress { return "Updating Codevisor" }
+    if appUpdateInProgress { return "Updating Helio" }
     return switch availability {
     case let .waiting(reason):
       switch reason {
-      case .starting: isLocal ? "Starting Codevisor Server" : "Connecting to Server"
+      case .starting: isLocal ? "Starting Helio Server" : "Connecting to Server"
       case .connecting: "Connecting to \(machineName)"
-      case .updating: "Updating Codevisor Server"
-      case .restarting: "Restarting Codevisor Server"
+      case .updating: "Updating Helio Server"
+      case .restarting: "Restarting Helio Server"
       }
     case .ready:
       "Server Ready"
@@ -191,7 +191,7 @@ public struct ServerAvailabilityView: View {
 
   private var message: String {
     if appUpdateInProgress {
-      return "Codevisor is installing an update and will reopen automatically."
+      return "Helio is installing an update and will reopen automatically."
     }
     if showsStartupProgress, let startupProgress {
       return startupProgress.label + (startIsSlow ? "\nThis step is taking longer than expected." : "")
@@ -201,17 +201,17 @@ public struct ServerAvailabilityView: View {
       switch reason {
       case .starting:
         offersSlowStartRestart
-          ? "This is taking longer than expected. Restarting Codevisor starts the server again; the server log has the details."
+          ? "This is taking longer than expected. Restarting Helio starts the server again; the server log has the details."
           : "Your cached workspaces are still available. This page will open when the server is ready."
       case .connecting:
         "Waiting for the server to become available. This page will open automatically."
       case .updating:
-        "The server is installing an update. Codevisor will reconnect automatically."
+        "The server is installing an update. Helio will reconnect automatically."
       case .restarting:
-        "The server is restarting. Codevisor will reconnect automatically."
+        "The server is restarting. Helio will reconnect automatically."
       }
     case .ready:
-      "Codevisor is ready."
+      "Helio is ready."
     case let .failed(message):
       message
     }
@@ -265,7 +265,7 @@ public struct ClientDataStartupView: View {
       ProgressView()
         .controlSize(.large)
       VStack(spacing: 7) {
-        Text("Preparing Codevisor")
+        Text("Preparing Helio")
           .font(.title2.weight(.semibold))
         Text("Checking and updating this device's local data…")
           .foregroundStyle(.secondary)

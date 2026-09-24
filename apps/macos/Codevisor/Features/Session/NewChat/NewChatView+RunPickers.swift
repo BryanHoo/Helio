@@ -63,7 +63,7 @@ extension NewChatView {
   }
 
   /// The machine picker shows only when there is a choice to make.
-  var showsMachinePicker: Bool { environment.machines.allMachines.count > 1 }
+  var showsMachinePicker: Bool { false }
 
   /// The live project record. The controller holds a snapshot from when
   /// the project was picked; the server's git probe lands on the list

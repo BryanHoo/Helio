@@ -7,7 +7,6 @@ import { bootstrapDevelopment } from "./dev-bootstrap.mjs"
 import {
   developmentLayout,
   ensureBuildDirectories,
-  IOS_DEVELOPMENT_BUNDLE_IDENTIFIER,
   localDevelopmentEnvironment
 } from "./dev-layout.mjs"
 import { runXcodebuild } from "./xcodebuild.mjs"
@@ -38,8 +37,8 @@ if (target === "macos") {
       "Codevisor",
       "-configuration",
       "Debug",
-      "CODEVISOR_DEV_PRODUCT_NAME=Codevisor",
-      "CODEVISOR_DEV_DISPLAY_NAME=Codevisor",
+      "CODEVISOR_DEV_PRODUCT_NAME=Helio",
+      "CODEVISOR_DEV_DISPLAY_NAME=Helio",
       "CODE_SIGNING_ALLOWED=NO",
       ...forwardedArguments,
       "build"
@@ -47,30 +46,7 @@ if (target === "macos") {
     { environment, layout }
   )
   console.log(
-    `\nBuilt macOS app: ${join(layout.build.macos.derivedData, "Build/Products/Debug/Codevisor.app")}`
-  )
-} else if (target === "ios") {
-  await bootstrapDevelopment(repoRoot, { environment })
-  await runXcodebuild(
-    repoRoot,
-    "ios",
-    [
-      "-project",
-      "apps/ios/Codevisor.xcodeproj",
-      "-scheme",
-      "Codevisor",
-      "-configuration",
-      "Debug",
-      "-destination",
-      "generic/platform=iOS Simulator",
-      `CODEVISOR_IOS_BUNDLE_IDENTIFIER=${IOS_DEVELOPMENT_BUNDLE_IDENTIFIER}`,
-      ...forwardedArguments,
-      "build"
-    ],
-    { environment, layout }
-  )
-  console.log(
-    `\nBuilt iOS simulator app: ${join(layout.build.ios.derivedData, "Build/Products/Debug-iphonesimulator/Codevisor.app")}`
+    `\nBuilt macOS app: ${join(layout.build.macos.derivedData, "Build/Products/Debug/Helio.app")}`
   )
 } else if (target === "pixelbook") {
   // PixelBook, the component gallery, links only Autocomplete, so it needs none of the
@@ -104,7 +80,7 @@ if (target === "macos") {
   )
 } else {
   console.error(
-    "usage: bun scripts/build-native.mjs <macos|ios|pixelbook|list:macos> [xcodebuild arguments]"
+    "usage: bun scripts/build-native.mjs <macos|pixelbook|list:macos> [xcodebuild arguments]"
   )
   process.exitCode = 2
 }

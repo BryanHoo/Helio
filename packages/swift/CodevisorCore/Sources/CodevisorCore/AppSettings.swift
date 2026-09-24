@@ -208,7 +208,7 @@ public final class AppSettingsModel {
           data: data,
           error: error,
           reportTitle: "Couldn't Read Your Settings",
-          reportMessage: "Codevisor is starting with default settings. A backup of the old file was kept."
+          reportMessage: "Helio is starting with default settings. A backup of the old file was kept."
         )
       }
     } else {

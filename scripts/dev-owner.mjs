@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process"
-import { createHash } from "node:crypto"
 import { mkdir, realpath, rm } from "node:fs/promises"
 import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -10,19 +9,14 @@ import {
   stopProcesses,
   trackProcessTree
 } from "../packages/processes/src/index.mjs"
-import { parseDevelopmentRunnerArguments } from "./dev-arguments.mjs"
-import { sweepStaleContainers } from "./dev-containers.mjs"
-import { developmentLayout, iosDevelopmentBundleIdentifier } from "./dev-layout.mjs"
-import { claimDevelopmentRunner, releaseDevelopmentRunner } from "./dev-runtime.mjs"
-import { requireIOSSimulator, simctl, readJSON } from "./ios-simulator-state.mjs"
+import { developmentLayout } from "./dev-layout.mjs"
+import { claimDevelopmentRunner, readManifest, releaseDevelopmentRunner } from "./dev-runtime.mjs"
 
 const repoRoot = await realpath(fileURLToPath(new URL("..", import.meta.url)))
 const [kind, ...args] = process.argv.slice(2)
-parseDevelopmentRunnerArguments(args, {
-  allowedArguments: kind === "ios" ? [] : ["--no-ios", "--reuse-macos-build"]
-})
-const simulator =
-  kind === "ios" || !args.includes("--no-ios") ? await requireIOSSimulator(repoRoot) : undefined
+if (kind !== "macos" || args.some((arg) => arg !== "--reuse-macos-build")) {
+  throw new Error("usage: bun scripts/dev.mjs [--reuse-macos-build]")
+}
 const layout = developmentLayout(repoRoot)
 const claimPath = layout.runtime.manifest
 const claim = {
@@ -33,8 +27,7 @@ const claim = {
   repoRoot,
   startedAt: new Date().toISOString()
 }
-const hash = createHash("sha256").update(repoRoot).digest("hex").slice(0, 10)
-const appName = `Codevisor (${basename(repoRoot)})`
+const appName = `Helio (${basename(repoRoot)})`
 const appExecutable = join(
   layout.build.macos.derivedData,
   "Build/Products/Debug",
@@ -65,18 +58,11 @@ try {
   claimed = true
   await cleanupExternalResources()
   if (!stopRequested) {
-    child = spawn(
-      process.execPath,
-      [
-        join(repoRoot, "scripts", kind === "ios" ? "dev-ios-worker.mjs" : "dev-worker.mjs"),
-        ...args
-      ],
-      {
-        cwd: repoRoot,
-        stdio: "inherit",
-        detached: true
-      }
-    )
+    child = spawn(process.execPath, [join(repoRoot, "scripts", "dev-local-macos.mjs"), ...args], {
+      cwd: repoRoot,
+      stdio: "inherit",
+      detached: true
+    })
     const exited = new Promise((resolve, reject) => {
       child.once("exit", (code, signal) => resolve({ code, signal }))
       child.once("error", reject)
@@ -84,7 +70,7 @@ try {
     exited.catch(requestStop)
     tree = await trackProcessTree(child.pid)
     monitor = setInterval(() => {
-      void readJSON(claimPath)
+      void readManifest(claimPath)
         .then((current) => {
           if (current?.ownerPid !== process.pid) requestStop()
         })
@@ -121,26 +107,11 @@ try {
 
 async function cleanupExternalResources() {
   const cleanup = [
-    ...(kind === "ios"
-      ? []
-      : [
-          (async () => {
-            const apps = (await readProcessTable()).filter(
-              (entry) => entry.command === appExecutable
-            )
-            await stopProcesses(apps, { graceMs: 2_000 })
-          })()
-        ]),
-    ...(simulator
-      ? [
-          simctl(["terminate", simulator.udid, iosDevelopmentBundleIdentifier(repoRoot)], {
-            timeout: 5_000
-          }).catch(() => {})
-        ]
-      : []),
-    sweepStaleContainers("apple", hash),
-    sweepStaleContainers("docker", hash),
-    rm(join(repoRoot, "apps/ios/Codevisor/Resources/AppIconDevGenerated.icon"), {
+    (async () => {
+      const apps = (await readProcessTable()).filter((entry) => entry.command === appExecutable)
+      await stopProcesses(apps, { graceMs: 2_000 })
+    })(),
+    rm(join(repoRoot, "apps/macos/Codevisor/Resources/AppIconDevGenerated.icon"), {
       recursive: true,
       force: true
     })

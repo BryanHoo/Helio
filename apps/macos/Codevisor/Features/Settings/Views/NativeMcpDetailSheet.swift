@@ -55,7 +55,7 @@ struct NativeMcpDetailSheet: View {
             if !server.envNames.isEmpty {
               LabeledContent("Environment Variables", value: server.envNames.joined(separator: ", "))
             }
-            Text("Values stay in the harness's config file and are never read into Codevisor.")
+            Text("Values stay in the harness's config file and are never read into Helio.")
               .font(.callout)
               .foregroundStyle(.secondary)
           }

@@ -21,7 +21,7 @@ struct DataUpgradeView: View {
         Text(
           progress.state == "failed"
             ? "Your data is unchanged. Try the update again."
-            : "Codevisor will open when it’s ready."
+            : "Helio will open when it’s ready."
         )
         .foregroundStyle(.secondary)
       }

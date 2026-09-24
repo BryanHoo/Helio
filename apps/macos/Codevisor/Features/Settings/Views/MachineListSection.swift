@@ -41,7 +41,7 @@ struct MachineListSection<Content: View, Footer: View>: View {
   }
 
   var body: some View {
-    let machines = environment.machines.allMachines
+    let machines = [CodevisorMachine.local]
     if machines.count == 1, let only = machines.first {
       content(only)
     } else {

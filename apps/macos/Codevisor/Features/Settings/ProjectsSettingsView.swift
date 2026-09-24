@@ -8,25 +8,21 @@ struct ProjectsSettingsView: View {
   @State private var showingAdd = false
 
   private var groups: [ProjectGroup] {
-    environment.projectList.fleetActiveProjectGroups.sorted {
-      let order = $0.name.localizedStandardCompare($1.name)
-      return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
-    }
+    environment.projectList.fleetActiveProjectGroups
+      .filter { $0.serverIds.contains(CodevisorMachine.local.id) }
+      .sorted {
+        let order = $0.name.localizedStandardCompare($1.name)
+        return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
+      }
   }
 
   private var readyMachineIds: [String] {
-    environment.machines.allMachines
-      .filter { environment.machines.availability(for: $0.id) == .ready }
-      .map(\.id)
+    environment.machines.availability(for: CodevisorMachine.local.id) == .ready
+      ? [CodevisorMachine.local.id] : []
   }
 
   private var initialMachineId: String {
-    if let preferred = SettingsRouter.shared.projectCreationMachineId,
-      environment.machines.machine(for: preferred) != nil
-    {
-      return preferred
-    }
-    return environment.defaultComposerServerId
+    CodevisorMachine.local.id
   }
 
   var body: some View {

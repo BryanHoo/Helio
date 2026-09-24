@@ -14,7 +14,7 @@ extension OnboardingView {
     switch step {
     case .welcome: welcomeStep
     case .permissions: permissionsStep
-    case .analytics: analyticsStep
+    case .analytics: projectStep
     case .harnesses: harnessesStep
     case .project: projectStep
     case .account: harnessesStep
@@ -32,7 +32,7 @@ extension OnboardingView {
       stepHeader(
         symbol: "lock.shield",
         title: "Allow access",
-        subtitle: "Let Codevisor operate apps and work with protected files when you ask."
+        subtitle: "Let Helio operate apps and work with protected files when you ask."
       )
 
       ComputerUsePermissionRowsView(model: permissions, includesFullDiskAccess: true)
@@ -50,7 +50,7 @@ extension OnboardingView {
         .shadow(color: .black.opacity(0.22), radius: 14, y: 8)
         .accessibilityHidden(true)
 
-      Text("Welcome to Codevisor")
+      Text("Welcome to Helio")
         .font(.heroTitle)
         .padding(.top, 22)
 
@@ -59,89 +59,6 @@ extension OnboardingView {
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
         .padding(.top, 6)
-    }
-    .frame(maxWidth: .infinity)
-  }
-
-  // MARK: - Privacy
-
-  /// A compact final-step consent card. Both choices start selected, remain
-  /// independent, and are not persisted until the user finishes.
-  private var analyticsStep: some View {
-    VStack(spacing: 0) {
-      Image(systemName: "chart.line.uptrend.xyaxis")
-        .font(.system(size: Typography.IconSize.hero, weight: .medium))
-        .symbolRenderingMode(.hierarchical)
-        .foregroundStyle(.secondary)
-        .accessibilityHidden(true)
-
-      Text("Help improve Codevisor")
-        .font(.stepTitle)
-        .padding(.top, 18)
-
-      VStack(alignment: .leading, spacing: 16) {
-        VStack(alignment: .leading, spacing: 6) {
-          Toggle("Share anonymous usage metrics", isOn: $shareAnalytics)
-            .toggleStyle(.checkbox)
-            .fontWeight(.semibold)
-
-          Text("Shares anonymous product usage so we can understand what’s useful and what to improve.")
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-
-        Divider()
-
-        VStack(alignment: .leading, spacing: 6) {
-          Toggle("Send crash and error reports", isOn: $shareCrashReports)
-            .toggleStyle(.checkbox)
-            .fontWeight(.semibold)
-
-          Text("Shares technical details when Codevisor crashes or encounters an error.")
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-      }
-      .padding(18)
-      .frame(maxWidth: 420, alignment: .leading)
-      .background(
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-          .fill(theme.cardBackground)
-      )
-      .padding(.top, 24)
-
-      HStack(alignment: .top, spacing: 10) {
-        Image(systemName: "lock.shield.fill")
-          .foregroundStyle(.secondary)
-          .accessibilityHidden(true)
-
-        VStack(alignment: .leading, spacing: 4) {
-          Text("Your work stays private")
-            .font(.callout.weight(.semibold))
-
-          Text(
-            "Neither option includes prompts, responses, code, file paths, project names, browser content, or terminal commands."
-          )
-          .font(.callout)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-        }
-      }
-      .padding(12)
-      .frame(maxWidth: 420, alignment: .leading)
-      .background(
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(Color.primary.opacity(0.05))
-      )
-      .padding(.top, 12)
-
-      Text("You can change this at any time in Settings → Privacy & Data.")
-        .font(.callout)
-        .foregroundStyle(.secondary)
-        .multilineTextAlignment(.center)
-        .padding(.top, 16)
     }
     .frame(maxWidth: .infinity)
   }

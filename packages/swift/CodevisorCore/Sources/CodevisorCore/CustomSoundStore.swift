@@ -17,7 +17,7 @@ public struct CustomSoundStore: Sendable {
     public var errorDescription: String? {
       switch self {
       case .unreadableAudio:
-        "This file isn't an audio format Codevisor can read. Try a WAV, MP3, M4A, or AIFF file."
+        "This file isn't an audio format Helio can read. Try a WAV, MP3, M4A, or AIFF file."
       case .emptyAudio:
         "This audio file has no sound in it."
       case .tooLong(let seconds):
@@ -27,7 +27,7 @@ public struct CustomSoundStore: Sendable {
           CustomSoundStore.maxDuration
         )
       case .conversionFailed:
-        "Codevisor couldn't convert this sound. Try a different file."
+        "Helio couldn't convert this sound. Try a different file."
       }
     }
   }

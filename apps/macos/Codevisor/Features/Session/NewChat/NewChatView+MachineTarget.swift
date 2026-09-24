@@ -9,12 +9,7 @@ extension NewChatView {
   var composerServerId: String {
     if let controller { return controller.project.serverId }
     if let initialProjectTarget { return initialProjectTarget.serverId }
-    if let remembered = environment.composerDefaults.lastNewWorkspaceServerId,
-      environment.machines.allMachines.contains(where: { $0.id == remembered })
-    {
-      return remembered
-    }
-    return environment.defaultComposerServerId
+    return CodevisorMachine.local.id
   }
 
   var projects: [Project] {

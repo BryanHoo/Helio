@@ -333,7 +333,7 @@ struct NewChatView: View {
         Button("Restart") { AppRelauncher.relaunch() }
           .buttonStyle(.bordered)
           .controlSize(.small)
-          .help("Restart Codevisor and its server")
+          .help("Restart Helio and its server")
       }
     }
     .padding(10)

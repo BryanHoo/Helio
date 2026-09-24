@@ -57,36 +57,9 @@ struct McpManagedServerRow: View {
           .lineLimit(1)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      if server.kind == "browserUse", let browserConfiguration {
-        Menu {
-          ForEach(
-            [("chrome", "Codevisor Extension"), ("managed", "Chromium")], id: \.0
-          ) { value, label in
-            Button {
-              Task { await setPreferredBrowser(value) }
-            } label: {
-              if (browserConfiguration.preferredBrowser ?? "managed") == value {
-                Label(label, systemImage: "checkmark")
-              } else {
-                Text(label)
-              }
-            }
-          }
-          if browserConfiguration.chromeAvailable,
-            browserConfiguration.supportsExtensionFlow,
-            !browserConfiguration.chromeConnected,
-            browserConfiguration.developmentExtensionPath != nil
-          {
-            Divider()
-            Button("Install Chrome Extension…") {
-              Task { await installBrowserExtension() }
-            }
-          }
-        } label: {
-          Text(preferredBrowserLabel(browserConfiguration))
-        }
-        .controlSize(.small)
-        .settingsActionTint(theme)
+      if server.kind == "browserUse" {
+        Text("Chromium")
+          .controlSize(.small)
       }
       let needsAuthorization =
         server.authType == "oauth"
@@ -187,11 +160,4 @@ struct McpManagedServerRow: View {
     }
   }
 
-  private func preferredBrowserLabel(_ configuration: ServerBrowserUseConfiguration) -> String {
-    switch configuration.preferredBrowser {
-    case "chrome": return configuration.chromeConnected ? "Codevisor Extension" : "Codevisor Extension · Setup"
-    case "managed": return "Chromium"
-    default: return "Chromium"
-    }
-  }
 }

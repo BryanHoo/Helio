@@ -10,7 +10,7 @@
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-      WindowGroup("Codevisor") {
+      WindowGroup("Helio") {
         AppStoreScreenshotRoot()
       }
       .defaultSize(width: 1280, height: 820)

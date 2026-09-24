@@ -37,7 +37,7 @@ struct McpServerDetailSheet: View {
       Form {
         Section("Connection") {
           if server.isBuiltIn {
-            LabeledContent("Provider", value: "Codevisor built-in")
+            LabeledContent("Provider", value: "Helio built-in")
           } else {
             LabeledContent("Transport", value: server.transport == "http" ? "HTTP" : "Local command")
           }
@@ -126,7 +126,7 @@ struct McpServerDetailSheet: View {
       Button("Cancel", role: .cancel) {}
         .settingsActionTint(theme)
     } message: {
-      Text("This removes its configuration and saved authorization from Codevisor.")
+      Text("This removes its configuration and saved authorization from Helio.")
     }
   }
 

@@ -287,7 +287,7 @@ describe("@codevisor/server", () => {
       host: "127.0.0.1",
       id: "local",
       kind: "local",
-      name: "Local Codevisor",
+      name: "Local Helio",
       port: 49361,
       version: "0.1.0",
       bootId: "test-boot",

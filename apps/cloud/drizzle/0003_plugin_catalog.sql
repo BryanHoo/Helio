@@ -1,1 +1,0 @@
-ALTER TABLE `plugin_consents` ADD `metadata` text DEFAULT '{}' NOT NULL;

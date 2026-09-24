@@ -77,7 +77,7 @@ struct PluginUpdateSheet: View {
       Text("Review Update")
     } footer: {
       Text(
-        "Codevisor will apply these exact staged bytes. If the plan expires or the installed plugin changes, you’ll review a new plan."
+        "Helio will apply these exact staged bytes. If the plan expires or the installed plugin changes, you’ll review a new plan."
       )
     }
     .listRowBackground(theme.formRowBackground)

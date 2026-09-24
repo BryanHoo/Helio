@@ -62,7 +62,7 @@ struct CustomHarnessEditorSheet: View {
     } else {
       ScrollView {
         VStack(alignment: .leading, spacing: 14) {
-          Text("Any agent that speaks ACP over stdio. Codevisor runs the command below and talks ACP to it.")
+          Text("Any agent that speaks ACP over stdio. Helio runs the command below and talks ACP to it.")
             .font(.callout)
             .foregroundStyle(theme.textSecondary)
             .fixedSize(horizontal: false, vertical: true)

@@ -29,7 +29,7 @@ struct MarkdownDocumentFailure {
         message = "\(name) may have been moved, renamed, or deleted."
       } else if code == "permission_denied" || status == 403 {
         title = "Can’t access this file"
-        message = "Codevisor doesn’t have permission to read \(name). Check its permissions, then try again."
+        message = "Helio doesn’t have permission to read \(name). Check its permissions, then try again."
       } else if status == 401 {
         title = "Connection needs attention"
         message = "Reconnect to this machine in Settings, then try again."
@@ -38,7 +38,7 @@ struct MarkdownDocumentFailure {
         message = "Open a link to a Markdown file to preview it here."
       } else if Self.isConnectionFailure(error) || [502, 503, 504].contains(status ?? 0) {
         title = "Can’t connect to this machine"
-        message = "Make sure it’s online and Codevisor is running, then try again."
+        message = "Make sure it’s online and Helio is running, then try again."
       } else {
         title = "Can’t open this document"
         message = "Something went wrong while opening \(name). Try again in a moment."

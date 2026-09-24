@@ -126,7 +126,7 @@ struct ComputerUsePermissionRowsView: View {
         .foregroundStyle(.secondary)
         .accessibilityHidden(true)
 
-      Text("Screen Recording applies after Codevisor restarts")
+      Text("Screen Recording applies after Helio restarts")
         .font(.callout)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
@@ -181,7 +181,7 @@ struct ComputerUsePermissionsGateView: View {
       VStack(spacing: 4) {
         Text("Allow Computer Use")
           .font(.title2.bold())
-        Text("Codevisor uses these to operate apps when you ask.")
+        Text("Helio uses these to operate apps when you ask.")
           .font(.callout)
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)

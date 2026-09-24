@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto"
-import { rmSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { rmSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -7,7 +6,6 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import {
   browserExtensionInstallation,
-  browserExtensionPath,
   CODEVISOR_BROWSER_EXTENSION_ID
 } from "./browser-extension-relay.js"
 import {
@@ -48,46 +46,10 @@ describe("Browser Use tool contract", () => {
     expect(click?.description).toContain("hit targeting")
   })
 
-  it("keeps the bundled relay extension id stable", () => {
-    const extension = browserExtensionPath()
-    expect(extension).toBeDefined()
-    const manifest = JSON.parse(readFileSync(join(extension!, "manifest.json"), "utf8")) as {
-      key: string
-      permissions: string[]
-    }
-    const digest = createHash("sha256").update(Buffer.from(manifest.key, "base64")).digest()
-    const id = [...digest.subarray(0, 16)]
-      .flatMap((byte) => [byte >> 4, byte & 15])
-      .map((nibble) => String.fromCharCode(97 + nibble))
-      .join("")
-    expect(id).toBe(CODEVISOR_BROWSER_EXTENSION_ID)
-    expect(manifest.permissions).toContain("debugger")
-    expect(manifest.permissions).toEqual(
-      expect.arrayContaining([
-        "downloads",
-        "offscreen",
-        "clipboardRead",
-        "clipboardWrite",
-        "tabGroups"
-      ])
-    )
-    expect(readFileSync(join(extension!, "background.js"), "utf8")).toContain(
-      'importScripts("tab-groups.js")'
-    )
-    expect(readFileSync(join(extension!, "tab-groups.js"), "utf8")).toContain("chrome.tabs.group(")
-    expect(readFileSync(join(extension!, "offscreen.html"), "utf8")).toContain("offscreen.js")
-    expect(readFileSync(join(extension!, "offscreen.js"), "utf8")).toContain(
-      "document.execCommand(type)"
-    )
-    const connectPage = readFileSync(join(extension!, "connect.html"), "utf8")
-    expect(connectPage).toContain("https://www.codevisor.dev/privacy")
-    expect(connectPage).toContain("agent provider you selected in Codevisor")
-  })
-
-  it("distinguishes bundled extension files from an installed Chrome profile", () => {
+  it("does not bundle an extension even when an old Chrome profile still has one", () => {
     const home = mkdtempSync(join(tmpdir(), "codevisor-browser-extension-"))
     directories.push(home)
-    expect(browserExtensionInstallation(home)).toMatchObject({ bundled: true, installed: false })
+    expect(browserExtensionInstallation(home)).toMatchObject({ bundled: false, installed: false })
 
     expect(["darwin", "linux"]).toContain(process.platform)
     const profile =
@@ -100,7 +62,7 @@ describe("Browser Use tool contract", () => {
       JSON.stringify({ extensions: { settings: { [CODEVISOR_BROWSER_EXTENSION_ID]: {} } } })
     )
     expect(browserExtensionInstallation(home)).toMatchObject({
-      bundled: true,
+      bundled: false,
       installed: true,
       profiles: [profile]
     })

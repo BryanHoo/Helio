@@ -3,9 +3,7 @@
 # packages/swift/CodevisorUI/Sources/CodevisorUI/DesignSystem/Typography.swift
 #
 # Blocks:
-#   1. Font size literals below the macOS 10 pt legibility floor
-#      (iOS's floor is 11 pt, but 10-11 pt macOS glyph tokens are legal,
-#      so the shared floor checked here is 10).
+#   1. Font size literals below the macOS 10 pt legibility floor.
 #   2. Light-family font weights (.ultraLight, .thin, .light) — HIG:
 #      avoid light weights.
 #
@@ -18,7 +16,7 @@ fail=0
 
 # First-party Swift sources only (skip SwiftPM checkouts/build products).
 swift_sources() {
-  find apps/ios apps/macos \
+  find apps/macos \
     -name "*.swift" \
     -not -path "*/.build/*" \
     -not -path "*/DerivedData*/*" \
@@ -28,7 +26,7 @@ swift_sources() {
 # 1. Sub-floor size literals: size: 0-9 / ofSize: 0-9 (incl. fractions).
 subfloor=$(swift_sources | xargs grep -nE '(ofSize|size): *[0-9](\.[0-9]+)? *[,)]' 2>/dev/null || true)
 if [[ -n "$subfloor" ]]; then
-  echo "error: font size literal below the 10 pt legibility floor (HIG minimum: 11 pt iOS / 10 pt macOS)."
+  echo "error: font size literal below the 10 pt legibility floor (macOS HIG)."
   echo "Use a text style, or a token from CodevisorUI Typography:"
   echo "$subfloor"
   fail=1

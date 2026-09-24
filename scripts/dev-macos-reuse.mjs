@@ -1,11 +1,7 @@
 import { join } from "node:path"
 
 export function requestsMacOSBuildReuse(arguments_) {
-  const requested = arguments_.includes("--reuse-macos-build")
-  if (requested && !arguments_.includes("--no-ios")) {
-    throw new Error("--reuse-macos-build is supported only by dev:macos.")
-  }
-  return requested
+  return arguments_.includes("--reuse-macos-build")
 }
 
 /// Reusing a granted ad-hoc app must never fall back to a rebuild: that

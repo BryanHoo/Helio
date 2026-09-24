@@ -95,16 +95,13 @@ export const routeScreenSharing = async (
       throw new HttpFailure(404, "Screen Sharing pane is no longer available")
   }
   if (config.screenSharing === undefined)
-    throw new HttpFailure(501, "Screen Sharing requires the native Codevisor app on a Mac")
+    throw new HttpFailure(501, "Screen Sharing requires the native Helio app on a Mac")
   let result: ScreenSharingReply
   try {
     result = Schema.decodeUnknownSync(ScreenSharingReply)(await config.screenSharing(payload))
   } catch {
     // Never expose helper paths, tokens, or SDP through a transport error.
-    throw new HttpFailure(
-      503,
-      "Open or update Codevisor on the host Mac, then retry Screen Sharing"
-    )
+    throw new HttpFailure(503, "Open or update Helio on the host Mac, then retry Screen Sharing")
   }
   writeJson(response, 200, result)
   return true

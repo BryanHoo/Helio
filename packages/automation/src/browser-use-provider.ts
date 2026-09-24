@@ -15,7 +15,6 @@ import {
   userChromiumIsRunning
 } from "./browser-chromium.js"
 import {
-  browserExtensionArchivePath,
   browserExtensionInstallation,
   chromeBrowserAvailable,
   CODEVISOR_BROWSER_EXTENSION_ID,
@@ -23,8 +22,7 @@ import {
   openBrowserExtensionDevelopmentFolder,
   openBrowserExtensionDevelopmentInstaller,
   openBrowserExtensionDevelopmentPage,
-  openBrowserExtensionWebStore,
-  prepareBrowserExtension
+  openBrowserExtensionWebStore
 } from "./browser-extension-relay.js"
 import { makeBrowserRepls, browserResultValue } from "./browser-repl.js"
 import { makeBrowserRuntimeFactory } from "./browser-runtime-factory.js"
@@ -76,8 +74,8 @@ export const makeBrowserUseProvider = (
   const sessionDispositions = new Map<string, Map<string, "deliverable" | "handoff">>()
   const assetInventories = new Map<string, BrowserAssetInventory>()
   const extensionRelay = makeBrowserExtensionRelay()
-  const developmentExtensionPath = prepareBrowserExtension(dataDir, "http://127.0.0.1:49361")
-  const extensionArchive = browserExtensionArchivePath(developmentExtensionPath)
+  const developmentExtensionPath = join(dataDir, "browser", "extension")
+  const extensionArchive = ""
   const extensionSetupMode: BrowserExtensionSetupMode =
     process.env.CODEVISOR_DEV_WORKTREE !== undefined ||
     process.env.HERDMAN_DEV_WORKTREE !== undefined
@@ -278,9 +276,7 @@ export const makeBrowserUseProvider = (
     openExtensionWebStore: () => openBrowserExtensionWebStore(),
     extensionArchivePath: () => extensionArchive,
     extensionIconPath: () => join(developmentExtensionPath, "icons", "128.png"),
-    configureExtensionRelay: (serverBaseUrl) => {
-      prepareBrowserExtension(dataDir, serverBaseUrl)
-    },
+    configureExtensionRelay: () => {},
     invoke: async (context, toolName, args) => {
       contexts.set(context.sessionId, context)
       if (toolName === "reset") {
@@ -341,6 +337,9 @@ export const makeBrowserUseProvider = (
       }
       if (toolName === "use_backend") {
         const backend = args.backend
+        if (backend === "extension") {
+          return textToolResult("The browser extension is unavailable in the local Mac app", true)
+        }
         if (backend !== "managed" && backend !== "extension" && backend !== "builtin") {
           return textToolResult("backend must be managed, extension, or builtin", true)
         }

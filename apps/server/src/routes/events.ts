@@ -3,7 +3,6 @@ import type { Socket } from "node:net"
 
 import type { EventEnvelope, TerminalClientFrame } from "@codevisor/api"
 import { TerminalClientFrame as TerminalClientFrameSchema, decode } from "@codevisor/api"
-import { CODEVISOR_BROWSER_EXTENSION_ID } from "@codevisor/automation"
 import type { CodevisorDatabaseService } from "@codevisor/db"
 import type { TerminalManagerService } from "@codevisor/terminal"
 import { WebSocket, type WebSocketServer } from "ws"
@@ -13,7 +12,6 @@ import {
   authorize,
   failureMessage,
   HttpFailure,
-  isLocalhost,
   matchRoute,
   parseRequestUrl,
   run,
@@ -71,18 +69,6 @@ export const handleUpgrade = async (
 ): Promise<void> => {
   try {
     const url = parseRequestUrl(request)
-    if (
-      request.method === "GET" &&
-      url.pathname === "/v1/browser-use/extension/socket" &&
-      services.mcp !== undefined &&
-      isLocalhost(request.socket.remoteAddress) &&
-      request.headers.origin === `chrome-extension://${CODEVISOR_BROWSER_EXTENSION_ID}`
-    ) {
-      webSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
-        services.mcp!.acceptBrowserExtension(webSocket)
-      })
-      return
-    }
     // Direct sealed-channel pipe: authenticates via already-pinned E2E
     // identity inside the channel protocol itself (DirectChannelHost) — a
     // bearer token would be both unnecessary and unavailable to it.

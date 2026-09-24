@@ -88,7 +88,7 @@ struct UpdateCenterView: View {
 
   private var summaryDetail: String {
     guard let refreshed = center.lastRefreshedAt else {
-      return "Checking every machine's Codevisor, harnesses, and plugins."
+      return "Checking Helio, harnesses, and plugins."
     }
     return "Last checked \(refreshed.formatted(date: .omitted, time: .shortened))"
   }
@@ -208,7 +208,7 @@ struct UpdateCenterView: View {
     } header: {
       Text("Update Channel")
     } footer: {
-      Text("Receive Alpha builds of Codevisor and its servers before they reach the stable channel.")
+      Text("Receive Alpha builds of Helio before they reach the stable channel.")
     }
   }
 

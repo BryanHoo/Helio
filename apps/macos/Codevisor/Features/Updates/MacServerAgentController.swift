@@ -14,13 +14,13 @@ private enum MacServerAgentError: LocalizedError, Sendable {
   var errorDescription: String? {
     switch self {
     case .operationPending:
-      "A previous macOS background-service request is still pending. Wait for it to finish, then restart Codevisor."
+      "A previous macOS background-service request is still pending. Wait for it to finish, then restart Helio."
     case .processDidNotStop:
-      "The previous background server has not stopped. Codevisor cannot replace it yet."
+      "The previous background server has not stopped. Helio cannot replace it yet."
     case .requiresApproval:
-      "Codevisor's background server is turned off in System Settings › General › Login Items & Extensions. Turn it on, then restart Codevisor."
+      "Helio's background server is turned off in System Settings › General › Login Items & Extensions. Turn it on, then restart Helio."
     case let .registrationDidNotEnable(status):
-      "macOS did not enable Codevisor's background server (status \(status.rawValue))."
+      "macOS did not enable Helio's background server (status \(status.rawValue))."
     case let .timedOut(operation, after):
       "macOS did not answer the background-service request '\(operation)' within \(after)."
     }

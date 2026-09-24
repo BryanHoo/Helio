@@ -122,7 +122,7 @@ private struct ProjectCheckoutSettingsSection: View {
           title: "Delete Checkout…",
           confirmationTitle: "Delete checkout on \(machineName)?",
           message:
-            "This permanently deletes \(project.folderURL.path) from Codevisor along with its workspaces, chats and worktree files on \(machineName). Other checkouts are unchanged. This cannot be undone."
+            "This permanently deletes \(project.folderURL.path) from Helio along with its workspaces, chats and worktree files on \(machineName). Other checkouts are unchanged. This cannot be undone."
         ) {}
         .disabled(editor.isSaving)
       }

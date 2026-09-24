@@ -33,7 +33,7 @@ public struct PluginAccessPolicy: Decodable, Sendable {
     guard let minimumAge, [4, 9, 13, 16, 18].contains(minimumAge) else {
       return "The publisher needs to add an age rating before this plugin can open on iOS."
     }
-    if minimumAge > min(supportedAgeRating, 16) { return "This plugin exceeds Codevisor’s iOS age rating." }
+    if minimumAge > min(supportedAgeRating, 16) { return "This plugin exceeds the supported age rating." }
     return nil
   }
 }

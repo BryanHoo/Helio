@@ -43,7 +43,7 @@ export async function releaseDevelopmentRunner(manifestPath, manifest) {
   await rm(manifestPath, { force: true })
 }
 
-async function readManifest(manifestPath) {
+export async function readManifest(manifestPath) {
   try {
     return JSON.parse(await readFile(manifestPath, "utf8"))
   } catch (error) {

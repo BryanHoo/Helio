@@ -9,7 +9,6 @@ struct CodevisorApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
   @State private var environment: AppEnvironment?
   @State private var serverAgent: MacServerAgentController
-  @State private var sparkleUpdater: SparkleUpdateController?
   @State private var startupError: String?
   @State private var startupInProgress = false
 
@@ -17,30 +16,17 @@ struct CodevisorApp: App {
     let serverAgent = MacServerAgentController()
     _environment = State(initialValue: nil)
     _serverAgent = State(initialValue: serverAgent)
-    _sparkleUpdater = State(initialValue: nil)
     _startupError = State(initialValue: nil)
   }
 
   @MainActor
   private static func makeRuntime(
     serverAgent: MacServerAgentController,
-    storage: ClientStorage,
-    instanceLease: AppInstanceLease?
-  ) -> (environment: AppEnvironment, updater: SparkleUpdateController?) {
+    storage: ClientStorage
+  ) -> AppEnvironment {
     let environment = AppEnvironment.live(storage: storage)
     if !CodevisorAppVariant.isDevelopment {
       environment.localServer?.configureManagedService(serverAgent.managedService)
-    }
-    let sparkleUpdater: SparkleUpdateController?
-    if CodevisorAppVariant.enablesSparkleUpdater, let instanceLease {
-      sparkleUpdater = SparkleUpdateController(
-        model: environment.appUpdate,
-        localServer: environment.localServer,
-        serverAgent: serverAgent,
-        instanceLease: instanceLease
-      )
-    } else {
-      sparkleUpdater = nil
     }
     if !CodevisorAppVariant.isDevelopment && !AppPreview.isRunning {
       // Keep the bundled CLI (`codevisor` etc.) linked into
@@ -76,9 +62,6 @@ struct CodevisorApp: App {
         environment.settings.setPermissionsReviewedVersion(AppUpdateModel.bundleVersion())
       }
     }
-    AnalyticsClient.shared.configureFromMainBundle(enabled: environment.settings.shareAnalytics)
-    AnalyticsClient.shared.captureAppOpenedOnce()
-    DiagnosticsClient.shared.configureFromMainBundle(enabled: environment.settings.shareCrashReports)
     ChatNotificationManager.shared.configure(settings: environment.settings)
     // Attention pings and banner clearing are decided by the app-wide
     // coordinator (edge-triggered, focused chat suppressed); the manager
@@ -86,7 +69,7 @@ struct CodevisorApp: App {
     environment.attentionCoordinator.notificationDelivery = ChatNotificationManager.shared
     // Deep links that open machine-scoped Settings pages ("Manage
     // Harnesses…") resolve the selected machine through this.
-    return (environment, sparkleUpdater)
+    return environment
   }
 
   var body: some Scene {
@@ -126,9 +109,7 @@ struct CodevisorApp: App {
     .windowIdealSize(.maximum)
     .commands {
       if let environment {
-        AppUpdateCommands(environment: environment)
         FileCommands()
-        MachineCommands(machines: environment.machines)
         WorkspaceLayoutCommands()
         DebugOverlayCommands()
       }
@@ -173,22 +154,20 @@ struct CodevisorApp: App {
       )
       let runtime = Self.makeRuntime(
         serverAgent: serverAgent,
-        storage: storage,
-        instanceLease: appDelegate.appInstanceLease
+        storage: storage
       )
-      environment = runtime.environment
-      sparkleUpdater = runtime.updater
+      environment = runtime
       // The quit confirmation reads the user's preference and skips
       // itself while Sparkle is installing an update.
-      appDelegate.settings = runtime.environment.settings
-      appDelegate.appUpdate = runtime.environment.appUpdate
+      appDelegate.settings = runtime.settings
+      appDelegate.appUpdate = runtime.appUpdate
       startupError = nil
       if !AppPreview.isRunning {
         // Machine readiness belongs to the app runtime, not a window.
         // Settings can be the only restored scene at launch, so waiting
         // until RootView mounts leaves every normal server request gated.
         Task { @MainActor in
-          await runtime.environment.prepareAllMachines()
+          await runtime.prepareMachine(CodevisorMachine.local.id)
           // Initialize the terminal runtime up front, in a clean context,
           // so opening the terminal later can't re-enter its dispatch_once.
           TerminalRuntime.prewarm()
@@ -207,7 +186,7 @@ private struct ClientDataStartupFailureView: View {
 
   var body: some View {
     ContentUnavailableView {
-      Label("Codevisor Couldn't Open Its Data", systemImage: "externaldrive.badge.exclamationmark")
+      Label("Helio Couldn't Open Its Data", systemImage: "externaldrive.badge.exclamationmark")
     } description: {
       Text("The app stopped before loading or syncing so your existing data remains intact.\n\n\(message)")
     } actions: {
@@ -257,7 +236,7 @@ struct RootView: View {
     .environment(panelLayout)
     .modifier(
       ClientControlModifier(
-        name: Host.current().localizedName ?? "Codevisor Mac", platform: "macos",
+        name: Host.current().localizedName ?? "Helio Mac", platform: "macos",
         context: clientControlContext, navigate: navigateClient, control: controlClient
       )
     )
@@ -347,43 +326,11 @@ struct RootView: View {
         store = SessionStore(environment: environment)
         store?.setWindowFocused(controlActiveState == .key)
       }
-      if !AppPreview.isRunning {
-        // A remote client updated this machine's server: the bundled
-        // server hands the update back here. Sparkle installs the
-        // signed app update and replaces app + bundled server
-        // together — unattended, because the person who asked is at
-        // ANOTHER machine's screen and nobody here could accept a
-        // prompt.
-        environment.localServer?.onUpdateRequested = { [environment] in
-          Task { @MainActor in
-            await environment.appUpdate.installUpdateUnattended()
-          }
-        }
-        // Restore the cloud account session (or adopt the dev cloud
-        // token) in the background; nothing at boot depends on it.
-        await environment.cloud.bootstrap()
-      }
     }
-    // Fleet update upkeep: the periodic sweep behind the sidebar footer
-    // count and Settings › Updates, and the resume of an update-all the
-    // app's own restart interrupted.
-    .modifier(UpdateCenterUpkeep())
     // The local server's blocking data upgrade: a non-dismissable sheet
     // over the whole window, wherever the user is, instead of a card only
     // the New Chat page used to show.
     .modifier(ServerDataUpgradePresentation())
-    // codevisor://add-machine deeplinks, printed by `codevisor setup` on a
-    // remote machine. Extracted into its own modifier: inlining the
-    // alerts here pushed this already-large chain past the Swift type
-    // checker's budget on release builds.
-    .modifier(MachineDeeplinkHandling())
-    // codevisor://cloud-auth deeplinks — the browser handoff's fallback
-    // path when sign-in ran in the default browser instead of the
-    // ASWebAuthenticationSession sheet.
-    .modifier(CloudAuthDeeplinkHandling())
-    // codevisor://install-plugin deeplinks — the web plugin directory's
-    // "Open in Codevisor" button.
-    .modifier(PluginInstallDeeplinkHandling())
   }
 
   private func openNotificationSession(_ sessionId: UUID, serverId: String) {

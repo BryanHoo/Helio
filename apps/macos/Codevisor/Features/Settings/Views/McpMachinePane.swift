@@ -125,7 +125,7 @@ struct McpMachinePane: View {
         .settingsActionTint(theme)
     } message: {
       Text(
-        "Codevisor edits only this entry in \(abbreviatePath(nativeServerPendingRemoval?.configPath ?? "")), backs the file up first, and keeps the entry so you can undo."
+        "Helio edits only this entry in \(abbreviatePath(nativeServerPendingRemoval?.configPath ?? "")), backs the file up first, and keeps the entry so you can undo."
       )
     }
     .confirmationDialog(

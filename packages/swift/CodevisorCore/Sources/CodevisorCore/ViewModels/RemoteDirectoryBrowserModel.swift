@@ -321,7 +321,7 @@ public final class RemoteDirectoryBrowserModel {
     case "not_found":
       return "That folder doesn't exist on \(machineName). Check the path and try again."
     case "permission_denied":
-      return "Codevisor on \(machineName) isn't allowed to read that folder. "
+      return "Helio on \(machineName) isn't allowed to read that folder. "
         + "Pick another folder, or adjust its permissions on the machine."
     case "not_a_directory":
       return "That path is a file, not a folder."

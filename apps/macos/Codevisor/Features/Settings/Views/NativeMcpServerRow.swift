@@ -28,7 +28,7 @@ struct NativeMcpServerRow: View {
             nativeBadge("Disabled")
           }
           if server.alreadyManaged {
-            nativeBadge("In Codevisor")
+            nativeBadge("In Helio")
           }
         }
         Text(server.identity)

@@ -21,16 +21,13 @@ struct PluginMachinePane: View {
   @State private var pluginPendingRestore: ServerPluginSummary?
   @State private var isMutating = false
 
-  /// One sheet slot for both flows, so "Install" inside the browse sheet
-  /// can swap straight into the install sheet's discover→consent stages.
+  /// 安装与更新共用一个 sheet，避免同一时间叠加多个操作面板。
   private enum PluginsSheet: Identifiable {
     case install(initialSource: String?)
-    case browse
     case update(ServerPluginUpdatePlan)
     var id: String {
       switch self {
       case .install: "install"
-      case .browse: "browse"
       case .update(let plan): "update:\(plan.planId)"
       }
     }
@@ -73,17 +70,6 @@ struct PluginMachinePane: View {
                 try await client.importRemotePlugin(source: source)
               }
               await reload()
-            }
-          )
-        case .browse:
-          PluginRegistryBrowseSheet(
-            fetchRegistry: { try await client.fetchPluginRegistry(query: nil) },
-            installedIds: Set((plugins ?? []).map(\.id)),
-            onInstall: { entry in
-              // The registry only discovers; installing goes
-              // through the existing consent flow with the
-              // entry's repo as the source.
-              activeSheet = .install(initialSource: entry.repo)
             }
           )
         case .update(let plan):
@@ -193,12 +179,6 @@ struct PluginMachinePane: View {
       if plugins != nil {
         SettingsListActions {
           Button {
-            activeSheet = .browse
-          } label: {
-            Label("Browse Plugins…", systemImage: "magnifyingglass")
-          }
-          .settingsActionTint(theme)
-          Button {
             activeSheet = .install(initialSource: nil)
           } label: {
             Label("Install Plugin…", systemImage: "plus")
@@ -240,7 +220,6 @@ struct PluginMachinePane: View {
           .truncationMode(.middle)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      PluginSafetyButton(pluginId: plugin.id, name: plugin.name)
       Menu {
         if updates[plugin.id]?.state == .available {
           Button("Update…") { prepareUpdate(plugin) }

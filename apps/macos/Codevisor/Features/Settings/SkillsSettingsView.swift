@@ -44,7 +44,7 @@ struct SkillsSettingsView: View {
     .background {
       if !theme.isSystem { theme.windowBackground }
     }
-    .task(id: environment.machines.allMachines.map(\.id)) { await scanAllMachines() }
+    .task { await scanAllMachines() }
     .sheet(isPresented: $showingCreate) {
       SkillCreateSheet { name, description, pasted in
         do {
@@ -99,7 +99,7 @@ struct SkillsSettingsView: View {
 
   private func scanAllMachines() async {
     await withTaskGroup(of: (String, Set<String>?).self) { group in
-      for machine in environment.machines.allMachines {
+      for machine in [CodevisorMachine.local] {
         let client = environment.machines.client(for: machine.id)
         group.addTask { @MainActor in
           let scan = try? await client.listSkills()

@@ -146,14 +146,14 @@ export const handleRequest = async (
       await services.mcp.finishOAuth(state, code)
       response.writeHead(200, { "content-type": "text/html; charset=utf-8" })
       response.end(
-        "<!doctype html><title>Codevisor</title><p>Authorization complete. Codevisor is connecting to the MCP server. You can close this window.</p>"
+        "<!doctype html><title>Helio</title><p>Authorization complete. Helio is connecting to the MCP server. You can close this window.</p>"
       )
       return
     }
     if (request.method === "GET" && url.pathname === "/v1/mcps/oauth/complete") {
       response.writeHead(200, { "content-type": "text/html; charset=utf-8" })
       response.end(
-        "<!doctype html><title>Codevisor</title><p>Codevisor is reconnecting to the MCP server. You can close this window.</p>"
+        "<!doctype html><title>Helio</title><p>Helio is reconnecting to the MCP server. You can close this window.</p>"
       )
       return
     }
