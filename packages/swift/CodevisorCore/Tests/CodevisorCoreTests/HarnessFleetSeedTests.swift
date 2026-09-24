@@ -19,6 +19,7 @@ struct HarnessFleetSeedTests {
         harness("claude-code", name: "Claude Code", ready: true, desiredEnabled: true),
         harness("codex", name: "Codex", ready: true, desiredEnabled: false),
         harness("gemini", name: "Gemini", ready: false, desiredEnabled: true),
+        harness("cursor", name: "Cursor", ready: true, desiredEnabled: true),
       ],
       in: sync)
 
@@ -28,6 +29,19 @@ struct HarnessFleetSeedTests {
     #expect(settings.first?.name == "Claude Code")
     #expect(settings.first?.enabled == true)
     #expect(settings.first?.installed == true)
+  }
+
+  @Test("Historical catalog entries do not appear in the supported harness list")
+  func ignoresRetiredCatalogRows() throws {
+    let sync = try makeSync()
+    HarnessFleet.set(
+      .init(id: "cursor", name: "Cursor", symbolName: "terminal", enabled: true, installed: true),
+      in: sync)
+    HarnessFleet.set(
+      .init(id: "codex", name: "Codex", symbolName: "terminal", enabled: true, installed: true),
+      in: sync)
+
+    #expect(HarnessFleet.settings(sync).map(\.id) == ["codex"])
   }
 
   @Test("Authored catalog rows and uninstall directives are never overwritten")

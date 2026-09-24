@@ -84,7 +84,7 @@ export interface QuestionAnswer {
   readonly answers?: Readonly<Record<string, QuestionAnswerEntry>>
 }
 
-export type ProviderId = "acp" | "claude" | "codex" | "cursor" | "grok-build"
+export type ProviderId = "claude" | "codex"
 
 export type HarnessLaunch =
   | {
@@ -96,8 +96,7 @@ export type HarnessLaunch =
       readonly kind: "executable"
       readonly command: string
       readonly args: ReadonlyArray<string>
-      /// Extra environment merged over the resolved shell env when spawning
-      /// the adapter (user-defined custom harnesses). Account env still wins.
+      /// Extra environment merged over the resolved shell env when spawning.
       readonly env?: Readonly<Record<string, string>>
     }
 
@@ -217,15 +216,14 @@ export interface HarnessDefinition {
   readonly name: string
   readonly symbolName: string
   readonly detectBinaries: ReadonlyArray<string>
-  /// Extra executables required by an ACP adapter, in addition to its own binary.
+  /// Additional executables required by a provider.
   readonly requiredBinaries?: ReadonlyArray<string>
   /// Absolute paths probed when no detect binary is on PATH — CLIs bundled
   /// inside desktop apps (a leading `~/` expands via env.HOME). Lets users
   /// who installed the app but never the CLI still run the harness.
   readonly fallbackPaths?: ReadonlyArray<string>
   readonly provider: ProviderId
-  /// Launch spec for the ACP provider's adapter process; native providers
-  /// (claude/codex) drive the detected binary directly and omit it.
+  /// Optional launch spec for externally supplied definitions.
   readonly launch?: HarnessLaunch
   /// When set, the harness is reported unavailable with this reason and
   /// sessions cannot be created — used to pull a known-broken integration
@@ -344,9 +342,8 @@ export interface CreatedAgentSession {
 export interface LoadedAgentSession {
   readonly sessionId: string
   readonly handle: AgentSessionHandle
-  /// Current session-specific configuration discovered while resuming. Older
-  /// ACP adapters may not return it, in which case callers fall back to the
-  /// harness capability catalog.
+  /// Current session-specific configuration discovered while resuming.
+  /// Providers without it fall back to the harness capability catalog.
   readonly metadata?: AgentSessionMetadata
 }
 
@@ -382,8 +379,7 @@ export interface AgentProvider {
   ) => Effect.Effect<LoadedAgentSession, AgentRuntimeError>
   /// Sessions from the harness's own on-disk store (run before/outside
   /// Codevisor) — powers onboarding's workspace suggestions and "import
-  /// existing chats". Absent when the harness has no native store to scan
-  /// (generic ACP adapters).
+  /// existing chats". Absent when the harness has no native store to scan.
   readonly listAgentSessions?: (
     definition: HarnessDefinition,
     account?: HarnessAccountContext

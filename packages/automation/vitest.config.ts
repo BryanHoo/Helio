@@ -11,6 +11,8 @@ import { defineConfig } from "vitest/config"
 // and every tool-definition table) stay at 100%.
 export default defineConfig({
   test: {
+    // 只运行源码测试，避免 tsc 产出的 dist 测试重复执行。
+    include: ["src/**/*.test.ts"],
     // Each worker can launch Chromium and QuickJS alongside the other
     // packages' suites. Bound this fan-out without serializing the tests.
     maxWorkers: 4,

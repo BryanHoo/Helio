@@ -52,9 +52,8 @@ export const withoutBuiltinCollisions = (
 /// dispatcher that keeps a session's sink observing events in order.
 export const makeAgentRuntimeCore = (config: AgentRuntimeConfig) => {
   // Effective catalog: builtins first, then injected user-defined entries.
-  // Both are mutable state: setExtraHarnesses swaps them live (the
-  // custom-harness PUT route), so every internal consumer reads them lazily
-  // rather than capturing.
+  // Injected definitions can change after construction; consumers read
+  // the current catalog instead of capturing a stale snapshot.
   const extraHarnesses = withoutBuiltinCollisions(config.extraHarnesses ?? [])
   const state: AgentRuntimeState = {
     catalog: extraHarnesses.length === 0 ? harnessCatalog : [...harnessCatalog, ...extraHarnesses],

@@ -126,23 +126,6 @@ export const HarnessBundledApp = Schema.Struct({
 })
 export type HarnessBundledApp = typeof HarnessBundledApp.Type
 
-export const CustomHarnessSpec = Schema.Struct({
-  id: Schema.String,
-  name: Schema.String,
-  command: Schema.String,
-  args: Schema.optional(Schema.Array(Schema.String)),
-  env: Schema.optional(Schema.Record(Schema.String, Schema.String))
-})
-export type CustomHarnessSpec = typeof CustomHarnessSpec.Type
-
-export const CustomHarnessTestResult = Schema.Struct({
-  ok: Schema.Boolean,
-  agentName: Schema.optional(Schema.String),
-  protocolVersion: Schema.optional(Schema.Number),
-  error: Schema.optional(Schema.String)
-})
-export type CustomHarnessTestResult = typeof CustomHarnessTestResult.Type
-
 export const HarnessPreference = Schema.Struct({
   enabled: Schema.optional(Schema.Boolean),
   installed: Schema.optional(Schema.Boolean)

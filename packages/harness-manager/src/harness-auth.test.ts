@@ -2,7 +2,11 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { harnessCatalog, type AgentRuntimeService } from "@codevisor/agent-runtime"
+import {
+  harnessCatalog,
+  type AgentRuntimeService,
+  type HarnessDefinition
+} from "@codevisor/agent-runtime"
 import type { Harness } from "@codevisor/api"
 import { makeDatabase, type CodevisorDatabaseService } from "@codevisor/db"
 import type { TerminalManagerService } from "@codevisor/terminal"
@@ -12,6 +16,15 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { makeHarnessAuthManager } from "./harness-auth.js"
 
 const run = <A, E>(effect: Effect.Effect<A, E>): Promise<A> => Effect.runPromise(effect)
+
+// 旧账户行为使用测试专属定义，避免把旧代理重新放进内置目录。
+const legacyFixture = (id: string): HarnessDefinition => ({
+  ...harnessCatalog[0]!,
+  id,
+  name: id,
+  provider: "codex",
+  symbolName: "terminal"
+})
 
 const directories: string[] = []
 const databases: CodevisorDatabaseService[] = []
@@ -65,12 +78,13 @@ describe("Pi harness authentication", () => {
     const terminal = {} as TerminalManagerService
     const manager = makeHarnessAuthManager({
       agents,
+      catalog: [...harnessCatalog, legacyFixture("pi")],
       dataDir: directory,
       db,
       terminal,
       resolveEnv: () => Promise.resolve({ HOME: directory })
     })
-    const definition = harnessCatalog.find((candidate) => candidate.id === "pi")!
+    const definition = legacyFixture("pi")
     const harness: Harness = {
       id: definition.id,
       name: definition.name,
@@ -199,6 +213,7 @@ describe("harness authentication refresh", () => {
     )
     const manager = makeHarnessAuthManager({
       agents: { probeHarnessAuth } as unknown as AgentRuntimeService,
+      catalog: [...harnessCatalog, legacyFixture("pi"), legacyFixture("gemini")],
       dataDir: directory,
       db,
       terminal: {} as TerminalManagerService,
@@ -253,6 +268,7 @@ describe("harness authentication refresh", () => {
     )
     const manager = makeHarnessAuthManager({
       agents: { probeHarnessAuth } as unknown as AgentRuntimeService,
+      catalog: [...harnessCatalog, legacyFixture("opencode")],
       dataDir: directory,
       db,
       terminal: {} as TerminalManagerService,
@@ -279,51 +295,6 @@ describe("harness authentication refresh", () => {
       authState: "error",
       detail: "ACP initialize timed out after 10000ms"
     })
-  })
-})
-
-describe("OpenCode profile authentication", () => {
-  it("creates managed profiles with isolated XDG directories", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "codevisor-opencode-profile-"))
-    directories.push(directory)
-    const db = await run(
-      makeDatabase({ filename: join(directory, "codevisor.sqlite"), serverId: "test" })
-    )
-    databases.push(db)
-    const probeHarnessAuth = vi.fn(() =>
-      Effect.succeed({
-        state: "authenticated" as const,
-        methods: [],
-        canLogout: false
-      })
-    )
-    const manager = makeHarnessAuthManager({
-      agents: { probeHarnessAuth } as unknown as AgentRuntimeService,
-      dataDir: directory,
-      db,
-      terminal: {} as TerminalManagerService,
-      resolveEnv: () =>
-        Promise.resolve({ HOME: directory, OPENCODE_AUTH_CONTENT: '{"openai":{"type":"api"}}' })
-    })
-
-    const account = await manager.createAccount("opencode", "Work")
-    const context = await manager.accountContext(account.id)
-    const profile = join(directory, "harness-profiles", "opencode", account.id)
-    expect(context).toMatchObject({
-      id: account.id,
-      profileKind: "managed",
-      profilePath: profile,
-      env: {
-        XDG_DATA_HOME: join(profile, "data"),
-        XDG_CONFIG_HOME: join(profile, "config"),
-        XDG_STATE_HOME: join(profile, "state"),
-        XDG_CACHE_HOME: join(profile, "cache")
-      }
-    })
-    expect(probeHarnessAuth).toHaveBeenCalledWith(
-      "opencode",
-      expect.objectContaining({ id: account.id, profilePath: profile })
-    )
   })
 })
 

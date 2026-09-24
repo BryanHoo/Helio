@@ -20,7 +20,7 @@ public extension HarnessFleet {
   static func settings(_ sync: ConfigSync, includingUninstalled: Bool = false) -> [Setting] {
     _ = sync.revisionsByNamespace["harnesses"]
     return sync.entries(namespace: "harnesses").compactMap { entry in
-      guard entry.deleted != true, !entry.key.hasPrefix("custom:"),
+      guard entry.deleted != true, HarnessRegistry.builtin.contains(where: { $0.id == entry.key }),
         case .object(let fields) = entry.value,
         case .bool(let enabled) = fields["enabled"],
         case .bool(let installed) = fields["installed"],
@@ -51,7 +51,10 @@ public extension HarnessFleet {
   static func seed(from harnesses: [ServerHarness], in sync: ConfigSync) -> [String] {
     let authored = Set(settings(sync, includingUninstalled: true).map(\.id))
     var added: [String] = []
-    for harness in harnesses where harness.isReady && harness.isDesiredEnabled {
+    for harness in harnesses
+    where harness.isReady && harness.isDesiredEnabled
+      && HarnessRegistry.builtin.contains(where: { $0.id == harness.id })
+    {
       guard !authored.contains(harness.id) else { continue }
       set(
         Setting(

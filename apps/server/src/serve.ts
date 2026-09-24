@@ -3,12 +3,9 @@ import { hostname } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { promisify } from "node:util"
 
-import { makeAcpProvider } from "@codevisor/adapter-acp"
 import { makeClaudeProvider } from "@codevisor/adapter-claude"
 import { makeCodexProvider } from "@codevisor/adapter-codex"
-import { makeCursorProvider } from "@codevisor/adapter-cursor"
-import { makeGrokBuildProvider } from "@codevisor/adapter-grok-build"
-import { makeAgentRuntime, resolveShellEnv } from "@codevisor/agent-runtime"
+import { makeAgentRuntime, resolveShellEnv, type ProviderFactory } from "@codevisor/agent-runtime"
 import type { DataUpgradeProgress } from "@codevisor/api"
 import {
   makeAttachmentStore,
@@ -18,8 +15,6 @@ import {
   worktreesRoot
 } from "@codevisor/db"
 import { credentialFerrySources } from "@codevisor/harness-manager"
-import { loadCustomHarnesses } from "@codevisor/harness-manager"
-import type { CustomHarnessLoadResult } from "@codevisor/harness-manager"
 import { makeHarnessLifecycleManager } from "@codevisor/harness-manager"
 import { makeHarnessAuthManager } from "@codevisor/harness-manager"
 import { makeMcpManager, makeNativeMcpManager } from "@codevisor/mcp"
@@ -41,8 +36,7 @@ import {
 } from "./boot-listener.js"
 import { makeActiveWorkSleepInhibitor } from "./infra/active-work-sleep-inhibitor.js"
 import { makeCloudServerControl } from "./infra/cloud-bridge.js"
-import { makeCustomHarnessStore } from "./infra/custom-harness-store.js"
-import { canonicalDatabasePaths, codevisorRoot, resolveServerDataLayout } from "./infra/data-dir.js"
+import { canonicalDatabasePaths, resolveServerDataLayout } from "./infra/data-dir.js"
 import { migrateLegacyLayout, migrateTmpDataDir } from "./infra/legacy-layout.js"
 import { migrateLinuxDataLayout } from "./infra/linux-data-migration.js"
 import { acquireServerLease, type ServerLease } from "./infra/server-lease.js"
@@ -53,7 +47,6 @@ import {
   stabilizeServerWorkingDirectory,
   failureMessage,
   initializeOptionalServerFeature,
-  initializeOptionalServerFeatureAsync,
   writeDataUpgradeStatus,
   parseProcessId,
   monitorAppOwner,
@@ -77,6 +70,12 @@ export {
   stabilizeServerWorkingDirectory
 } from "./serve-boot.js"
 export type { BootScopedDataUpgradeProgress } from "./serve-boot.js"
+
+// 服务仅注册两种内置适配器；通用会话运行时继续由 agent-runtime 负责。
+export const serverAgentProviders: ReadonlyArray<ProviderFactory> = [
+  (env, context) => makeClaudeProvider(env, context),
+  (env, context) => makeCodexProvider(env, context)
+]
 
 /// Boots the Codevisor server from parsed `--flag value` arguments. Shared by
 /// the `codevisor-server` daemon bin and the `codevisor serve` CLI subcommand.
@@ -250,35 +249,9 @@ export const runServe = (
     // checkout hooks and filters can find user-installed tools such as
     // Homebrew's git-lfs.
     const gitEnvironment = resolveShellEnv()
-    // User-defined custom ACP harnesses (~/.codevisor/harnesses.json) merge
-    // into the catalog before anything consumes it. Bad entries are skipped
-    // with a warning — a hand-edited file must never block server boot.
-    const customHarnesses =
-      (yield* Effect.promise(() =>
-        initializeOptionalServerFeatureAsync("Custom harnesses", () =>
-          loadCustomHarnesses(codevisorRoot())
-        )
-      )) ??
-      ({
-        definitions: [],
-        specs: [],
-        warnings: []
-      } satisfies CustomHarnessLoadResult)
-    for (const warning of customHarnesses.warnings) {
-      console.error(`Custom harnesses: ${warning}`)
-    }
     const agents = makeAgentRuntime({
       ...(backgroundTerminals === undefined ? {} : { backgroundTerminals }),
-      ...(customHarnesses.definitions.length === 0
-        ? {}
-        : { extraHarnesses: customHarnesses.definitions }),
-      providerFactories: [
-        (env, context) => makeAcpProvider(env, context),
-        (env, context) => makeClaudeProvider(env, context),
-        (env, context) => makeCodexProvider(env, context),
-        (env, context) => makeCursorProvider(env, context),
-        (env, context) => makeGrokBuildProvider(env, context)
-      ],
+      providerFactories: serverAgentProviders,
       resolveEnv: () => resolveShellEnv()
     })
     const sessionActivity = makeActiveWorkSleepInhibitor()
@@ -371,7 +344,6 @@ export const runServe = (
               mcp
             })
           )
-    const customHarnessStore = makeCustomHarnessStore(agents)
     const lifecycle = initializeOptionalServerFeature("Harness lifecycle", () => {
       const manager = makeHarnessLifecycleManager({
         agents,
@@ -396,7 +368,6 @@ export const runServe = (
       {
         agents,
         attachments,
-        customHarnesses: customHarnessStore,
         db,
         resolveGitEnvironment: () => gitEnvironment,
         terminal,

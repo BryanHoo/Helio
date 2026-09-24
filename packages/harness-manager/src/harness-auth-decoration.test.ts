@@ -2,7 +2,11 @@ import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { harnessCatalog, type AgentRuntimeService } from "@codevisor/agent-runtime"
+import {
+  harnessCatalog,
+  type AgentRuntimeService,
+  type HarnessDefinition
+} from "@codevisor/agent-runtime"
 import type { Harness } from "@codevisor/api"
 import { makeDatabase, type CodevisorDatabaseService } from "@codevisor/db"
 import type { TerminalManagerService } from "@codevisor/terminal"
@@ -12,6 +16,15 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { makeHarnessAuthManager } from "./harness-auth.js"
 
 const run = <A, E>(effect: Effect.Effect<A, E>): Promise<A> => Effect.runPromise(effect)
+
+// 历史账户仅注入测试目录，产品内置目录仍只有 Claude 与 Codex。
+const geminiFixture: HarnessDefinition = {
+  ...harnessCatalog[0]!,
+  id: "gemini",
+  name: "Gemini CLI",
+  provider: "codex",
+  symbolName: "diamond"
+}
 
 const directories: string[] = []
 const databases: CodevisorDatabaseService[] = []
@@ -97,12 +110,13 @@ describe("harness authentication decoration", () => {
     )
     const manager = makeHarnessAuthManager({
       agents: { probeHarnessAuth } as unknown as AgentRuntimeService,
+      catalog: [...harnessCatalog, geminiFixture],
       dataDir: directory,
       db,
       terminal: {} as TerminalManagerService,
       resolveEnv: () => Promise.resolve({ HOME: directory })
     })
-    const definition = harnessCatalog.find((candidate) => candidate.id === "gemini")!
+    const definition = geminiFixture
     const harness: Harness = {
       id: definition.id,
       name: definition.name,
@@ -161,12 +175,13 @@ describe("harness authentication decoration", () => {
     )
     const manager = makeHarnessAuthManager({
       agents: { probeHarnessAuth } as unknown as AgentRuntimeService,
+      catalog: [...harnessCatalog, geminiFixture],
       dataDir: directory,
       db,
       terminal: {} as TerminalManagerService,
       resolveEnv: () => Promise.resolve({ HOME: directory })
     })
-    const definition = harnessCatalog.find((candidate) => candidate.id === "gemini")!
+    const definition = geminiFixture
     const harness: Harness = {
       id: definition.id,
       name: definition.name,

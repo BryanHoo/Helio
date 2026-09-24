@@ -6,11 +6,13 @@ import { defineConfig } from "vitest/config"
 // feeds; the OpenCode
 // server module drives a real `opencode serve` process (rationale carried
 // over from the repo root config when these lived in apps/server). Their
-// focused tests still run; custom-harnesses and credential-ferry stay at
+// focused tests still run; credential-ferry stays at
 // 100%. The *-test-support module is shared test
 // scaffolding, not product code.
 export default defineConfig({
   test: {
+    // 只运行源码测试，避免 tsc 产出的 dist 测试重复执行。
+    include: ["src/**/*.test.ts"],
     // These tests spawn fake harness CLIs and auth servers per test; on a loaded CI runner — where every
     // package's suite runs in parallel — they need well past vitest's 5s default.
     testTimeout: 30_000,

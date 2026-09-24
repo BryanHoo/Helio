@@ -2,20 +2,14 @@ import { fileURLToPath } from "node:url"
 
 import { defineConfig } from "vitest/config"
 
-// The runtime's integration tests live in @codevisor/adapter-acp
-// (runtime-acp.test.ts): they exercise the runtime through real adapters, and
-// the adapters depend on this package — the tests can't live here without a
-// package cycle. This config runs that suite as part of this package's test
-// run, with workspace imports aliased back to sources so coverage attributes
-// to this package's files (imports normally resolve to dist, which coverage
-// excludes).
+// Adapter integration tests exercise the runtime through Claude and Codex.
+// Source aliases keep runtime coverage attributed to this package.
 const src = (path: string): string => fileURLToPath(new URL(path, import.meta.url))
 
 export default defineConfig({
   resolve: {
     alias: {
       "@codevisor/agent-runtime": src("./src/index.ts"),
-      "@codevisor/adapter-acp": src("../adapter-acp/src/index.ts"),
       "@codevisor/adapter-claude": src("../adapter-claude/src/index.ts"),
       "@codevisor/adapter-codex": src("../adapter-codex/src/index.ts")
     }
@@ -23,7 +17,6 @@ export default defineConfig({
   test: {
     include: [
       "src/**/*.test.ts",
-      "../adapter-acp/src/*.test.ts",
       "../adapter-claude/src/*.test.ts",
       "../adapter-codex/src/*.test.ts"
     ],

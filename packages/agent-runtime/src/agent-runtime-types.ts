@@ -59,20 +59,15 @@ export interface AgentRuntimeConfig {
   /// defaults to spawning the binary with the resolved environment. Exposed
   /// for tests.
   readonly readVersionOutput?: (path: string, env: NodeJS.ProcessEnv) => Promise<string>
-  /// Additional harness definitions merged after the builtin catalog —
-  /// user-defined custom ACP harnesses. Entries whose id collides with a
-  /// builtin are dropped (the builtin wins); callers validate ids upstream.
+  /// Additional definitions for embedded runtimes. Builtin ids always win.
   readonly extraHarnesses?: ReadonlyArray<HarnessDefinition>
 }
 
 export interface AgentRuntimeService {
-  /// The effective harness catalog: builtins plus the current user-defined
-  /// custom entries. A live view — read it lazily, don't capture it, so
-  /// `setExtraHarnesses` swaps are observed. Consumers (harness auth,
-  /// lifecycle) read definitions from here instead of the static
-  /// `harnessCatalog` export so custom entries behave uniformly.
+  /// The effective catalog, including definitions injected by embedded runtimes.
+  /// Consumers read it lazily to observe `setExtraHarnesses` swaps.
   readonly catalog: ReadonlyArray<HarnessDefinition>
-  /// Replaces the injected custom entries (the custom-harness PUT route).
+  /// Replaces injected entries.
   /// Colliding ids are dropped exactly like the constructor path. Existing
   /// sessions on removed harnesses keep running; new lookups fail.
   readonly setExtraHarnesses: (definitions: ReadonlyArray<HarnessDefinition>) => void

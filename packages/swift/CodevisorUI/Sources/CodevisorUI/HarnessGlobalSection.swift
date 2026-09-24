@@ -10,23 +10,19 @@ public struct HarnessGlobalSection<Icon: View>: View {
   private let icon: (String, String) -> Icon
   private let onAccounts: (HarnessFleet.Setting, _ startsSignIn: Bool) -> Void
   private let onSignIn: (_ machineId: String, _ harnessId: String, _ startsSignIn: Bool) -> Void
-  private let onEditCustom: ((HarnessFleet.Setting) -> Void)?
 
   /// - Parameters:
   ///   - onAccounts: presents the fleet-shared accounts sheet for a harness.
   ///   - onSignIn: presents machine-bound accounts / sign-in for one machine.
-  ///   - onEditCustom: edits a custom harness definition; nil hides Edit….
   public init(
     model: HarnessGlobalModel,
     onAccounts: @escaping (HarnessFleet.Setting, _ startsSignIn: Bool) -> Void,
     onSignIn: @escaping (_ machineId: String, _ harnessId: String, _ startsSignIn: Bool) -> Void,
-    onEditCustom: ((HarnessFleet.Setting) -> Void)? = nil,
     @ViewBuilder icon: @escaping (String, String) -> Icon
   ) {
     self.model = model
     self.onAccounts = onAccounts
     self.onSignIn = onSignIn
-    self.onEditCustom = onEditCustom
     self.icon = icon
   }
 
@@ -36,7 +32,7 @@ public struct HarnessGlobalSection<Icon: View>: View {
       ForEach(HarnessFleet.settings(environment.configSync, catalog: model.catalog)) { setting in
         HarnessFleetRow(
           setting: setting, machines: machines, model: model,
-          onAccounts: onAccounts, onSignIn: onSignIn, onEditCustom: onEditCustom
+          onAccounts: onAccounts, onSignIn: onSignIn
         ) {
           icon(setting.id, setting.symbolName)
         }
@@ -73,7 +69,6 @@ private struct HarnessFleetRow<Icon: View>: View {
   let model: HarnessGlobalModel
   let onAccounts: (HarnessFleet.Setting, _ startsSignIn: Bool) -> Void
   let onSignIn: (_ machineId: String, _ harnessId: String, _ startsSignIn: Bool) -> Void
-  let onEditCustom: ((HarnessFleet.Setting) -> Void)?
   @ViewBuilder let icon: () -> Icon
 
   var body: some View {
@@ -132,9 +127,6 @@ private struct HarnessFleetRow<Icon: View>: View {
         }
       }
     } actions: {
-      if let onEditCustom, model.customSpecs[setting.id] != nil {
-        Button("Edit…", systemImage: "pencil") { onEditCustom(setting) }
-      }
       Button("Uninstall…", role: .destructive) { model.uninstall = setting }
     }
     .onChange(of: hasAccount) { had, has in

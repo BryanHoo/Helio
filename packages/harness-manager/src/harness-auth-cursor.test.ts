@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import type { AgentRuntimeService } from "@codevisor/agent-runtime"
+import { harnessCatalog, type AgentRuntimeService } from "@codevisor/agent-runtime"
 import { makeDatabase, type CodevisorDatabaseService } from "@codevisor/db"
 import type { TerminalManagerService } from "@codevisor/terminal"
 import { Effect } from "effect"
@@ -49,6 +49,8 @@ describe("Cursor authentication probing", () => {
     )
     const manager = makeHarnessAuthManager({
       agents: {} as AgentRuntimeService,
+      // 仅在测试里恢复历史账户定义，不扩充产品内置代理目录。
+      catalog: [{ ...harnessCatalog[0]!, id: "cursor", detectBinaries: ["cursor-agent"] }],
       dataDir: directory,
       db,
       terminal: {} as TerminalManagerService,

@@ -8,9 +8,8 @@ import Testing
 struct HarnessRegistryTests {
   @Test("Every built-in harness has a name and resolves to itself")
   func builtinNames() {
+    #expect(HarnessRegistry.builtin.map(\.id) == ["claude-code", "codex"])
     for descriptor in HarnessRegistry.builtin {
-      // Some brands style their name like their id (`goose`); that's the
-      // vendor's spelling, not a missing name.
       #expect(!descriptor.displayName.isEmpty)
       #expect(HarnessRegistry.descriptor(for: descriptor.id) == descriptor)
     }
@@ -34,41 +33,25 @@ struct HarnessRegistryTests {
     #expect(HarnessRegistry.displayName(for: "claude-code", reported: nil) == "Claude Code")
   }
 
-  @Test("Account scope answers every question the screens used to keep lists for")
+  @Test("Only supported harnesses have fleet account rows")
   func accountScopes() {
-    // Server-side shared account rows: one RPC, sign-in hosted on a machine.
-    for id in ["claude-code", "codex", "grok-build"] {
+    for id in ["claude-code", "codex"] {
       let descriptor = HarnessRegistry.descriptor(for: id)
       #expect(descriptor.usesFleetAccountRows)
       #expect(descriptor.sharesFleetAccounts)
       #expect(descriptor.fleetSignInNeedsMachine)
     }
-    // Replica credentials with OAuth: fleet-shared, assembled client-side,
-    // browser flows need a machine.
-    for id in ["opencode", "pi"] {
-      let descriptor = HarnessRegistry.descriptor(for: id)
-      #expect(!descriptor.usesFleetAccountRows)
-      #expect(descriptor.sharesFleetAccounts)
-      #expect(descriptor.fleetSignInNeedsMachine)
-    }
-    // Replica credentials only: nothing to host.
-    let devin = HarnessRegistry.descriptor(for: "devin")
-    #expect(devin.sharesFleetAccounts)
-    #expect(!devin.fleetSignInNeedsMachine)
-    // Machine-bound.
-    #expect(!HarnessRegistry.descriptor(for: "cursor").sharesFleetAccounts)
-    #expect(HarnessRowState.sharesFleetAccounts(harnessId: "opencode"))
+    #expect(!HarnessRegistry.descriptor(for: "opencode").sharesFleetAccounts)
+    #expect(!HarnessRowState.sharesFleetAccounts(harnessId: "opencode"))
     #expect(!HarnessRowState.sharesFleetAccounts(harnessId: "cursor"))
-    #expect(HarnessRegistry.fleetHostedSignInIds.sorted() == ["claude-code", "codex", "grok-build", "opencode", "pi"])
+    #expect(HarnessRegistry.fleetHostedSignInIds.sorted() == ["claude-code", "codex"])
   }
 
   @Test("Multiple accounts are a per-harness fact")
   func multipleAccounts() {
     #expect(HarnessRegistry.descriptor(for: "claude-code").supportsMultipleAccounts)
     #expect(HarnessRegistry.descriptor(for: "codex").supportsMultipleAccounts)
-    #expect(HarnessRegistry.descriptor(for: "opencode").supportsMultipleAccounts)
-    #expect(!HarnessRegistry.descriptor(for: "grok-build").supportsMultipleAccounts)
-    #expect(!HarnessRegistry.descriptor(for: "pi").supportsMultipleAccounts)
+    #expect(!HarnessRegistry.descriptor(for: "opencode").supportsMultipleAccounts)
   }
 
   @Test("Catalog rows without a name render the registry's name, not the id")
@@ -88,7 +71,7 @@ struct HarnessRegistryTests {
           timestamp: stamp),
       ])
     let settings = HarnessFleet.settings(sync)
-    #expect(settings.map(\.name) == ["Claude Code", "Codex", "Some Acp Bot"])
+    #expect(settings.map(\.name) == ["Claude Code", "Codex"])
     #expect(settings.first { $0.id == "claude-code" }?.symbolName == "sparkle")
   }
 

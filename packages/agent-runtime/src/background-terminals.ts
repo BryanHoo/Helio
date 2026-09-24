@@ -1,7 +1,7 @@
 /// Server-owned terminals for agent background processes.
 ///
-/// Providers register long-running agent processes (backgrounded shells, ACP
-/// client terminals, mirrored codex commands) under a stable *terminal key*;
+/// Providers register long-running agent processes (backgrounded shells,
+/// mirrored codex commands) under a stable *terminal key*;
 /// the host application backs the registry with its terminal manager so
 /// clients can attach to the process's live output as a regular terminal.
 /// The key rides on `BackgroundTask.terminalKey` wire snapshots, which is how
@@ -38,7 +38,7 @@ export interface BackgroundTerminalIntegration {
   /// Claude provider then leaves background Bash untouched).
   readonly wrapCommand?: (key: string, command: string) => string
   /// How long a command must stay alive before it is promoted to a
-  /// background-task terminal tab (ACP/codex providers — commands there have
+  /// background-task terminal tab (native providers — commands there have
   /// no explicit "background" flag, so liveness is the signal). Kept short:
   /// quick commands (git status, rg) finish well under it, while anything a
   /// user would want to watch shows up near-realtime. Providers with an

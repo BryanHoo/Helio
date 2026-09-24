@@ -102,15 +102,16 @@ struct HarnessFleetStatusTests {
           key: "codex", value: .object(["name": .string("Codex"), "enabled": .bool(true), "installed": .bool(true)]),
           timestamp: stamp),
         ServerSyncEntry(
-          key: "claude",
+          key: "claude-code",
           value: .object([
-            "name": .string("Claude"), "enabled": .bool(false), "installed": .bool(false), "uninstall": .bool(true),
+            "name": .string("Claude Code"), "enabled": .bool(false), "installed": .bool(false),
+            "uninstall": .bool(true),
           ]), timestamp: stamp),
       ])
     let settings = HarnessFleet.settings(sync)
     #expect(settings.map(\.id) == ["codex"])
     #expect(settings[0].enabled)
-    #expect(HarnessFleet.settings(sync, includingUninstalled: true).map(\.id) == ["claude", "codex"])
+    #expect(HarnessFleet.settings(sync, includingUninstalled: true).map(\.id) == ["claude-code", "codex"])
   }
 
   @Test("Uninstall hides a harness while retaining its instruction for offline machines; Add restores it")

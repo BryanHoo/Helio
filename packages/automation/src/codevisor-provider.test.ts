@@ -37,7 +37,7 @@ afterEach(() => {
 describe("Codevisor MCP provider", () => {
   it("publishes a unique, resource-oriented tool contract", async () => {
     const names = codevisorTools.map((tool) => tool.name)
-    expect(names).toHaveLength(153)
+    expect(names).toHaveLength(150)
     expect(new Set(names).size).toBe(names.length)
     expect(names).toEqual(
       expect.arrayContaining([
@@ -163,7 +163,10 @@ describe("Codevisor MCP provider", () => {
       serverUrl: "https://cloud.example",
       sessionToken: "cloud-token"
     })
-    await provider.invoke(callingContext, "harnesses.custom_replace", { body: [] })
+    await provider.invoke(callingContext, "harnesses.update_settings", {
+      harnessId: "codex",
+      enabled: false
+    })
     await provider.invoke(callingContext, "sessions.create", {
       id: "new-session",
       harnessId: "codex"
@@ -191,7 +194,7 @@ describe("Codevisor MCP provider", () => {
       serverUrl: "https://cloud.example",
       sessionToken: "cloud-token"
     })
-    expect(JSON.parse(requests[1]!.init.body as string)).toEqual([])
+    expect(JSON.parse(requests[1]!.init.body as string)).toEqual({ enabled: false })
     expect(JSON.parse(requests[2]!.init.body as string)).toMatchObject({
       id: "new-session",
       projectId: "calling project/id",

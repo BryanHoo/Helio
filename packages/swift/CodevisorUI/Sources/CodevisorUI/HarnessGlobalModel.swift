@@ -1,4 +1,3 @@
-import ACPKit
 import CodevisorCore
 import Foundation
 import Observation
@@ -7,7 +6,6 @@ import Observation
 @MainActor @Observable
 public final class HarnessGlobalModel {
   var catalog: [ServerHarness] = []
-  var customSpecs: [String: ServerCustomHarnessSpec] = [:]
   var showsPicker = false
   var uninstall: HarnessFleet.Setting?
   var isLoading = true
@@ -37,12 +35,6 @@ public final class HarnessGlobalModel {
   }
 
   func add(_ harness: ServerHarness, in environment: AppEnvironment) {
-    if let spec = customSpecs[harness.id],
-      let data = try? JSONEncoder().encode(spec),
-      let value = try? JSONDecoder().decode(JSONValue.self, from: data)
-    {
-      environment.configSync.set(namespace: "harnesses", key: "custom:\(harness.id)", value: value)
-    }
     let setting = HarnessFleet.Setting(
       id: harness.id, name: harness.name,
       symbolName: harness.symbolName, enabled: true, installed: true)
@@ -59,9 +51,6 @@ public final class HarnessGlobalModel {
       guard let harnesses = try? await client.listHarnesses() else { continue }
       loaded = true
       for harness in harnesses { found[harness.id] = harness }
-      if harnesses.contains(where: { $0.source == "custom" }), let specs = try? await client.listCustomHarnesses() {
-        for spec in specs { customSpecs[spec.id] = spec }
-      }
     }
     guard !Task.isCancelled else { return }
     catalog = found.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }

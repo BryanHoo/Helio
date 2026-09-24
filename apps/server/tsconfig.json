@@ -8,19 +8,10 @@
   "include": ["src/**/*.ts"],
   "references": [
     {
-      "path": "../../packages/adapter-acp"
-    },
-    {
       "path": "../../packages/adapter-claude"
     },
     {
       "path": "../../packages/adapter-codex"
-    },
-    {
-      "path": "../../packages/adapter-cursor"
-    },
-    {
-      "path": "../../packages/adapter-grok-build"
     },
     {
       "path": "../../packages/agent-runtime"

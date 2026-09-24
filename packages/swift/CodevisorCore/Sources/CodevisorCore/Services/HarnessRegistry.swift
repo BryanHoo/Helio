@@ -73,32 +73,6 @@ public enum HarnessRegistry {
     .init(
       id: "codex", displayName: "Codex", symbolName: "chevron.left.forwardslash.chevron.right",
       accountScope: .fleetAccounts, supportsMultipleAccounts: true),
-    .init(id: "grok-build", displayName: "Grok Build", symbolName: "x.square", accountScope: .fleetAccounts),
-    .init(
-      id: "opencode", displayName: "OpenCode", symbolName: "curlybraces",
-      accountScope: .fleetCredentials(signInNeedsMachine: true), supportsMultipleAccounts: true,
-      usesProviderBrowser: true),
-    .init(id: "pi", displayName: "Pi", accountScope: .fleetCredentials(signInNeedsMachine: true)),
-    .init(id: "devin", displayName: "Devin", accountScope: .fleetCredentials(signInNeedsMachine: false)),
-    .init(id: "cursor", displayName: "Cursor"),
-    .init(id: "gemini", displayName: "Gemini CLI", symbolName: "diamond"),
-    .init(id: "goose", displayName: "goose", symbolName: "bird"),
-    .init(id: "amp", displayName: "Amp", symbolName: "bolt"),
-    .init(id: "blackbox", displayName: "Blackbox AI", symbolName: "shippingbox"),
-    .init(id: "cortex-code", displayName: "Cortex Code", symbolName: "snowflake"),
-    .init(id: "minimax-code", displayName: "MiniMax Code"),
-    .init(id: "nova", displayName: "Nova"),
-    .init(id: "sigit", displayName: "siGit Code"),
-    .init(id: "harn", displayName: "Harn"),
-    .init(id: "junie", displayName: "Junie", symbolName: "j.square"),
-    .init(id: "kimchi", displayName: "Kimchi"),
-    .init(id: "poolside", displayName: "Poolside", symbolName: "water.waves"),
-    .init(id: "stakpak", displayName: "Stakpak", symbolName: "shippingbox"),
-    .init(id: "mistral-vibe", displayName: "Mistral Vibe", symbolName: "m.square"),
-    .init(id: "vtcode", displayName: "VT Code", symbolName: "v.square"),
-    .init(id: "kiro", displayName: "Kiro CLI", symbolName: "k.square"),
-    .init(id: "openhands", displayName: "OpenHands", symbolName: "hand.raised"),
-    .init(id: "construct", displayName: "Construct", symbolName: "building.2"),
   ]
 
   private static let byId: [String: HarnessDescriptor] = Dictionary(

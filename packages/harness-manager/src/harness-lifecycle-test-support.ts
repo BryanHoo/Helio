@@ -55,9 +55,9 @@ export const agentsStub = (
 export const npmDefinition: HarnessDefinition = {
   detectBinaries: ["fake-cli"],
   id: "fake-cli",
-  launch: { args: ["acp"], command: "fake-cli", kind: "executable" },
+  launch: { args: [], command: "fake-cli", kind: "executable" },
   name: "Fake CLI",
-  provider: "acp",
+  provider: "codex",
   symbolName: "terminal",
   update: {
     sources: [
@@ -148,9 +148,9 @@ export const installableDefinition: HarnessDefinition = {
     { formula: "fake-cli", kind: "brew" },
     { kind: "npm", packageName: "fake-cli" }
   ],
-  launch: { args: ["acp"], command: "fake-cli", kind: "executable" },
+  launch: { args: [], command: "fake-cli", kind: "executable" },
   name: "Fake CLI",
-  provider: "acp",
+  provider: "codex",
   symbolName: "terminal",
   update: {
     sources: [
