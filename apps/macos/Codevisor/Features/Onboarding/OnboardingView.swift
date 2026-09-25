@@ -35,19 +35,15 @@ struct OnboardingView: View {
 
   /// Where the harness step stands. Distinguishes "the server isn't up
   /// yet / can't be reached" from "reachable, but nothing installed" — the
-  /// two used to collapse into a false "No harnesses found" — and the
-  /// fleet convergence that runs before the list may render.
+  /// two used to collapse into a false "No harnesses found".
   enum HarnessDetection: Equatable {
     case connecting
-    /// Pulling the account's shared state from its other machines. The
-    /// list waits: shown early, a second Mac looks exactly like a first.
-    case syncing
     case unreachable(String)
     case loaded
 
     var isSettled: Bool {
       switch self {
-      case .connecting, .syncing: false
+      case .connecting: false
       case .unreachable, .loaded: true
       }
     }

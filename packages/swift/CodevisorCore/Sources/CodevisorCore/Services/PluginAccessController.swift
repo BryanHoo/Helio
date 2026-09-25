@@ -4,30 +4,28 @@ import Observation
 @MainActor
 @Observable
 public final class PluginAccessController {
-  private let cloud: CloudAccountController
-  private let consentOutbox: PluginConsentOutbox
+  private let store: any PersistenceStore
+  private let preferencesKey = "pluginAccess.blockedPublishers"
   public let catalog: PluginCatalogClient
   private var currentPolicy: PluginAccessPolicy?
   public private(set) var revision = 0
   public private(set) var blockedPublishers: [String] = []
 
   public init(
-    cloud: CloudAccountController, store: any PersistenceStore = InMemoryStore(),
+    store: any PersistenceStore = InMemoryStore(),
     catalog: PluginCatalogClient = PluginCatalogClient()
   ) {
-    self.cloud = cloud
+    self.store = store
     self.catalog = catalog
-    self.consentOutbox = PluginConsentOutbox(store: store)
+    // 用户屏蔽名单只读写本机数据库，不需要账号会话。
+    self.blockedPublishers =
+      store.loadData(forKey: preferencesKey)
+      .flatMap { try? JSONDecoder().decode([String].self, from: $0) } ?? []
   }
 
   public func snapshot() async throws -> (PluginAccessPolicy, PluginPreferences) {
-    try? await syncConsent()
-    async let policyRequest = refreshPolicy()
-    async let preferencesData = cloud.pluginRequest(path: "/api/plugins/preferences")
-    let policy = try await policyRequest
-    let preferences = try await JSONDecoder().decode(PluginPreferences.self, from: preferencesData)
-    blockedPublishers = preferences.blockedPublishers.sorted()
-    return (policy, preferences)
+    let policy = try await refreshPolicy()
+    return (policy, PluginPreferences(blockedPublishers: blockedPublishers))
   }
 
   @discardableResult
@@ -71,36 +69,24 @@ public final class PluginAccessController {
       let pluginId: String; let consentKey: String; let metadata: PluginConsentMetadata; let noticeVersion = 1
     }
     let body = try JSONEncoder().encode(Consent(pluginId: pluginId, consentKey: consentKey, metadata: metadata))
-    try consentOutbox.record(key: "\(pluginId):\(consentKey)", scope: cloud.pluginConsentScope, body: body)
-    #if os(macOS)
-      // A cloud outage or a signed-out account must not prevent Mac installation.
-      try? await syncConsent()
-    #else
-      guard cloud.pluginConsentScope != nil else { throw PluginAccessError("Sign in to install plugins.") }
-      try await syncConsent()
-    #endif
+    // 保存每次安装所确认的条款；本地安装不依赖云端回执。
+    try store.saveData(body, forKey: "pluginConsent.\(pluginId).\(consentKey)")
     revision += 1
   }
 
-  public func syncConsent() async throws {
-    try await consentOutbox.flush(scope: cloud.pluginConsentScope) { [cloud] body in
-      _ = try await cloud.pluginRequest(path: "/api/plugins/consent", method: "POST", body: body)
-    }
-  }
-
   public func report(id: UUID, pluginId: String, name: String, reason: String, details: String) async throws {
-    let body = try JSONEncoder().encode([
-      "id": id.uuidString, "pluginId": pluginId, "pluginName": name, "reason": reason, "details": details,
-    ])
-    _ = try await cloud.pluginRequest(path: "/api/plugins/reports", method: "POST", body: body)
+    throw PluginAccessError("Plugin reporting requires an account service.")
   }
 
   public func setPublisherBlocked(_ publisher: String, blocked: Bool) async throws {
     guard !publisher.isEmpty, publisher.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }) else {
       throw PluginAccessError("This publisher could not be identified.")
     }
-    _ = try await cloud.pluginRequest(path: "/api/plugins/publishers/\(publisher)", method: blocked ? "PUT" : "DELETE")
-    if blocked { blockedPublishers.append(publisher) } else { blockedPublishers.removeAll { $0 == publisher } }
+    var updated = Set(blockedPublishers)
+    if blocked { updated.insert(publisher) } else { updated.remove(publisher) }
+    let sorted = updated.sorted()
+    try store.saveData(JSONEncoder().encode(sorted), forKey: preferencesKey)
+    blockedPublishers = sorted
     revision += 1
   }
 }

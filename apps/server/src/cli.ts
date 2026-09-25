@@ -14,7 +14,6 @@ import { NodeRuntime, NodeServices } from "@effect/platform-node"
 import { Effect, Option } from "effect"
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli"
 
-import { authLoginCommand } from "./cli/cloud-auth.js"
 import {
   pluginInstallCommand,
   pluginLinkCommand,
@@ -37,14 +36,7 @@ import {
   updateCommand,
   type CliDeps
 } from "./cli/support.js"
-import {
-  makeAuthCommand,
-  makeSyncCommand,
-  optionalString,
-  portFlag,
-  runPrompt,
-  syncConfigPrompt
-} from "./cli/wiring.js"
+import { makeSyncCommand, optionalString, portFlag, runPrompt } from "./cli/wiring.js"
 import { resolveDataDir, resolveLogsDir } from "./infra/data-dir.js"
 import { bundledVersion, runServe } from "./serve.js"
 
@@ -250,19 +242,7 @@ const makeSetupDeps = (): SetupDeps => ({
 
 const setup = Command.make("setup", { port: portFlag }, ({ port }) =>
   Effect.promise(async () => {
-    process.exitCode = await setupCommand(makeSetupDeps(), {
-      port: Option.getOrUndefined(port),
-      // The running server saves the credential and connects immediately;
-      // login succeeds only after the relay handshake completes.
-      cloudLogin: async () => {
-        const deps = makeDeps()
-        return authLoginCommand(deps, {
-          port: Option.getOrUndefined(port),
-          machineName: hostname(),
-          promptSyncConfig: syncConfigPrompt
-        })
-      }
-    })
+    process.exitCode = await setupCommand(makeSetupDeps(), { port: Option.getOrUndefined(port) })
   })
 ).pipe(
   Command.withDescription("Onboard this machine: pick connectivity and issue a connection token")
@@ -433,7 +413,6 @@ const plugin = Command.make("plugin").pipe(
   ])
 )
 
-const auth = makeAuthCommand(runCli)
 const sync = makeSyncCommand(runCli)
 
 const root = Command.make("codevisor").pipe(
@@ -442,7 +421,6 @@ const root = Command.make("codevisor").pipe(
     serve,
     setup,
     qr,
-    auth,
     plugin,
     start,
     stop,

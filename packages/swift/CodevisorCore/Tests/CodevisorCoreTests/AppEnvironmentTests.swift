@@ -6,6 +6,29 @@ import ACPKit
 @MainActor
 @Suite("AppEnvironment and harness services")
 struct AppEnvironmentTests {
+  @Test("本机启动不恢复旧远端机器，项目仍从本地仓库加载")
+  func localStartupIgnoresRemoteMachines() throws {
+    let store = InMemoryStore()
+    let remote = CodevisorMachine(
+      id: "remote-old", name: "Old machine",
+      baseURL: URL(string: "http://old.test:49361")!, kind: "remote")
+    try store.saveData(
+      JSONEncoder().encode(MachineRegistry(selectedMachineId: remote.id, remoteMachines: [remote])),
+      forKey: "machines")
+    let project = Project.fromFolder(URL(fileURLWithPath: "/tmp/local-startup-project"))
+    DefaultProjectRepository(store: store).save([project])
+    let environment = AppEnvironment(
+      projectRepository: DefaultProjectRepository(store: store),
+      sessionRepository: DefaultSessionRepository(store: store),
+      configCache: ConfigOptionCache(store: store),
+      settings: AppSettingsModel(store: store),
+      machineStore: store,
+      localServer: StubLocalServer())
+
+    #expect(environment.machines.allMachines.map(\.id) == [CodevisorMachine.local.id])
+    #expect(environment.projectList.projects.contains { $0.id == project.id })
+  }
+
   @Test("Debug builds use isolated development defaults")
   func debugVariantDefaults() {
     #if DEBUG

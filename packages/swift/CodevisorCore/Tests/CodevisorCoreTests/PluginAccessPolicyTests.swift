@@ -4,6 +4,19 @@ import Testing
 
 @Suite("iOS plugin access policy")
 struct PluginAccessPolicyTests {
+  @Test("本地发布者偏好在重新创建控制器后保留")
+  @MainActor
+  func localPublisherPreferencesPersist() async throws {
+    let store = InMemoryStore()
+    let first = PluginAccessController(store: store)
+    try await first.setPublisherBlocked("acme", blocked: true)
+
+    let restored = PluginAccessController(store: store)
+    #expect(restored.blockedPublishers == ["acme"])
+    try await restored.setPublisherBlocked("acme", blocked: false)
+    #expect(PluginAccessController(store: store).blockedPublishers.isEmpty)
+  }
+
   private func policy(_ fields: String = "") throws -> PluginAccessPolicy {
     let json = "{\"supportedAgeRating\":16,\"blocks\":[],\"ageRatings\":[]\(fields)}"
     return try JSONDecoder().decode(PluginAccessPolicy.self, from: Data(json.utf8))

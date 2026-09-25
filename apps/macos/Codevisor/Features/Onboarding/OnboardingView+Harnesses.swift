@@ -24,8 +24,6 @@ extension OnboardingView {
       switch detection {
       case .connecting:
         progress("Checking agents…")
-      case .syncing:
-        progress("Syncing your account…")
       case let .unreachable(message):
         VStack(spacing: 12) {
           Label {
@@ -112,8 +110,7 @@ extension OnboardingView {
   }
 
   /// Waits for the local server, loads this Mac's catalog with a short
-  /// retry tail, then converges with the account's fleet before the list
-  /// renders. Onboarding shows on first launch — exactly when the server
+  /// retry tail before the list renders. Onboarding shows on first launch — exactly when the server
   /// is cold-starting — so querying immediately used to hit a closed port
   /// and misreport "No harnesses found".
   func detectHarnesses() async {
@@ -140,7 +137,7 @@ extension OnboardingView {
       return
     }
     harnesses = loaded
-    await joinFleet()
+    HarnessFleet.seed(from: harnesses, in: environment.configSync)
     detection = .loaded
     // Suggest project folders from the user's most recent harness
     // sessions so the project step offers one-click choices.
@@ -148,47 +145,6 @@ extension OnboardingView {
       serverId: CodevisorMachine.local.id
     )
     projectSetup.isLoadingRecommendations = false
-  }
-
-  /// Pulls the account's shared state from its reachable machines, then
-  /// adds what this Mac has ready to the fleet — additively: a harness the
-  /// fleet already knows keeps the preference authored elsewhere. Bounded
-  /// so a machine that answers slowly can't hold the step; anything it
-  /// missed lands on the next sweep and the list follows the replica.
-  private func joinFleet() async {
-    if !AppPreview.isRunning && environment.cloud.state.isSignedIn {
-      detection = .syncing
-      await withTaskGroup(of: Void.self) { group in
-        group.addTask { await pullFleet() }
-        group.addTask { try? await Task.sleep(for: .seconds(20)) }
-        await group.next()
-        group.cancelAll()
-      }
-    }
-    HarnessFleet.seed(from: harnesses, in: environment.configSync)
-  }
-
-  private func pullFleet() async {
-    // A relaunch mid-flow resumes here while the persisted session is
-    // still being validated; the roster is empty until that lands.
-    while !environment.cloud.hasCompletedBootstrap, !Task.isCancelled {
-      try? await Task.sleep(for: .milliseconds(100))
-    }
-    guard environment.cloud.state.isSignedIn else { return }
-    await environment.cloud.refreshMachines()
-    // Machines the account reports offline can't answer; probing them
-    // only waits out a relay timeout.
-    let offline = Set(environment.cloud.machines.filter { !$0.online }.map(\.deviceId))
-    let ids = environment.machines.allMachines.map(\.id).filter { id in
-      guard let device = CodevisorMachine.cloudDeviceId(forMachineId: id) else { return true }
-      return !offline.contains(device)
-    }
-    await withTaskGroup(of: Void.self) { group in
-      for id in ids {
-        group.addTask { await environment.prepareMachine(id) }
-      }
-    }
-    await environment.configSync.synchronizeAll()
   }
 
   private var serverFailureMessage: String {

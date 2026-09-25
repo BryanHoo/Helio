@@ -36,7 +36,6 @@ extension AppEnvironment {
       settings: settings,
       machineStore: store,
       machineCredentialStore: KeychainMachineCredentialStore.shared,
-      cloudCredentialStore: KeychainCloudCredentialStore.shared,
       legacyCacheMigrationStore: store,
       paneGroups: DefaultPaneGroupRepository(store: store),
       workspaces: DefaultWorkspaceRepository(store: store),

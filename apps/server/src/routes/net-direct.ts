@@ -68,7 +68,7 @@ export const routeNetDirect = (
 }
 
 /// Adapts a server-accepted `ws` socket onto the CloudSocket surface the
-/// DirectChannelHost consumes (mirror of cloud-bridge's outbound adapter).
+/// DirectChannelHost consumes these channels for direct machine connections.
 export const adaptDirectSocket = (socket: WebSocket): CloudSocket => {
   const adapted: CloudSocket = {
     send: (data) => socket.send(data),

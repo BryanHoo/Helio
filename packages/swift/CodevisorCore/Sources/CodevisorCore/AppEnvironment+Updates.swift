@@ -3,6 +3,12 @@ import Foundation
 /// Environment surface split from the class body to keep
 /// AppEnvironment.swift within size limits.
 extension AppEnvironment {
+  /// 内置 server 的安装只恢复本机；项目、会话和工作区仓库不受影响。
+  static func retireRemoteMachinesIfNeeded(machines: MachineController, hasEmbeddedServer: Bool) {
+    guard hasEmbeddedServer, !machines.registry.remoteMachines.isEmpty else { return }
+    machines.removeAllRemoteMachines()
+  }
+
   /// The machine used to seed a standalone composer. This is the only
   /// app-level machine default: request routing and lifecycle APIs always
   /// require an explicit server id.
@@ -132,7 +138,6 @@ extension AppEnvironment {
     // New skill metadata means some machine is missing the content blob
     // behind it; ferry immediately instead of waiting for the sweep.
     if namespace == "skills" { Task { await configSync.synchronizeSkills() } }
-    if namespace == FleetRoster.namespace { Task { await fleetRoster.applyRoster() } }
     // Fleet-wide harness state moved (enables, accounts, ferried
     // credentials): every machine's picker catalog is now suspect. Mark
     // them all stale — the reconcile-response hook refines per machine
@@ -149,7 +154,6 @@ extension AppEnvironment {
   /// Applies everything the local replica already knows at startup.
   func applyBootSyncState() {
     applySyncedSettings()
-    Task { await fleetRoster.applyRoster() }
   }
 
   public func sessionImporter(for serverId: String) -> SessionImporter {

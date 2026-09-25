@@ -35,7 +35,6 @@ import {
   type BootListener
 } from "./boot-listener.js"
 import { makeActiveWorkSleepInhibitor } from "./infra/active-work-sleep-inhibitor.js"
-import { makeCloudServerControl } from "./infra/cloud-bridge.js"
 import { canonicalDatabasePaths, resolveServerDataLayout } from "./infra/data-dir.js"
 import { migrateLegacyLayout, migrateTmpDataDir } from "./infra/legacy-layout.js"
 import { migrateLinuxDataLayout } from "./infra/linux-data-migration.js"
@@ -233,21 +232,6 @@ export const runServe = (
     restoreTerminalPersistence(dirname(databasePath), terminal, startup)
     startup.checkpoint("initializingServices")
     const backgroundTerminals = yield* Effect.promise(() => backgroundTerminalIntegration(terminal))
-    // 旧凭据仍留在磁盘供用户自行处理，但本地版不会自动建立云端连接。
-    const cloudControl = appOwned
-      ? undefined
-      : makeCloudServerControl(
-          {
-            credentialsPath: join(dirname(databasePath), "cloud.json"),
-            machineName: args.name ?? hostname(),
-            appVersion: version ?? "unknown",
-            localBaseUrl: `http://127.0.0.1:${port}`,
-            terminal,
-            env: process.env,
-            log: (line: string) => console.error(line)
-          },
-          undefined
-        )
     // Start resolving the GUI process's minimal environment without delaying
     // server boot. The first Git operation awaits this shared result so
     // checkout hooks and filters can find user-installed tools such as
@@ -394,10 +378,6 @@ export const runServe = (
         port,
         directPathEnabled: directPathMode === "enabled",
         worktreeNameStyle,
-        // Lets clients match this machine to its cloud presence entry, and
-        // drive its registration live via /v1/cloud as the app's account
-        // session changes.
-        cloud: cloudControl,
         bootId,
         processId: process.pid,
         appOwned,

@@ -8,7 +8,6 @@ import type { ServerUpdateChannel } from "@codevisor/updater"
 import { applyAfterDrain } from "./apply-after-drain.js"
 import { readTailnetPeers } from "./infra/tailnet.js"
 import { routeClientControl } from "./routes/client-control.js"
-import { routeCloud } from "./routes/cloud.js"
 import { handleEvents } from "./routes/events.js"
 import { routeFiles } from "./routes/files.js"
 import { routeFs } from "./routes/fs.js"
@@ -163,13 +162,10 @@ export const handleRequest = async (
 
     await authorize(services.db, config, request)
 
-    // App 托管模式不签发远端凭据，也不暴露云端连接和网络发现入口。
+    // App 托管模式不签发远端凭据，也不暴露网络发现入口。
     if (
       config.appOwned &&
-      (url.pathname === "/v1/tailnet/peers" ||
-        url.pathname.startsWith("/v1/auth/") ||
-        url.pathname === "/v1/cloud" ||
-        url.pathname.startsWith("/v1/cloud/"))
+      (url.pathname === "/v1/tailnet/peers" || url.pathname.startsWith("/v1/auth/"))
     ) {
       throw new HttpFailure(404, "Route not found")
     }
@@ -197,10 +193,6 @@ export const handleRequest = async (
     }
 
     if (request.method === "GET" && url.pathname === "/v1/info") {
-      // Live registrations (app-driven connect/disconnect) win over the
-      // boot-time snapshot so clients never match against a stale device id.
-      const cloudDeviceId =
-        config.cloud === undefined ? config.cloudDeviceId : config.cloud.deviceId()
       writeJson(response, 200, {
         id: config.id,
         name: config.name,
@@ -219,8 +211,7 @@ export const handleRequest = async (
         ],
         machineId: await run(services.db.getOrCreateInstanceId),
         arch: process.arch,
-        hostname: hostname(),
-        ...(cloudDeviceId === undefined ? {} : { cloudDeviceId })
+        hostname: hostname()
       })
       return
     }
@@ -395,9 +386,6 @@ export const handleRequest = async (
       return
     }
     if (await routeFs(services, request, response, url)) {
-      return
-    }
-    if (await routeCloud(config, request, response, url)) {
       return
     }
     if (routeNetDirect(config, request, response, url)) {

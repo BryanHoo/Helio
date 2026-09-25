@@ -35,18 +35,7 @@ export default defineConfig({
         "src/cli.ts",
         "src/cli/wiring.ts",
         "src/bg-wrap.ts",
-        "src/terminal-proxy.ts",
-        // The cloud bridge is an integration boundary over `ws`, live
-        // terminals, and the filesystem. Everything it composes is fully
-        // covered elsewhere: connection/channel/crypto logic in
-        // packages/cloud-client and packages/cloud-crypto, credential parsing
-        // and the login flow in src/cli/cloud-auth.ts, and the hub itself in
-        // apps/cloud's workerd integration suite.
-        "src/infra/cloud-bridge.ts",
-        // Same boundary, split out for size: the http/ws channel handlers are
-        // glue over `fetch` and `ws` sockets; the frame/header/credit logic
-        // they compose lives (fully covered) in packages/cloud-client.
-        "src/infra/cloud-proxy-handlers.ts"
+        "src/terminal-proxy.ts"
       ],
       provider: "v8",
       thresholds: { branches: 100, functions: 100, lines: 100, statements: 100 }
