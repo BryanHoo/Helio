@@ -79,10 +79,6 @@ struct ChatlessWorkspacePaneTests {
     #expect(state.convertNewTabPane(id: paneId, to: .terminal, sessionId: nil) == nil)
     #expect(state.panes[0].kind == .newTab)  // the placeholder survives untouched
 
-    let converted = state.convertNewTabPane(id: paneId, to: .screenSharing, sessionId: nil)
-    #expect(converted?.kind == .screenSharing)
-    #expect(converted?.terminalKey == paneId.uuidString)
-    #expect(converted?.chatSessionId == nil)
   }
 
   @Test func aTerminalStillConvertsWhenARealSessionIsPresent() {

@@ -54,32 +54,10 @@ extension WorkspaceSyncModel {
       paneType = "new-tab"
       resourceKind = nil
       resourceId = nil
-    case .screenSharing:
-      paneType = "screen-sharing"
-      resourceKind = nil
-      resourceId = nil
-      if let data = try? JSONEncoder().encode(pane.screenSharing ?? ScreenSharingPanePreferences()) {
-        metadata = String(data: data, encoding: .utf8)
-      }
     case .document:
       paneType = "file"
       resourceKind = "file"
       resourceId = pane.documentPath
-    case .plugin:
-      // Plugin panes publish under a plugin-scoped provider so old
-      // clients (which only accept "codevisor") drop them silently
-      // instead of misrendering. Metadata carries the plugin identity
-      // redundantly, so future providers can evolve the id scheme.
-      let pluginId = pane.pluginId ?? "unknown"
-      let type = pane.pluginPaneType ?? "pane"
-      return ServerWorkspacePane(
-        id: pane.id.uuidString,
-        workspaceId: workspaceId.uuidString,
-        providerId: "plugin:\(pluginId)",
-        paneType: type,
-        title: pane.name,
-        createdAt: ServerDateCoding.string(from: createdAt)
-      )
     }
     return ServerWorkspacePane(
       id: pane.id.uuidString,
@@ -96,30 +74,10 @@ extension WorkspaceSyncModel {
 
   static func descriptor(from record: ServerWorkspacePane) -> PaneDescriptorState? {
     guard let id = UUID(uuidString: record.id) else { return nil }
-    if record.providerId.hasPrefix("plugin:") {
-      let pluginId = String(record.providerId.dropFirst("plugin:".count))
-      guard !pluginId.isEmpty else { return nil }
-      return PaneDescriptorState(
-        id: id,
-        kind: .plugin,
-        name: record.title,
-        terminalKey: id.uuidString,
-        pluginId: pluginId,
-        pluginPaneType: record.paneType
-      )
-    }
     // Unknown providers still drop silently: the registry remains
     // forward-compatible; renderer support is a client capability.
     guard record.providerId == "codevisor" else { return nil }
     switch record.paneType {
-    case "screen-sharing":
-      guard let data = record.metadata?.data(using: .utf8),
-        let preferences = try? JSONDecoder().decode(ScreenSharingPanePreferences.self, from: data),
-        preferences.schemaVersion == 1
-      else { return nil }
-      return PaneDescriptorState(
-        id: id, kind: .screenSharing, name: record.title,
-        terminalKey: id.uuidString, screenSharing: preferences)
     case "file", "markdown":
       guard record.resourceKind == "file", let path = record.resourceId, !path.isEmpty else {
         return nil

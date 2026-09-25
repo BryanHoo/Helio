@@ -18,8 +18,6 @@ private struct NewTabOption: Identifiable, Equatable {
     case chat
     case terminal
     case files
-    case screenSharing
-    case plugin(pluginId: String, paneType: String, iconPath: String?)
   }
 
   let id: String
@@ -38,15 +36,6 @@ struct NewTabPageView: View {
   /// an established chat pane (wired by the container, which owns session
   /// creation). Nil (previews) falls back to a draft conversion.
   var onNewChat: (() -> Void)? = nil
-  /// The machine's API client, for the machine-scoped plugin pane rows.
-  /// Nil (previews, machineless groups) shows no plugin rows.
-  var client: (any CodevisorServerClienting)? = nil
-  var iconCacheNamespace = "preview"
-  /// The machine whose cached status gates capability rows (Screen
-  /// Sharing). Nil (previews, machineless groups) shows none.
-  var machineId: String? = nil
-
-  @State private var pluginOptions: [NewTabOption] = []
   @State private var query = ""
   /// Focusing this pane focuses the picker's input — never on appearance,
   /// only when the group says the pane is the one the user is working in.
@@ -54,22 +43,12 @@ struct NewTabPageView: View {
 
   private static let popupCornerRadius: CGFloat = 18
 
-  /// Read from the machine's last status probe rather than re-probing on
-  /// every mount: the first render already has the right rows, so the
-  /// popup never grows (and re-centers) a beat after it appears.
-  private var supportsScreenSharing: Bool {
-    guard let machineId else { return false }
-    return environment.machines.statusByMachineId[machineId]?.supportsScreenSharing == true
-  }
-
   private var options: [NewTabOption] {
     [
       NewTabOption(id: "chat", title: "New Chat", kind: .chat),
       NewTabOption(id: "terminal", title: "New Terminal", kind: .terminal),
       NewTabOption(id: "files", title: "Open File", kind: .files),
     ]
-      + (supportsScreenSharing
-        ? [NewTabOption(id: "screen-sharing", title: "Screen Sharing", kind: .screenSharing)] : []) + pluginOptions
   }
 
   var body: some View {
@@ -103,9 +82,6 @@ struct NewTabPageView: View {
     .onDisappear {
       group?.unregisterNewTabFocus(paneId: paneId)
     }
-    .task(id: pluginStateRevision) {
-      await loadPluginOptions()
-    }
   }
 
   private var popup: some View {
@@ -114,24 +90,10 @@ struct NewTabPageView: View {
         switch option.kind {
         case .chat:
           Autocomplete.Action(option.title, id: option.id, systemImage: "text.bubble") { open(option) }
-        case .screenSharing:
-          Autocomplete.Action(option.title, id: option.id, systemImage: "display") { open(option) }
         case .terminal:
           Autocomplete.Action(option.title, id: option.id, systemImage: "terminal") { open(option) }
         case .files:
           Autocomplete.Action(option.title, id: option.id, systemImage: "doc.text.magnifyingglass") { open(option) }
-        case let .plugin(pluginId, paneType, iconPath):
-          Autocomplete.Action(option.title, id: option.id, action: { open(option) }) {
-            if let client {
-              PluginIconView(
-                pluginId: pluginId, paneType: paneType, iconPath: iconPath,
-                client: client, cacheNamespace: iconCacheNamespace)
-            } else {
-              Image(systemName: "puzzlepiece.extension")
-            }
-          } label: {
-            Text(option.title)
-          }
         }
       }
     }
@@ -152,41 +114,11 @@ struct NewTabPageView: View {
       } else {
         group?.convertNewTabPane(id: paneId, to: .chat)
       }
-    case .screenSharing:
-      group?.convertNewTabPane(id: paneId, to: .screenSharing)
     case .terminal:
       group?.convertNewTabPane(id: paneId, to: .terminal)
-    case let .plugin(pluginId, paneType, _):
-      group?.convertNewTabPane(
-        id: paneId,
-        to: .plugin,
-        name: option.title,
-        pluginId: pluginId,
-        pluginPaneType: paneType
-      )
     }
   }
 
-  private var pluginStateRevision: UInt64 {
-    environment.pluginStateRevision(for: iconCacheNamespace)
-  }
-
-  /// Machine-scoped plugin pane rows. Errors (older servers without the
-  /// plugins feature, unreachable machines) just leave the rows out — the
-  /// page's built-in options never depend on the request.
-  private func loadPluginOptions() async {
-    guard let client else { return }
-    guard let plugins = try? await client.listPlugins() else { return }
-    pluginOptions = plugins.flatMap { plugin in
-      plugin.panes.map { pane in
-        NewTabOption(
-          id: "plugin:\(plugin.id)|\(pane.type)",
-          title: pane.title,
-          kind: .plugin(pluginId: plugin.id, paneType: pane.type, iconPath: pane.iconPath ?? plugin.iconPath)
-        )
-      }
-    }
-  }
 }
 
 #if DEBUG

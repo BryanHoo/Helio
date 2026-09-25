@@ -163,7 +163,7 @@ public final class ComputerUseLivePreview {
     onChange.values.forEach { $0() }
   }
 
-  /// Internal observers (the remote host) that are not SwiftUI.
+  /// Internal observers that are not SwiftUI.
   @ObservationIgnored private var onChange: [UUID: () -> Void] = [:]
 
   func observe(_ handler: @escaping () -> Void) -> UUID {
@@ -232,11 +232,7 @@ public final class ComputerUseLivePreviewViewer {
   public private(set) var title: String
   /// The latest frame's pixel size; nil before the first frame.
   public private(set) var frameSize: CGSize?
-  /// Remote viewers look for the agent's activity more often while the
-  /// chat's turn is running. Ignored by local viewers.
-  @ObservationIgnored public var prefersFastPolling = false
-  /// Hosts the current surface; stable for the viewer's lifetime so a
-  /// remote reconnect can swap surfaces underneath SwiftUI.
+  /// Hosts the current local surface for the viewer's lifetime.
   @ObservationIgnored public let view: NSView = ComputerUseLivePreviewContainer()
 
   @ObservationIgnored private var surface: ComputerUseLivePreviewSurface?

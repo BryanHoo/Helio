@@ -96,14 +96,12 @@ extension PaneGroupModel {
     to kind: PaneKind,
     chatSessionId: UUID? = nil,
     name: String? = nil,
-    pluginId: String? = nil,
-    pluginPaneType: String? = nil, publishChange: Bool = true
+    publishChange: Bool = true
   ) {
     guard let previous = state.panes.first(where: { $0.id == id }),
       let converted = state.convertNewTabPane(
         id: id, to: kind, sessionId: sessionId,
-        chatSessionId: chatSessionId, name: name,
-        pluginId: pluginId, pluginPaneType: pluginPaneType
+        chatSessionId: chatSessionId, name: name
       )
     else { return }
     if Self.requiresNewLivePane(previous: previous, next: converted) {
@@ -218,7 +216,6 @@ extension PaneGroupModel {
       if let chat = livePane as? ChatPane {
         wireChatHost(chat, paneId: descriptor.id)
       }
-      if let sharing = livePane as? ScreenSharingPane { wireScreenSharing(sharing) }
       live[descriptor.id] = livePane
     }
     if let previous, previous.id != descriptor.id {

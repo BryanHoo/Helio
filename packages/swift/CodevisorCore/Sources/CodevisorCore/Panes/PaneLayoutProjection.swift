@@ -104,7 +104,7 @@ public enum PaneLayoutProjection {
       return lhs.chatSessionId != nil && lhs.chatSessionId == rhs.chatSessionId
     case .terminal:
       return lhs.terminalKey.caseInsensitiveCompare(rhs.terminalKey) == .orderedSame
-    case .newTab, .plugin, .document, .screenSharing:
+    case .newTab, .document:
       return false
     }
   }

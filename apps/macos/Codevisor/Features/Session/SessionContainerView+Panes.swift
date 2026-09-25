@@ -87,10 +87,7 @@ extension SessionContainerView {
             group: model,
             onNewChat: { [weak model] in
               createChat(convertingPlaceholder: descriptor.id, in: model)
-            },
-            client: environment.machines.client(for: selectedWorkspace.serverId),
-            iconCacheNamespace: selectedWorkspace.serverId,
-            machineId: selectedWorkspace.serverId
+            }
           ))
       }
       return AnyView(

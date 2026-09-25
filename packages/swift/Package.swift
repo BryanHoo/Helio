@@ -25,47 +25,24 @@ let package = Package(
     .library(name: "CodevisorCoreMac", targets: ["CodevisorCoreMac"]),
     .library(name: "CodevisorUI", targets: ["CodevisorUI"]),
     .library(name: "Autocomplete", targets: ["Autocomplete"]),
-    // Screen sharing, in three targets: the WebRTC-free engine, the WebRTC peer, and test doubles.
+    // 本机 Computer Use 预览使用捕获与渲染核心。
     .library(name: "ScreenSharing", targets: ["ScreenSharing"]),
-    .library(name: "ScreenSharingWebRTC", targets: ["ScreenSharingWebRTC"]),
     .library(name: "ScreenSharingTesting", targets: ["ScreenSharingTesting"]),
     .library(name: "CodevisorTestSupport", targets: ["CodevisorTestSupport"]),
   ],
   dependencies: [
     .package(url: "https://github.com/PostHog/posthog-ios.git", exact: "3.59.3"),
     .package(url: "https://github.com/getsentry/sentry-cocoa.git", exact: "9.23.0"),
-    .package(url: "https://github.com/851-labs/webrtc.git", exact: "152.0.0-codevisor.1"),
     .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", exact: "1.26.2"),
   ],
   targets: [
-    // MARK: ScreenSharing (the engine, WebRTC-free: session and message contracts, frames and the
-    // mailbox, metrics, ScreenCaptureKit capture, VideoToolbox codecs, the Metal renderer, the AppKit
-    // viewer surface, host input injection, the RFB protocol and the VNC viewing session. Links CZlib
-    // and system frameworks only, so a backend that is not the native WebRTC pipeline, and every test
-    // of these parts, never loads the binary framework. See docs/plans/screen-sharing-composable-architecture.md.)
-    .systemLibrary(name: "CZlib", path: "ScreenSharing/CZlib"),
+    // MARK: ScreenSharing (本机 Computer Use 预览使用的帧、捕获与 Metal 渲染)
     .target(
       name: "ScreenSharing",
-      dependencies: ["CZlib"],
       path: "ScreenSharing/Sources/ScreenSharing",
       swiftSettings: [.swiftLanguageMode(.v6)]
     ),
-    // The native transport: the WebRTC peer, its data channels, sender and receiver endpoints with
-    // their recovery, the codec factory bridging VideoToolbox into WebRTC, and the pinned field
-    // trials. The only target that links WebRTC.
-    .target(
-      name: "ScreenSharingWebRTC",
-      dependencies: ["ScreenSharing", .product(name: "WebRTC", package: "WebRTC")],
-      path: "ScreenSharing/Sources/ScreenSharingWebRTC",
-      resources: [
-        .copy("Resources/WebRTC-LICENSE.txt"),
-        .copy("Resources/WebRTC-ThirdPartyNotices-macOS.md"),
-        .copy("Resources/WebRTC-ThirdPartyNotices-iOS.md"),
-      ],
-      swiftSettings: [.swiftLanguageMode(.v6)]
-    ),
-    // Test doubles: the in-process VNC server (scripted handshake, every encoding, a message log)
-    // the suites and the rig drive. Never a dependency of a product target.
+    // 本机预览的测试替身，不进入产品目标。
     .target(
       name: "ScreenSharingTesting",
       dependencies: ["ScreenSharing"],
@@ -77,16 +54,6 @@ let package = Package(
       dependencies: ["ScreenSharing", "ScreenSharingTesting", "CodevisorTestSupport"],
       path: "ScreenSharing/Tests/ScreenSharingTests",
       swiftSettings: [.swiftLanguageMode(.v6)]
-    ),
-    .testTarget(
-      name: "ScreenSharingWebRTCTests",
-      dependencies: ["ScreenSharingWebRTC", "CodevisorTestSupport"],
-      path: "ScreenSharing/Tests/ScreenSharingWebRTCTests",
-      swiftSettings: [.swiftLanguageMode(.v6)],
-      // SwiftPM's macOS test bundle loader needs the sibling binary framework.
-      linkerSettings: [
-        .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@loader_path/../../.."], .when(platforms: [.macOS]))
-      ]
     ),
     .target(name: "CodevisorTestSupport", path: "TestSupport", swiftSettings: [.swiftLanguageMode(.v6)]),
     // MARK: CodevisorTheming (VSCode/Shiki theme parsing, normalization,
@@ -322,7 +289,7 @@ let package = Package(
     .target(
       name: "CodevisorCoreMac",
       dependencies: [
-        "CodevisorCore", "ScreenSharing", "ScreenSharingWebRTC",
+        "CodevisorCore", "ScreenSharing",
         .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
       ],
       path: "CodevisorCoreMac/Sources/CodevisorCoreMac",

@@ -34,30 +34,22 @@ extension SessionContainerView {
     return (group.selectedPane as? FilePane)?.model
   }
 
-  var activeScreenSharingPane: ScreenSharingPane? {
-    guard let group = activeToolbarGroup, group.state.selectedPane?.kind == .screenSharing,
-      let pane = group.selectedPane as? ScreenSharingPane, pane.store != nil
-    else { return nil }
-    return pane
-  }
-
   var paneControlsReplaceTitle: Bool {
     activeFileModel != nil
   }
 
   /// Chats retain the editable title and context previously used in Nous.
-  /// Connected screen sharing names the remote Mac; file controls replace the title.
+  /// File controls replace the title.
   var activePaneTitle: Binding<String> {
     Binding(
       get: {
-        if let pane = activeScreenSharingPane { return pane.connectionName }
         guard let descriptor = activePaneDescriptor else { return "New Tab" }
         let workspace = selectedWorkspace
         if descriptor.kind == .chat { return paneTitle(descriptor) }
         return workspace.selectedCenterTab?.customTitle ?? paneTitle(descriptor)
       },
       set: { title in
-        guard !paneControlsReplaceTitle, activeScreenSharingPane == nil, activeFileModel == nil else { return }
+        guard !paneControlsReplaceTitle, activeFileModel == nil else { return }
         let workspace = selectedWorkspace
         renameCenterTab(workspace.selectedCenterTabId, to: title)
       }
@@ -65,12 +57,6 @@ extension SessionContainerView {
   }
 
   var activePaneSubtitle: String {
-    if let store = activeScreenSharingPane?.store {
-      guard let display = store.displays.first(where: { $0.id == store.selectedDisplayId }), display.width > 0 else {
-        return ""
-      }
-      return "\(display.width) × \(display.height)"
-    }
     guard activePaneDescriptor?.kind == .chat else { return "" }
     let workspace = selectedWorkspace
     let candidates: [String?] = [

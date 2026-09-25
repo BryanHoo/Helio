@@ -12,7 +12,6 @@ struct ComputerUsePiPOverlay: View {
   @State private var isHovering = false
   /// The pointer's offset from the card's resting corner while dragging.
   @State private var dragOffset: CGSize = .zero
-  private let isTurnRunning: Bool
   /// Height of the floating composer, so bottom corners sit above it.
   private let composerHeight: CGFloat
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -21,12 +20,9 @@ struct ComputerUsePiPOverlay: View {
 
   init(
     chatSessionID: UUID,
-    source: ComputerUsePiPModel.Source,
-    isTurnRunning: Bool,
     composerHeight: CGFloat
   ) {
-    _model = State(initialValue: ComputerUsePiPModel(chatSessionID: chatSessionID, source: source))
-    self.isTurnRunning = isTurnRunning
+    _model = State(initialValue: ComputerUsePiPModel(chatSessionID: chatSessionID))
     self.composerHeight = composerHeight
   }
 
@@ -50,12 +46,8 @@ struct ComputerUsePiPOverlay: View {
       .animation(reduceMotion ? nil : .spring(duration: 0.3), value: composerHeight)
     }
     .animation(reduceMotion ? nil : .spring(duration: 0.3), value: model.isVisible)
-    .onAppear {
-      model.turnActivityChanged(isRunning: isTurnRunning)
-      model.sync()
-    }
+    .onAppear { model.sync() }
     .onChange(of: model.activity) { model.sync() }
-    .onChange(of: isTurnRunning) { _, running in model.turnActivityChanged(isRunning: running) }
     .onDisappear { model.teardown() }
   }
 

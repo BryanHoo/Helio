@@ -16,14 +16,6 @@ public struct ScreenSharingCapabilities: OptionSet, Sendable, Hashable {
   public static let statistics = ScreenSharingCapabilities(rawValue: 1 << 2)
 }
 
-/// The remote pointer, for a backend that reports it separately from the
-/// frames (VNC's Cursor and PointerPos pseudo-encodings): its shape, drawn
-/// locally, and where the host moved it, in video pixels.
-public enum ScreenSharingCursorUpdate: Sendable, Equatable {
-  case shape(RFBCursorShape)
-  case position(RFBPoint)
-}
-
 /// One live media session as the viewer sees it: decoded frames land in
 /// `frames` (newest wins), optional protocols ride typed channels, and the
 /// transport reports its state through `onConnectionChanged`. No SDP, no
@@ -47,9 +39,6 @@ public protocol ScreenSharingViewingSession: AnyObject {
   var onConnectionChanged: ((String) -> Void)? { get set }
   func statistics() async -> [String: String]
   func close()
-  /// The remote pointer's shape and host-side moves; only backends that
-  /// report the pointer separately set it (the default ignores it).
-  var onCursorChanged: ((ScreenSharingCursorUpdate) -> Void)? { get set }
   /// The viewer's size in points: backends that can resize the remote
   /// desktop to fit (VNC ExtendedDesktopSize) do; the default ignores it.
   func requestDesktopSize(width: Int, height: Int)
@@ -68,8 +57,4 @@ extension ScreenSharingViewingSession {
   public var initialDesktopSize: (width: Int, height: Int)? { nil }
   public var linkBitsPerSecond: Double? { nil }
 
-  public var onCursorChanged: ((ScreenSharingCursorUpdate) -> Void)? {
-    get { nil }
-    set {}
-  }
 }

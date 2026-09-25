@@ -9,12 +9,6 @@ struct SidebarWorkspaceTabRow: View {
   let title: String
   let kind: PaneKind
   let isAgentOwned: Bool
-  /// A plugin pane's identity, so the row shows the plugin's own artwork
-  /// (fetched through `pluginIconClient`) instead of the generic glyph.
-  var pluginId: String? = nil
-  var pluginPaneType: String? = nil
-  var pluginIconClient: (any CodevisorServerClienting)? = nil
-  var pluginIconCacheNamespace = "preview"
   /// The chat a chat tab shows, when it is still known to the session
   /// list; drives the activity/unread leading icon.
   let chatSession: ChatSession?
@@ -96,16 +90,6 @@ struct SidebarWorkspaceTabRow: View {
     if let chatSession {
       ChatSessionLeadingIcon(session: chatSession, store: store, activityColor: .secondary)
         .foregroundStyle(.secondary)
-    } else if kind == .plugin, let pluginId, let pluginIconClient {
-      PluginIconView(
-        pluginId: pluginId,
-        paneType: pluginPaneType,
-        iconPath: "server",
-        client: pluginIconClient,
-        cacheNamespace: pluginIconCacheNamespace
-      )
-      .frame(width: 14, height: 14)
-      .frame(width: 18)
     } else if kind == .document {
       FileIcon(path: title, size: 16).frame(width: 18)
     } else {
@@ -120,9 +104,7 @@ struct SidebarWorkspaceTabRow: View {
     case .chat: "text.bubble"
     case .terminal: isAgentOwned ? "server.rack" : "terminal"
     case .newTab: "square.dashed"
-    case .plugin: "puzzlepiece.extension"
     case .document: "text.document"
-    case .screenSharing: "display"
     }
   }
 

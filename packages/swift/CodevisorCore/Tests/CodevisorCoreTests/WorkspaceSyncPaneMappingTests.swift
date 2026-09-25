@@ -2,9 +2,8 @@ import Foundation
 import Testing
 @testable import CodevisorCore
 
-/// The pane<->server-record mapping behind workspace sync: plugin panes ride
-/// a `plugin:`-prefixed provider without icon metadata; unknown providers
-/// still drop silently.
+/// The pane<->server-record mapping behind workspace sync: only supported
+/// workspace pane kinds are restored from server records.
 @MainActor
 @Suite("WorkspaceSyncModel pane mapping")
 struct WorkspaceSyncPaneMappingTests {
@@ -50,53 +49,7 @@ struct WorkspaceSyncPaneMappingTests {
     #expect(acknowledged.selectedPane?.name == "Hello")
   }
 
-  @Test("Plugin panes publish a plugin-scoped provider and round-trip")
-  func pluginPaneRoundTrip() {
-    let id = UUID()
-    let pane = PaneDescriptorState(
-      id: id,
-      kind: .plugin,
-      name: "Git Diff",
-      // Plugin panes key on their own id (there is no PTY); the
-      // restored descriptor rebuilds exactly this.
-      terminalKey: id.uuidString,
-      pluginId: "codevisor.git-diff",
-      pluginPaneType: "diff"
-    )
-    let record = WorkspaceSyncModel.serverPane(
-      from: pane, workspaceId: workspaceId, createdAt: Date()
-    )
-    #expect(record.providerId == "plugin:codevisor.git-diff")
-    #expect(record.paneType == "diff")
-    #expect(record.title == "Git Diff")
-    #expect(record.metadata == nil)
-    #expect(record.resourceKind == nil)
-    #expect(record.resourceId == nil)
-
-    // The server echoes the record verbatim; the descriptor it rebuilds
-    // must equal the one that was published (identical terminalKey is
-    // what makes the optimistic sync barrier acknowledge the echo).
-    let restored = WorkspaceSyncModel.descriptor(from: record)
-    #expect(restored == pane)
-  }
-
-  @Test("Plugin panes never persist icon metadata")
-  func pluginPaneOmitsMetadata() {
-    let pane = PaneDescriptorState(
-      id: UUID(),
-      kind: .plugin,
-      name: "Diff",
-      terminalKey: UUID().uuidString,
-      pluginId: "codevisor.git-diff",
-      pluginPaneType: "diff"
-    )
-    let record = WorkspaceSyncModel.serverPane(
-      from: pane, workspaceId: workspaceId, createdAt: Date()
-    )
-    #expect(record.metadata == nil)
-  }
-
-  @Test("Unknown providers and malformed plugin providers still drop silently")
+  @Test("Unknown and retired providers still drop silently")
   func unknownProvidersDrop() {
     func record(providerId: String, paneType: String = "diff") -> ServerWorkspacePane {
       ServerWorkspacePane(
@@ -109,7 +62,7 @@ struct WorkspaceSyncPaneMappingTests {
       )
     }
     #expect(WorkspaceSyncModel.descriptor(from: record(providerId: "somebody-else")) == nil)
-    // A bare "plugin:" carries no plugin identity.
+    #expect(WorkspaceSyncModel.descriptor(from: record(providerId: "plugin:example")) == nil)
     #expect(WorkspaceSyncModel.descriptor(from: record(providerId: "plugin:")) == nil)
     // Unknown codevisor pane types remain forward-compatible drops.
     #expect(
@@ -133,6 +86,14 @@ struct WorkspaceSyncPaneMappingTests {
       )
     }
     #expect(WorkspaceSyncModel.descriptor(from: record(paneType: "browser", title: "Browser")) == nil)
+    // 旧版本共享 pane 不再进入工作台。
+    #expect(WorkspaceSyncModel.descriptor(from: record(paneType: "screen-sharing", title: "Screen Sharing")) == nil)
+    let pluginPane = ServerWorkspacePane(
+      id: id.uuidString, workspaceId: workspaceId.uuidString,
+      providerId: "plugin:example", paneType: "panel", title: "Panel",
+      createdAt: "2026-01-01T00:00:00.000Z"
+    )
+    #expect(WorkspaceSyncModel.descriptor(from: pluginPane) == nil)
     // The New Tab page is device-local. A row from a client that still
     // publishes it means nothing here.
     #expect(WorkspaceSyncModel.descriptor(from: record(paneType: "new-tab", title: "New tab")) == nil)

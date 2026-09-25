@@ -156,20 +156,6 @@ const connectMacHelper = async (dataDir: string): Promise<HelperClient> => {
   }
 }
 
-// A dedicated native service message, not an agent tool invocation. The server
-// supplies the validated request and authenticates this private socket.
-export const requestMacScreenSharing = async (
-  dataDir: string,
-  request: Readonly<Record<string, unknown>>
-): Promise<unknown> => {
-  const client = await connectMacHelper(dataDir)
-  try {
-    return await client.request({ type: "screenSharing", request })
-  } finally {
-    await client.close()
-  }
-}
-
 export const linuxComputerUseHelperPath = (
   options: ServerResourceOptions = {}
 ): string | undefined => findServerResource("computer-use-linux.py", options)

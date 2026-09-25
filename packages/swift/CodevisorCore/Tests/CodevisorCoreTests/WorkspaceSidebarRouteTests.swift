@@ -6,7 +6,7 @@ import Testing
 struct WorkspaceSidebarRouteTests {
   @Test(
     "Archiving a hidden routing chat preserves the visible page",
-    arguments: [PaneKind.screenSharing, .newTab, .terminal, .plugin, .document]
+    arguments: [PaneKind.newTab, .terminal, .document]
   )
   func archiveHiddenChatKeepsPage(kind: PaneKind) throws {
     let project = Project.fromFolder(URL(fileURLWithPath: "/sidebar-tests"))

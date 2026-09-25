@@ -4,7 +4,7 @@ import { basename, join } from "node:path"
 import test from "node:test"
 import { fileURLToPath } from "node:url"
 
-import { mainSerialExecutorFilter, mainSerialExecutorSuites, runSwiftTests } from "./test-swift.mjs"
+import { runSwiftTests } from "./test-swift.mjs"
 
 const root = fileURLToPath(new URL("../packages/swift", import.meta.url))
 
@@ -17,16 +17,16 @@ function testSources(directory) {
   })
 }
 
-test("every Swift suite that changes the global executor is isolated", () => {
+test("Swift suites do not change the global executor", () => {
   const suites = testSources(root)
     .filter((path) =>
       /\b(?:TestStore|TestStoreOf|withMainSerialExecutor)\b/.test(readFileSync(path, "utf8"))
     )
     .map((path) => basename(path, ".swift"))
-  assert.deepEqual(suites.sort(), [...mainSerialExecutorSuites].sort())
+  assert.deepEqual(suites, [])
 })
 
-test("test selections are complementary and unrelated suites cannot enter the isolated process", () => {
+test("the Swift runner executes the full package once and rejects extra selections", () => {
   const calls = []
   assert.equal(
     runSwiftTests(["--build-system", "native"], (executable, args) => {
@@ -36,17 +36,14 @@ test("test selections are complementary and unrelated suites cannot enter the is
     }),
     0
   )
-  assert.equal(calls.length, 3)
-  assert.equal(calls[0][calls[0].indexOf("--skip") + 1], mainSerialExecutorFilter)
-  assert.equal(calls[1][calls[1].indexOf("--filter") + 1], mainSerialExecutorFilter)
-  assert.ok(calls[1].includes("--skip-build"))
-  assert.ok(!calls[2].includes("--skip") && !calls[2].includes("--filter"))
-  const isolated = new RegExp(mainSerialExecutorFilter)
-  for (const suite of mainSerialExecutorSuites) {
-    assert.ok(isolated.test(`CodevisorCoreMacTests.${suite}/example()`))
-  }
-  assert.ok(!isolated.test("CodevisorCloudTests.CloudMachineKeyLookupTests/repeatedLookups()"))
-  assert.ok(!isolated.test("CodevisorCoreTests.SessionModelTests/firstPrompt()"))
+  assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0], [
+    "test",
+    "--package-path",
+    "packages/swift",
+    "--build-system",
+    "native"
+  ])
   for (const arg of ["--filter", "--filter=OtherTests", "--skip", "--package-path", "-s"]) {
     assert.throws(
       () => runSwiftTests([arg], () => assert.fail("must not launch Swift")),
@@ -55,13 +52,11 @@ test("test selections are complementary and unrelated suites cannot enter the is
   }
 })
 
-test("a failure in either test group stops the command and preserves its exit status", () => {
-  for (const failedCall of [1, 2, 3]) {
-    let calls = 0
-    const status = runSwiftTests([], () => ({ status: ++calls === failedCall ? 17 : 0 }))
-    assert.equal(status, 17)
-    assert.equal(calls, failedCall)
-  }
+test("Swift test failures preserve their exit status", () => {
+  assert.equal(
+    runSwiftTests([], () => ({ status: 17 })),
+    17
+  )
   assert.equal(
     runSwiftTests([], () => ({ status: null, signal: "SIGTERM" })),
     1

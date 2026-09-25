@@ -18,7 +18,6 @@ export * from "./events.js"
 export * from "./terminals.js"
 export * from "./openapi.js"
 
-export * from "./screen-sharing.js"
 export * from "./client-control.js"
 export * from "./client-ui.js"
 

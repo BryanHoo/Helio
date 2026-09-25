@@ -28,8 +28,6 @@ export const defaultServerConfig = (
   restartSnapshotPath: overrides.restartSnapshotPath,
   restartDrainTimeoutMs: overrides.restartDrainTimeoutMs,
   sessionActivity: overrides.sessionActivity,
-  screenSharing: overrides.screenSharing,
-  screenSharingVNC: overrides.screenSharingVNC,
   cloudDeviceId: overrides.cloudDeviceId,
   cloud: overrides.cloud
 })

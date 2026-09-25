@@ -27,7 +27,7 @@ extension Workspace {
   ///
   /// - Parameters:
   ///   - activatedChatSessionId: the chat owned by the activated destination,
-  ///     or nil when it hosts none (a New Tab, terminal or screen-sharing pane).
+  ///     or nil when it hosts none (a New Tab or terminal pane).
   ///   - routingSessionId: a session already routed to this workspace, used as
   ///     today's fallback when the activated destination has no chat of its own.
   ///   - selectionAlreadyRoutesWorkspace: the current selection is a chat that

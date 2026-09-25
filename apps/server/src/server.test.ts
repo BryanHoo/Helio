@@ -28,6 +28,16 @@ import {
 vi.mock("./infra/tailnet.js", () => ({ readTailnetPeers: vi.fn() }))
 
 describe("@codevisor/server", () => {
+  it("does not expose screen sharing transports", async () => {
+    const { server } = await start()
+    const info = await jsonRequest(server, "/v1/info")
+    expect(info.status).toBe(200)
+    expect((info.body as { features: string[] }).features).not.toContain("screen-sharing-v1")
+    expect((info.body as { features: string[] }).features).not.toContain("computer-use-stream-v1")
+    expect(
+      (await jsonRequest(server, "/v1/screen-sharing", { method: "POST", body: "{}" })).status
+    ).toBe(404)
+  })
   it("does not publish discovery for an app-owned local server", async () => {
     const { services } = await makeServices("app-owned")
     const server = await run(

@@ -145,7 +145,7 @@ extension SessionStore {
     let serverId = workspace.serverId
     // A session mount keeps its historical fallback. A workspace mount must not:
     // substituting `.local` for an unresolved REMOTE machine would quietly move
-    // that workspace's terminals and screen sharing onto this Mac. Unavailable
+    // that workspace's terminals onto this Mac. Unavailable
     // is the correct answer, under the workspace's own server id.
     let machine =
       environment.machines.machine(for: serverId)
@@ -173,14 +173,12 @@ extension SessionStore {
     let model = PaneGroupModel(
       sessionId: session?.id,
       repository: repository,
-      pluginIconClient: client,
-      pluginIconCacheNamespace: serverId,
       makeContext: paneContextFactory(
         session: session, project: project, machine: machine, client: client, serverId: serverId,
         workspaceId: workspaceIdForPanes, workspaceRootDirectory: workspaceRootDirectory)
     )
     model.onPaneChanged = { [weak self, weak environment] pane in
-      // A pane changing IN PLACE — a New Tab becoming Screen Sharing, a rename,
+      // A pane changing IN PLACE — a New Tab becoming a terminal, a rename,
       // a draft binding its chat — is a local layout write just like adding or
       // closing a tab, and the descriptor is already persisted by the time this
       // runs. Bump the same token those structural writes use so the sidebar

@@ -101,9 +101,7 @@ struct SessionContainerView: View {
       .navigationSubtitle(activePaneSubtitle)
       .toolbar(removing: paneControlsReplaceTitle ? .title : nil)
       .toolbar {
-        if let pane = activeScreenSharingPane, let store = pane.store {
-          ScreenSharingToolbar(store: store)
-        } else if let model = activeFileModel {
+        if let model = activeFileModel {
           FilePaneToolbar(model: model, onNewTab: addCenterTab)
         }
       }

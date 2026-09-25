@@ -21,9 +21,6 @@
     /// The fill around the remote display (letterbox bars, and everything
     /// before the first frame). Surfaces that don't paint one ignore it.
     func setLetterboxColor(_ color: NSColor)
-    /// The remote pointer: its shape (the local cursor while controlling) and
-    /// the host's moves (drawn over the video while viewing).
-    func showRemoteCursor(_ update: ScreenSharingCursorUpdate)
     /// The surface's size in points and its window's backing scale, whenever
     /// either changes (for a remote desktop that follows it).
     var onSizeChanged: ((CGSize, CGFloat) -> Void)? { get set }
@@ -34,7 +31,6 @@
       get { nil }
       set {}
     }
-    public func showRemoteCursor(_ update: ScreenSharingCursorUpdate) {}
   }
 
   extension ScreenSharingViewerSurface {

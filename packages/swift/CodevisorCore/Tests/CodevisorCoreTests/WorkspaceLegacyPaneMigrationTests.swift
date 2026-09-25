@@ -18,14 +18,14 @@ struct WorkspaceLegacyPaneMigrationTests {
       id: UUID(), kind: .terminal, name: "Server", terminalKey: "agent-key",
       attachOnly: true, ownerChatSessionId: owner
     )
-    let plugin = PaneDescriptorState(
-      id: UUID(), kind: .plugin, name: "Plugin", terminalKey: "plugin-key", pluginId: "test.plugin"
+    let document = PaneDescriptorState(
+      id: UUID(), kind: .document, name: "File", terminalKey: "file-key", documentPath: "/saved/file"
     )
     var payload = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(workspace)) as? [String: Any])
     var legacy = try #require(
       JSONSerialization.jsonObject(
         with: JSONEncoder().encode(
-          PaneGroupState(panes: [user, agent, plugin], selectedPaneId: agent.id)
+          PaneGroupState(panes: [user, agent, document], selectedPaneId: agent.id)
         )) as? [String: Any])
     legacy["height"] = 420
     legacy["isVisible"] = false
@@ -36,7 +36,7 @@ struct WorkspaceLegacyPaneMigrationTests {
     #expect(decoded == decodedAgain)
     #expect(decoded.centerTabs.first == workspace.centerTabs.first)
     #expect(decoded.selectedCenterTabId == workspace.selectedCenterTabId)
-    #expect(Array(decoded.allPanes.suffix(3)) == [user, agent, plugin])
+    #expect(Array(decoded.allPanes.suffix(3)) == [user, agent, document])
     #expect(decoded.centerTabs.count == 4)
     #expect(decoded.centerTabs.allSatisfy { $0.root.allGroups.count == 1 })
     #expect(decoded.allPanes.filter { PaneNavigationVisibility().includes($0) }.count == 3)

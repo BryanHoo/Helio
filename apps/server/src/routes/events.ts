@@ -20,7 +20,6 @@ import {
   type EventFanout
 } from "../server-context.js"
 import { adaptDirectSocket } from "./net-direct.js"
-import { spliceVNCSocket, VNC_SOCKET_PATH } from "./screen-sharing-vnc.js"
 import { attachSyncEventSocket } from "./sync-event-socket.js"
 
 export const handleEvents = async (
@@ -98,14 +97,6 @@ export const handleUpgrade = async (
       return
     }
     await authorize(services.db, config, request)
-    if (
-      request.method === "GET" &&
-      url.pathname === VNC_SOCKET_PATH &&
-      config.screenSharingVNC !== undefined
-    ) {
-      spliceVNCSocket(config.screenSharingVNC, url, request, socket, head, webSocketServer)
-      return
-    }
     const clientId = matchRoute(url.pathname, "/v1/clients/:id/socket")
     if (request.method === "GET" && clientId !== undefined && clientControl !== undefined) {
       webSocketServer.handleUpgrade(request, socket, head, (webSocket) => {

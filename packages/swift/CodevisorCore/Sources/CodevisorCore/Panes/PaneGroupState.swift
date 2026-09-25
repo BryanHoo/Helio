@@ -13,13 +13,8 @@ public enum PaneKind: String, Codable, Sendable {
   /// open), and its page offers what to create. It leaves by conversion —
   /// picking New Chat/New Terminal replaces it in place.
   case newTab
-  /// A plugin-contributed webview pane. The descriptor's plugin fields
-  /// identify the plugin server and pane type; the app layer renders it
-  /// through the server's plugin proxy.
-  case plugin
   /// A file on the workspace’s machine. The persisted name retains compatibility with document panes.
   case document
-  case screenSharing
 }
 
 /// The persisted identity of one pane in a session's pane group. Pure data —
@@ -47,11 +42,6 @@ public struct PaneDescriptorState: Identifiable, Codable, Sendable, Equatable {
   /// pruning must be owner-scoped — chat B's empty snapshot must never
   /// tear down chat A's dev server.
   public var ownerChatSessionId: UUID?
-  /// Plugin panes only: the owner-namespaced plugin id ("owner.name").
-  public var pluginId: String?
-  /// Plugin panes only: which of the plugin's pane types this renders.
-  public var pluginPaneType: String?
-  public var screenSharing: ScreenSharingPanePreferences?
   public var documentPath: String?
   /// Every pane moves between groups alike — tabs are tabs (the only
   /// rule with real stakes is the CLOSE rule: a lone placeholder only
@@ -67,10 +57,7 @@ public struct PaneDescriptorState: Identifiable, Codable, Sendable, Equatable {
     attachOnly: Bool = false,
     chatSessionId: UUID? = nil,
     ownerChatSessionId: UUID? = nil,
-    pluginId: String? = nil,
-    pluginPaneType: String? = nil,
-    documentPath: String? = nil,
-    screenSharing: ScreenSharingPanePreferences? = nil
+    documentPath: String? = nil
   ) {
     self.id = id
     self.kind = kind
@@ -79,10 +66,7 @@ public struct PaneDescriptorState: Identifiable, Codable, Sendable, Equatable {
     self.attachOnly = attachOnly
     self.chatSessionId = chatSessionId
     self.ownerChatSessionId = ownerChatSessionId
-    self.pluginId = pluginId
-    self.pluginPaneType = pluginPaneType
     self.documentPath = documentPath
-    self.screenSharing = screenSharing
   }
 
   public init(from decoder: Decoder) throws {
@@ -100,12 +84,7 @@ public struct PaneDescriptorState: Identifiable, Codable, Sendable, Equatable {
       // Agent tabs persisted before owner scoping have no owner; any
       // syncer may manage them.
       ownerChatSessionId: try container.decodeIfPresent(UUID.self, forKey: .ownerChatSessionId),
-      // Panes persisted before plugin panes existed carry no plugin
-      // payload.
-      pluginId: try container.decodeIfPresent(String.self, forKey: .pluginId),
-      pluginPaneType: try container.decodeIfPresent(String.self, forKey: .pluginPaneType),
-      documentPath: try container.decodeIfPresent(String.self, forKey: .documentPath),
-      screenSharing: try container.decodeIfPresent(ScreenSharingPanePreferences.self, forKey: .screenSharing)
+      documentPath: try container.decodeIfPresent(String.self, forKey: .documentPath)
     )
   }
 }
@@ -309,9 +288,7 @@ public struct PaneGroupState: Codable, Sendable, Equatable {
     to kind: PaneKind,
     sessionId: UUID?,
     chatSessionId: UUID? = nil,
-    name: String? = nil,
-    pluginId: String? = nil,
-    pluginPaneType: String? = nil
+    name: String? = nil
   ) -> PaneDescriptorState? {
     guard let index = panes.firstIndex(where: { $0.id == id }),
       panes[index].kind == .newTab
@@ -336,18 +313,6 @@ public struct PaneGroupState: Codable, Sendable, Equatable {
         terminalKey: paneId.uuidString,
         chatSessionId: chatSessionId
       )
-    case .plugin:
-      guard
-        let converted = Self.pluginPane(
-          id: paneId, name: name, pluginId: pluginId,
-          pluginPaneType: pluginPaneType
-        )
-      else { return nil }
-      pane = converted
-    case .screenSharing:
-      pane = PaneDescriptorState(
-        id: paneId, kind: .screenSharing, name: "Screen Sharing",
-        terminalKey: paneId.uuidString, screenSharing: ScreenSharingPanePreferences())
     case .newTab, .document:
       return nil
     }

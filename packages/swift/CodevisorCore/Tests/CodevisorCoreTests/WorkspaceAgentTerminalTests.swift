@@ -115,7 +115,7 @@ struct WorkspaceAgentTerminalTests {
   func navigationVisibility() {
     let hide = PaneNavigationVisibility()
     let show = PaneNavigationVisibility(hideAgentTerminals: false)
-    for kind in [PaneKind.terminal, .chat, .newTab, .plugin, .document, .screenSharing] {
+    for kind in [PaneKind.terminal, .chat, .newTab, .document] {
       for attachOnly in [false, true] {
         let pane = PaneDescriptorState(
           id: UUID(), kind: kind, name: "Pane", terminalKey: "key", attachOnly: attachOnly

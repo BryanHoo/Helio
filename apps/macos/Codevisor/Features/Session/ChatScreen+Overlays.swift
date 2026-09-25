@@ -20,31 +20,21 @@ extension ChatScreen {
   }
 
   /// A live view of the window this chat's agent is controlling through
-  /// Computer Use, on this Mac or the chat's host Mac.
+  /// Computer Use on this Mac.
   @ViewBuilder
   var computerUsePiPOverlay: some View {
     if let chatSessionID = controller.serverSession?.id,
-      let source = computerUsePiPSource
+      codevisorMachineIsThisMac(
+        controller.project.serverId,
+        statusByMachineId: environment.machines.statusByMachineId
+      )
     {
       ComputerUsePiPOverlay(
         chatSessionID: chatSessionID,
-        source: source,
-        isTurnRunning: controller.isSending,
         composerHeight: composerHeight
       )
       .id(chatSessionID)
     }
-  }
-
-  private var computerUsePiPSource: ComputerUsePiPModel.Source? {
-    let serverId = controller.project.serverId
-    if codevisorMachineIsThisMac(serverId, statusByMachineId: environment.machines.statusByMachineId) {
-      return .local
-    }
-    guard let computerUsePiPPane,
-      environment.machines.statusByMachineId[serverId]?.supportsComputerUseStreaming == true
-    else { return nil }
-    return .remote(client: environment.machines.client(for: serverId), pane: computerUsePiPPane)
   }
 
   /// One container and namespace coordinate every Liquid Glass shape in the

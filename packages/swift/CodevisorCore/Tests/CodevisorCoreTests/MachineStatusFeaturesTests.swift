@@ -37,14 +37,13 @@ struct MachineStatusFeaturesTests {
   @Test("Status probe caches the advertised feature list")
   func probeCachesFeatures() async throws {
     let fake = SyncFakeServerClient(projects: [], sessions: [])
-    fake.configureInfoFeatures(["plugins-v1", "screen-sharing-v1"])
+    fake.configureInfoFeatures(["plugins-v1"])
     let (controller, remote) = try makeController(fake: fake)
 
     await controller.refreshStatus(for: remote.id)
 
     let status = try #require(controller.statusByMachineId[remote.id])
-    #expect(status.features == ["plugins-v1", "screen-sharing-v1"])
-    #expect(status.supportsScreenSharing)
+    #expect(status.features == ["plugins-v1"])
   }
 
   @Test("A server without a feature list advertises no capabilities")
@@ -57,7 +56,6 @@ struct MachineStatusFeaturesTests {
 
     let status = try #require(controller.statusByMachineId[remote.id])
     #expect(status.features.isEmpty)
-    #expect(!status.supportsScreenSharing)
   }
 
   @Test("Adopting a cloud identity keeps the probed features")
@@ -73,13 +71,13 @@ struct MachineStatusFeaturesTests {
     )
     controller.connection(for: CodevisorMachine.local.id).status = MachineStatus(
       isReachable: true, label: "Local 1.0.0", route: .direct, serverId: "local",
-      features: ["screen-sharing-v1"]
+      features: ["plugins-v1"]
     )
 
     controller.adoptLocalCloudIdentity(deviceId: "dev-1")
 
     let status = controller.statusByMachineId[CodevisorMachine.local.id]
     #expect(status?.cloudDeviceId == "dev-1")
-    #expect(status?.supportsScreenSharing == true)
+    #expect(status?.features == ["plugins-v1"])
   }
 }

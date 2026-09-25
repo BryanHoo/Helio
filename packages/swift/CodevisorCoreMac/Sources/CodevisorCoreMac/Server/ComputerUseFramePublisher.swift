@@ -5,7 +5,7 @@ import ScreenCaptureKit
 import ScreenSharing
 
 /// A consumer of one controlled window's live frames: the in-app preview
-/// (a mailbox feeding Metal) or a remote viewer (a WebRTC frame sender).
+/// (a mailbox feeding Metal).
 protocol ComputerUseFrameSink: AnyObject, Sendable {
   /// Called before the stream is reconfigured to deliver frames of `size`,
   /// and once on attach with the current size. Frames of the previous size

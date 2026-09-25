@@ -4,8 +4,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import type { BackgroundTerminalIntegration } from "@codevisor/agent-runtime"
-import type { DataUpgradeProgress, ScreenSharingRequest } from "@codevisor/api"
-import { requestMacScreenSharing } from "@codevisor/automation"
+import type { DataUpgradeProgress } from "@codevisor/api"
 import type { TerminalManagerService } from "@codevisor/terminal"
 
 import {
@@ -15,9 +14,6 @@ import {
 } from "./infra/background-terminal-host.js"
 import type { ServerLease } from "./infra/server-lease.js"
 import { makeTerminalPersistence } from "./infra/terminal-persistence.js"
-import { xfceScaler } from "./routes/screen-sharing-vnc-scale.js"
-import { readScreenSharingVNC, vncScreenSharing } from "./routes/screen-sharing-vnc.js"
-import type { ScreenSharingVNCConfig } from "./server-context-types.js"
 import type { StartupReporter } from "./startup-progress.js"
 
 /// Boot-time helpers for the `serve` entry point: argument parsing, bundle
@@ -25,26 +21,6 @@ import type { StartupReporter } from "./startup-progress.js"
 /// initialization, and the background terminal integration.
 
 export const SERVER_PROCESS_TITLE = "codevisor-server"
-export const nativeScreenSharing = (dataDir: string) =>
-  process.platform === "darwin"
-    ? (request: ScreenSharingRequest) => requestMacScreenSharing(dataDir, request)
-    : undefined
-/// The native helper where it exists (macOS), else the operator's VNC
-/// desktop, else no screen sharing at all.
-export const screenSharingProvider = (
-  dataDir: string
-): {
-  readonly screenSharing: ((request: ScreenSharingRequest) => Promise<unknown>) | undefined
-  readonly screenSharingVNC: ScreenSharingVNCConfig | undefined
-} => {
-  const native = nativeScreenSharing(dataDir)
-  if (native !== undefined) return { screenSharing: native, screenSharingVNC: undefined }
-  const vnc = readScreenSharingVNC(dataDir)
-  if (vnc === undefined) return { screenSharing: undefined, screenSharingVNC: undefined }
-  // An Xfce desktop's scale can be set (851-2339); display N listens on 5900 + N.
-  const scaler = vnc.desktop === "xfce" ? xfceScaler(vnc.port - 5900) : undefined
-  return { screenSharing: vncScreenSharing(vnc, scaler), screenSharingVNC: vnc }
-}
 /// Background cache only: clients checking on the user's behalf pass
 /// `force` (GET /v1/update?refresh=1) and bypass this entirely. Six hours
 /// here made remote machines deny fresh releases for most of a day.

@@ -260,8 +260,6 @@ private struct SplitLeafView: View {
           pane: model.state.selectedPane,
           title: paneTitle,
           sessionStore: sessionStore,
-          pluginIconClient: model.pluginIconClient,
-          pluginIconCacheNamespace: model.pluginIconCacheNamespace,
           leafId: leafId,
           dragCoordinator: dragCoordinator,
           onActivate: { model.onActivated?() },
@@ -317,8 +315,6 @@ private struct SplitLeafHeader: View {
   let pane: PaneDescriptorState?
   let title: (PaneDescriptorState) -> String
   let sessionStore: SessionStore?
-  let pluginIconClient: (any CodevisorServerClienting)?
-  let pluginIconCacheNamespace: String
   let leafId: UUID
   let dragCoordinator: WorkspaceSplitDragCoordinator?
   let onActivate: () -> Void
@@ -368,9 +364,7 @@ private struct SplitLeafHeader: View {
     switch pane?.kind {
     case .chat: "text.bubble"
     case .terminal: pane?.attachOnly == true ? "server.rack" : "terminal"
-    case .plugin: "puzzlepiece.extension"
     case .document: "doc.richtext"
-    case .screenSharing: "display"
     case .newTab, .none: "square.dashed"
     }
   }
@@ -411,19 +405,6 @@ private struct SplitLeafHeader: View {
         store: sessionStore,
         activityColor: theme.textSecondary
       )
-    } else if pane?.kind == .plugin,
-      let pluginId = pane?.pluginId,
-      let pluginIconClient
-    {
-      PluginIconView(
-        pluginId: pluginId,
-        paneType: pane?.pluginPaneType,
-        iconPath: "server",
-        client: pluginIconClient,
-        cacheNamespace: pluginIconCacheNamespace
-      )
-      .frame(width: 18, height: 11)
-      .foregroundStyle(theme.textSecondary)
     } else {
       Image(systemName: iconName)
         .font(.system(size: 11, weight: .medium))
@@ -436,7 +417,7 @@ private struct SplitLeafHeader: View {
     switch pane?.kind {
     case .chat: "Rename Chat"
     case .terminal: "Rename Terminal"
-    case .newTab, .plugin, .document, .screenSharing, .none: "Rename Pane"
+    case .newTab, .document, .none: "Rename Pane"
     }
   }
 

@@ -17,7 +17,6 @@ import { routeMcps, routeMcpScopes, routeNativeMcps } from "./routes/mcps.js"
 import { routeNetDirect } from "./routes/net-direct.js"
 import { routePluginProxy, routePlugins } from "./routes/plugins.js"
 import { routeProjects } from "./routes/projects.js"
-import { routeScreenSharing } from "./routes/screen-sharing.js"
 import { routeSessions } from "./routes/sessions.js"
 import { routeSkills } from "./routes/skills.js"
 import { configMutationNamespace, runBackgroundSyncReconcile } from "./routes/sync-reconcilers.js"
@@ -172,8 +171,6 @@ export const handleRequest = async (
 
     if (await routeTranscriptStress(services, fanout, routeState, request, response, url)) return
 
-    if (await routeScreenSharing(services, config, request, response, url)) return
-
     if (request.method === "GET" && url.pathname === "/v1/events/cursor") {
       writeJson(response, 200, { cursor: await run(services.db.latestEventCursor) })
       return
@@ -201,9 +198,6 @@ export const handleRequest = async (
         platform: process.platform,
         bindHost: config.host,
         features: [
-          ...(config.screenSharing === undefined
-            ? []
-            : ["screen-sharing-v1", "computer-use-stream-v1"]),
           "canonical-chat-v1",
           "session-event-stream-v1",
           "transcript-pagination-v1",

@@ -27,7 +27,6 @@ struct ChatScreen: View {
   @Environment(\.openFileDocument) var openFileDocument
   @Environment(\.codeHighlightTheme) var codeHighlightTheme
   @Environment(AppEnvironment.self) var environment
-  @Environment(\.computerUsePiPPane) var computerUsePiPPane
   @Bindable var controller: SessionController
   /// The session screen's focus coordinator (shared with the terminals).
   let focus: TerminalFocusController

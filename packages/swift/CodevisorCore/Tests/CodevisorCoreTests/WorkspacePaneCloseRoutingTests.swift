@@ -7,7 +7,7 @@ import Testing
 struct WorkspacePaneCloseRoutingTests {
   @Test(
     "Archiving a split chat preserves the remaining pane and selected tab",
-    arguments: [PaneKind.screenSharing, .terminal, .plugin, .document, .newTab, .chat], [false, true]
+    arguments: [PaneKind.terminal, .document, .newTab, .chat], [false, true]
   )
   func archiveSplitChat(remainingKind: PaneKind, hasOtherTab: Bool) throws {
     let date = Date(timeIntervalSince1970: 1_000)
@@ -20,8 +20,7 @@ struct WorkspacePaneCloseRoutingTests {
       seedSessions: [closing] + (hasOtherTab ? [other] : []) + (remainingKind == .chat ? [remainingChat] : []))
     let remaining = PaneDescriptorState(
       id: UUID(), kind: remainingKind, name: "Remaining pane", terminalKey: "remaining",
-      chatSessionId: remainingKind == .chat ? remainingChat.id : nil,
-      screenSharing: remainingKind == .screenSharing ? ScreenSharingPanePreferences() : nil)
+      chatSessionId: remainingKind == .chat ? remainingChat.id : nil)
     let remainingLeaf = UUID(), closingLeaf = UUID()
     let root = SplitNode.leaf(
       PaneGroupState(panes: [remaining], selectedPaneId: remaining.id), id: remainingLeaf

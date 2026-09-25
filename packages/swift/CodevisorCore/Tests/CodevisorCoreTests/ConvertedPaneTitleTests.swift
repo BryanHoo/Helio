@@ -33,7 +33,7 @@ struct ConvertedPaneTitleTests {
     var state = try #require(bridge.load(sessionId: nil))
     #expect(state.selectedPane?.name == "New tab")
 
-    let conversion = state.convertNewTabPane(id: placeholder.id, to: .screenSharing, sessionId: nil)
+    let conversion = state.convertNewTabPane(id: placeholder.id, to: .terminal, sessionId: UUID())
     let converted = try #require(conversion)
     bridge.save(state, sessionId: nil)
 
@@ -41,30 +41,30 @@ struct ConvertedPaneTitleTests {
     #expect(converted.id == placeholder.id)
     let reloaded = try #require(bridge.load(sessionId: nil))
     #expect(reloaded.selectedPane?.id == placeholder.id)
-    #expect(reloaded.selectedPane?.kind == .screenSharing)
-    #expect(reloaded.selectedPane?.name == "Screen Sharing")
+    #expect(reloaded.selectedPane?.kind == .terminal)
+    #expect(reloaded.selectedPane?.name == "Terminal 1")
     #expect(reloaded.selectedPane?.name != "New tab")
 
     let persisted = try #require(repository.workspace(id: space.id))
-    #expect(persisted.centerTree.group(id: leafId)?.selectedPane?.name == "Screen Sharing")
+    #expect(persisted.centerTree.group(id: leafId)?.selectedPane?.name == "Terminal 1")
   }
 
   @Test func aUserRenamedTabKeepsItsTitleAcrossTheConversion() throws {
     var seeded = PaneGroupState()
     let placeholder = seeded.addNewTabPane()
     var tab = WorkspaceTab(root: .leaf(seeded))
-    tab.customTitle = "Remote screen"
+    tab.customTitle = "Custom tab"
     var space = workspace(centerTree: .leaf(PaneGroupState()))
     space.centerTabs = [tab]
     let leafId = try #require(tab.root.allGroups.first?.id)
 
     var state = try #require(space.centerTabs[0].root.group(id: leafId))
-    let conversion = state.convertNewTabPane(id: placeholder.id, to: .screenSharing, sessionId: nil)
+    let conversion = state.convertNewTabPane(id: placeholder.id, to: .terminal, sessionId: UUID())
     _ = try #require(conversion)
     space.centerTabs[0].root = space.centerTabs[0].root.updatingGroup(id: leafId) { _ in state }
 
     // The pane's own name follows the conversion; the tab's user title does not.
-    #expect(space.centerTabs[0].root.group(id: leafId)?.selectedPane?.name == "Screen Sharing")
-    #expect(space.centerTabs[0].customTitle == "Remote screen")
+    #expect(space.centerTabs[0].root.group(id: leafId)?.selectedPane?.name == "Terminal 1")
+    #expect(space.centerTabs[0].customTitle == "Custom tab")
   }
 }

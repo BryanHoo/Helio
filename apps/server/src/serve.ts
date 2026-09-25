@@ -40,7 +40,7 @@ import { migrateLegacyLayout, migrateTmpDataDir } from "./infra/legacy-layout.js
 import { migrateLinuxDataLayout } from "./infra/linux-data-migration.js"
 import { acquireServerLease, type ServerLease } from "./infra/server-lease.js"
 import { makeSharedAccounts, type SharedAccounts } from "./infra/shared-accounts.js"
-import { restoreTerminalPersistence, screenSharingProvider } from "./serve-boot.js"
+import { restoreTerminalPersistence } from "./serve-boot.js"
 import {
   SERVER_PROCESS_TITLE,
   stabilizeServerWorkingDirectory,
@@ -399,7 +399,6 @@ export const runServe = (
           }, 250)
         },
         sessionActivity,
-        ...screenSharingProvider(dirname(databasePath)),
         updater
       }),
       bootListener

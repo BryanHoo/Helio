@@ -72,7 +72,7 @@ struct NavigationDeletionEventTests {
 
   @Test(
     "Session deletion removes orphan panes and invalid routes without a server workspace assignment",
-    arguments: [PaneKind.chat, .plugin, .terminal])
+    arguments: [PaneKind.chat, .document, .terminal])
   func sessionDeletionPrunesPanesBeforeRefresh(selectedKind: PaneKind) async throws {
     let clock = TestClock()
     let fixture = WorkspaceEventFixture(navigationClock: clock)

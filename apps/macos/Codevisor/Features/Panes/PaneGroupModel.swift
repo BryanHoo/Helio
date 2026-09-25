@@ -34,8 +34,6 @@ final class PaneGroupModel: Identifiable {
   /// Rebuilt by `adoptSession` so panes created after a chat appears get the
   /// chat-anchored context instead of the workspace-only one.
   @ObservationIgnored private var makeContext: (PaneDescriptorState) -> PaneContext
-  @ObservationIgnored let pluginIconClient: (any CodevisorServerClienting)?
-  @ObservationIgnored let pluginIconCacheNamespace: String
   /// Set by the workspace container: moves keyboard focus to the composer (used
   /// as the chat pane's focus target).
   @ObservationIgnored var requestComposerFocus: (() -> Void)?
@@ -97,14 +95,10 @@ final class PaneGroupModel: Identifiable {
   init(
     sessionId: UUID?,
     repository: any PaneGroupRepository,
-    pluginIconClient: (any CodevisorServerClienting)? = nil,
-    pluginIconCacheNamespace: String = "preview",
     makeContext: @escaping (PaneDescriptorState) -> PaneContext
   ) {
     self.sessionId = sessionId
     self.repository = repository
-    self.pluginIconClient = pluginIconClient
-    self.pluginIconCacheNamespace = pluginIconCacheNamespace
     self.makeContext = makeContext
     if let stored = repository.load(sessionId: sessionId) {
       self.state = stored
@@ -158,10 +152,6 @@ final class PaneGroupModel: Identifiable {
     if let existing = live[descriptor.id] { return existing }
     let pane: any Pane
     switch descriptor.kind {
-    case .screenSharing:
-      let sharing = ScreenSharingPane(context: makeContext(descriptor), descriptor: descriptor)
-      wireScreenSharing(sharing)
-      pane = sharing
     case .document:
       let document = FilePane(context: makeContext(descriptor), descriptor: descriptor)
       document.onNavigate = { [weak self] path in
@@ -176,14 +166,6 @@ final class PaneGroupModel: Identifiable {
       let terminal = TerminalPane(context: makeContext(descriptor))
       terminal.onContentAttached = { [weak self] in self?.requestSelectedPaneFocus() }
       pane = terminal
-    case .plugin:
-      let plugin = PluginPane(context: makeContext(descriptor), descriptor: descriptor)
-      // `codevisor.setTitle` renames the pane's tab like a manual
-      // rename would (persisted + published).
-      plugin.onTitleChange = { [weak self] title in
-        self?.renamePane(id: descriptor.id, to: title)
-      }
-      pane = plugin
     // The New Tab placeholder rides the chat pane's plumbing: an
     // AnyView host resolving content from the live descriptor via
     // `chatContent` (the container branches on kind there).
@@ -198,22 +180,6 @@ final class PaneGroupModel: Identifiable {
     }
     live[descriptor.id] = pane
     return pane
-  }
-
-  func wireScreenSharing(_ sharing: ScreenSharingPane) {
-    sharing.onFocus = { [weak self, weak sharing] in
-      guard let self, let sharing, self.canFocusSelectedPane, self.state.selectedPaneId == sharing.id else { return }
-      self.requestBackgroundFocus?()
-    }
-    sharing.onPreferencesChanged = { [weak self, weak sharing] preferences in
-      guard let self, let sharing,
-        let index = self.state.panes.firstIndex(where: { $0.id == sharing.id }),
-        self.state.panes[index].screenSharing != preferences
-      else { return }
-      self.state.panes[index].screenSharing = preferences
-      self.persist()
-      self.onPaneChanged?(self.state.panes[index])
-    }
   }
 
   /// Binds a ChatPane host to THIS group: content resolves from the LIVE
@@ -241,7 +207,7 @@ final class PaneGroupModel: Identifiable {
           self.pendingNewTabFocus = paneId
           self.requestBackgroundFocus?()
         }
-      case .terminal, .plugin, .document, .screenSharing:
+      case .terminal, .document:
         break
       }
     }
@@ -326,8 +292,6 @@ final class PaneGroupModel: Identifiable {
       if Self.requiresNewLivePane(previous: previous, next: next) {
         discardLivePane(id: id)
         invalidatedLiveIds.insert(id)
-      } else if let sharing = live[id] as? ScreenSharingPane {
-        sharing.applyPreferences(next.screenSharing ?? .init())
       }
     }
 
@@ -412,13 +376,6 @@ final class PaneGroupModel: Identifiable {
       // TerminalPane captures connection identity in its PaneContext.
       return previous.terminalKey != next.terminalKey
         || previous.attachOnly != next.attachOnly
-    case (.plugin, .plugin):
-      // PluginPane captures the plugin identity at creation; a pane
-      // re-pointed at another plugin/pane type needs a fresh webview.
-      return previous.pluginId != next.pluginId
-        || previous.pluginPaneType != next.pluginPaneType
-    case (.screenSharing, .screenSharing):
-      return false
     case (.document, .document):
       return previous.documentPath != next.documentPath
     default:

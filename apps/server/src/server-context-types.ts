@@ -2,7 +2,6 @@ import type { IncomingMessage, ServerResponse } from "node:http"
 import type { Socket } from "node:net"
 
 import type { AgentRuntimeService } from "@codevisor/agent-runtime"
-import type { ScreenSharingRequest } from "@codevisor/api"
 import type { EventEnvelope, ServerKind, SessionSummary, UpdateInfo } from "@codevisor/api"
 import type { AttachmentStore, CodevisorDatabaseService } from "@codevisor/db"
 import type { CredentialSource } from "@codevisor/harness-manager"
@@ -79,10 +78,6 @@ export interface CodevisorServerConfig {
   /// Host power policy for active locally hosted turns. The production macOS
   /// server supplies a scoped idle-sleep assertion; other platforms/tests
   /// omit it.
-  readonly screenSharing?: ((request: ScreenSharingRequest) => Promise<unknown>) | undefined
-  /// The loopback VNC server that stands in for a display on machines
-  /// without the native helper; the socket route splices clients onto it.
-  readonly screenSharingVNC?: ScreenSharingVNCConfig | undefined
   readonly sessionActivity?: SessionActivityController | undefined
   /// This machine's Codevisor Cloud device id (from `codevisor auth login`),
   /// advertised via /v1/info so clients can match this machine to its cloud
@@ -94,16 +89,6 @@ export interface CodevisorServerConfig {
   /// desktop app register this machine on the signed-in account via
   /// /v1/cloud/connect instead of requiring a separate `codevisor auth login`.
   readonly cloud?: CloudServerControl | undefined
-}
-
-export interface ScreenSharingVNCConfig {
-  readonly port: number
-  readonly name: string
-  /// The desktop scripts/vnc-desktop.sh installed; "xfce" lets the server set its scale (851-2339).
-  readonly desktop?: "xfce"
-  /// The size the desktop was provisioned at (its `-geometry`).
-  readonly defaultWidth?: number
-  readonly defaultHeight?: number
 }
 
 export interface CloudServerControl {

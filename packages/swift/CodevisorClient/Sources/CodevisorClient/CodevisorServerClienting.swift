@@ -6,8 +6,6 @@ public protocol CodevisorServerClienting: Sendable {
   func sharedHarnessAccount(
     harnessId: String, request: ServerSharedHarnessAccountRequest
   ) async throws -> ServerSharedHarnessAccountResponse
-  func screenSharing(_ request: ServerScreenSharingRequest) async throws -> ServerScreenSharingReply
-  func screenSharingVNCSocket(displayId: String) throws -> any ServerWebSocketConnecting
   func health() async throws -> ServerHealth
   func info() async throws -> ServerInfo
   /// This machine's cloud registration (`GET /v1/cloud`).
