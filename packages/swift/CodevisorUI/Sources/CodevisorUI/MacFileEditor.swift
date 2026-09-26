@@ -112,6 +112,20 @@
     }
   }
 
+  /// SwiftUI 每次挂载需要独立的根视图；编辑器本体仍由会话持有以保留撤销历史。
+  final class FileEditorMountView: NSView {
+    init(editor: MacFileEditor) {
+      super.init(frame: .zero)
+      let container = editor.container
+      container.removeFromSuperview()
+      container.frame = bounds
+      container.autoresizingMask = [.width, .height]
+      addSubview(container)
+    }
+
+    required init?(coder: NSCoder) { nil }
+  }
+
   extension FileEditorStorage: NSTextViewDelegate {
     func textDidChange(_ notification: Notification) { changed() }
     func textViewDidChangeSelection(_ notification: Notification) { selectionChanged() }
@@ -121,9 +135,13 @@
     let storage: FileEditorStorage
     let theme: Theme
     let highlight: CodeHighlightTheme?
-    func makeNSView(context: Context) -> NSScrollView { storage.native.container }
-    func updateNSView(_ view: NSScrollView, context: Context) { storage.update(theme: theme, highlight: highlight) }
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
+    func makeNSView(context: Context) -> FileEditorMountView {
+      FileEditorMountView(editor: storage.native)
+    }
+    func updateNSView(_ view: FileEditorMountView, context: Context) {
+      storage.update(theme: theme, highlight: highlight)
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: FileEditorMountView, context: Context) -> CGSize? {
       CGSize(width: proposal.width ?? 600, height: proposal.height ?? 400)
     }
   }

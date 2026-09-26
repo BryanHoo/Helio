@@ -31,15 +31,14 @@ extension SessionStore {
           }
         }
       }
-      // Legacy groups may contain several panes. Adopt only their selection;
-      // native visibility and focus follow after the destination is mounted.
-      if let tab = workspace.selectedCenterTab,
-        let state = tab.root.group(id: tab.activeLeafId),
-        let model = centerLeafGroups[.init(workspaceId: workspaceId, groupId: tab.activeLeafId)]
-      {
-        model.state.selectedPaneId = state.selectedPaneId
-      }
       workspaceLayoutRevision += 1
+    }
+    // 即使目标未改变，右栏重新挂载时也要同步缓存模型的选中项，避免空白内容。
+    if let tab = workspace.selectedCenterTab,
+      let state = tab.root.group(id: tab.activeLeafId),
+      let model = centerLeafGroups[.init(workspaceId: workspaceId, groupId: tab.activeLeafId)]
+    {
+      model.state.selectedPaneId = state.selectedPaneId
     }
     return true
   }
