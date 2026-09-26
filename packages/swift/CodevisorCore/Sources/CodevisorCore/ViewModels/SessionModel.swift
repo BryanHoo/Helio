@@ -158,11 +158,9 @@ public final class SessionModel {
   }
   /// Latest context-window + cost usage reported by the agent (`usage_update`).
   public internal(set) var usage: SessionUsage?
-  /* Usage-limit state only feeds the temporarily disabled usage popover.
-  public private(set) var usageLimits: ServerHarnessUsageLimits?
-  public private(set) var isLoadingUsageLimits = false
-  public private(set) var usageLimitsError: String?
-  */
+  public internal(set) var usageLimits: ServerHarnessUsageLimits?
+  public internal(set) var isLoadingUsageLimits = false
+  public internal(set) var usageLimitsError: String?
   /// Background tasks the agent is running (backgrounded shells, subagents),
   /// replaced wholesale on every server snapshot. Non-empty after a turn ends
   /// means the agent will come back on its own once the work settles.

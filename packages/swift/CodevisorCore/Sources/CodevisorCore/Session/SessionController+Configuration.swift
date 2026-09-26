@@ -84,6 +84,8 @@ extension SessionController {
         SessionConfigOption.Category.thoughtLevel
       } else if normalized.contains("speed") {
         SessionConfigOption.Category.speed
+      } else if normalized == "sandbox" || normalized == "approval" {
+        SessionConfigOption.Category.permission
       } else {
         SessionConfigOption.Category.modelConfig
       }
@@ -181,6 +183,7 @@ extension SessionController {
     SessionConfigOption.Category.thoughtLevel,
     SessionConfigOption.Category.speed,
     SessionConfigOption.Category.modelConfig,
+    SessionConfigOption.Category.permission,
   ]
 
   /// A draft never sits with an empty model chip: when the harness
@@ -302,7 +305,6 @@ extension SessionController {
       optionBeforeChange?.category == SessionConfigOption.Category.model,
       previousValue != value
     {
-      captureModelSelected(modelId: value, previousModelId: previousValue)
       configurationAdjustmentMessage = nil
       // The user just chose a model, so a "we swapped your model" notice
       // no longer describes the current state.
@@ -316,6 +318,15 @@ extension SessionController {
       Self.rememberedConfigCategories.contains(optionBeforeChange?.category ?? ""),
       let harnessId = connectedHarnessId ?? selectedHarnessId
     {
+      if optionBeforeChange?.category == SessionConfigOption.Category.permission {
+        // 权限选择跨工作区记忆，但历史任务仍使用自己的会话配置。
+        composerDefaults?.rememberPermissionSelection(
+          serverId: project.serverId,
+          harnessId: harnessId,
+          configId: configId,
+          value: value
+        )
+      }
       composerDefaults?.rememberConfigSelections(
         in: resolvedComposerDefaultsScope,
         harnessId: harnessId,

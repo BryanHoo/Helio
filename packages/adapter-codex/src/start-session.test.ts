@@ -26,6 +26,78 @@ const expectedNativeCodexSkills = {
 }
 
 describe("CodexProvider", () => {
+  it("uses the effective Codex permissions for new and resumed threads", async () => {
+    const permissionOptions = (options: ReadonlyArray<{ id: string; currentValue: string }>) =>
+      Object.fromEntries(
+        options
+          .filter((option) => ["sandbox", "approval"].includes(option.id))
+          .map((option) => [option.id, option.currentValue])
+      )
+
+    const { created } = await setup({
+      approvalPolicy: "never",
+      sandboxPolicy: { type: "dangerFullAccess" }
+    })
+    expect(permissionOptions(created!.metadata.configOptions)).toEqual({
+      approval: "never",
+      sandbox: "danger-full-access"
+    })
+
+    const { client, loaded } = await setup({
+      approvalPolicy: "on-request",
+      resume: "old-thread",
+      sandboxPolicy: { type: "readOnly", networkAccess: false }
+    })
+    expect(permissionOptions(loaded!.metadata!.configOptions)).toEqual({
+      approval: "on-request",
+      sandbox: "read-only"
+    })
+    const prompt = run(loaded!.handle.prompt("inspect"))
+    await Promise.resolve()
+    client.emit("turn/completed", {
+      threadId: "thread-resumed",
+      turn: { id: "t-permissions", status: "completed" }
+    })
+    await prompt
+    expect(
+      client.requests.find((request) => request.method === "turn/start")?.params
+    ).toMatchObject({
+      approvalPolicy: "on-request",
+      sandboxPolicy: { type: "readOnly" }
+    })
+  })
+
+  it("preserves the resumed thread's complete sandbox policy", async () => {
+    const sandboxPolicy = {
+      excludeSlashTmp: true,
+      excludeTmpdirEnvVar: true,
+      networkAccess: true,
+      type: "workspaceWrite",
+      writableRoots: ["/tmp/extra"]
+    }
+    const { client, loaded } = await setup({
+      approvalPolicy: "untrusted",
+      resume: "old-thread",
+      sandboxPolicy
+    })
+    expect(
+      loaded!.metadata!.configOptions.find((option) => option.id === "approval")?.currentValue
+    ).toBe("untrusted")
+    const prompt = run(loaded!.handle.prompt("continue"))
+    await Promise.resolve()
+    client.emit("turn/completed", {
+      threadId: "thread-resumed",
+      turn: { id: "t-resume", status: "completed" }
+    })
+    await prompt
+    expect(
+      client.requests.find((request) => request.method === "turn/start")?.params
+    ).toMatchObject({
+      approvalPolicy: "untrusted",
+      sandboxPolicy
+    })
+  })
+
   it("routes tools through Codevisor and disables native Codex skills and automation", async () => {
     const toolGateway: ToolGatewayConfig = {
       name: "codevisor",

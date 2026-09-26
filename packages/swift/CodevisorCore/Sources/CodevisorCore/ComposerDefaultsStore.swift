@@ -24,7 +24,7 @@ public final class ComposerDefaultsStore {
     }
   }
 
-  fileprivate struct MachineDefaults: Codable, Sendable {
+  struct MachineDefaults: Codable, Sendable {
     var lastHarnessId: String?
     /// The project used by the last standalone New Chat page on this
     /// machine. UUIDs that no longer exist are ignored by callers.
@@ -36,9 +36,11 @@ public final class ComposerDefaultsStore {
     /// Keeping every harness here is important: changing harnesses should
     /// restore that harness's own model/reasoning/speed selections.
     var configSelections: [String: [String: String]] = [:]
+    /// 仅记录用户明确修改的权限，供同一机器上的新会话继承。
+    var permissionSelections: [String: [String: String]]?
   }
 
-  fileprivate struct WorkspaceDefaults: Codable, Sendable {
+  struct WorkspaceDefaults: Codable, Sendable {
     /// Protects against a stale workspace id being interpreted under a
     /// different machine after an import.
     var serverId: String?
@@ -46,7 +48,7 @@ public final class ComposerDefaultsStore {
     var configSelections: [String: [String: String]] = [:]
   }
 
-  private struct Defaults: Codable, Sendable {
+  struct Defaults: Codable, Sendable {
     var version = ComposerDefaultsStore.schemaVersion
     /// The machine targeted by the standalone New Chat composer most
     /// recently. Navigation never writes this; explicit composer project
@@ -62,7 +64,7 @@ public final class ComposerDefaultsStore {
   private let previousMigrationBackupKey: String
   private let legacyMigrationBackupKey: String
   private let persistenceOwner = UUID()
-  private var defaults: Defaults
+  var defaults: Defaults
   private var persistenceBatchDepth = 0
   private var batchNeedsPersistence = false
   private var batchNeedsImmediatePersistence = false
@@ -183,31 +185,6 @@ public final class ComposerDefaultsStore {
     }
   }
 
-  /// The remembered option ids and values for one harness on this machine.
-  public func configSelections(
-    forHarness harnessId: String,
-    onServer serverId: String
-  ) -> [String: String] {
-    configSelections(
-      forHarness: harnessId,
-      in: .newWorkspace(serverId: serverId)
-    )
-  }
-
-  /// The remembered option ids and values for one harness in this scope.
-  public func configSelections(
-    forHarness harnessId: String,
-    in scope: Scope
-  ) -> [String: String] {
-    switch scope {
-    case let .newWorkspace(serverId):
-      return defaults.machines[serverId]?.configSelections[harnessId] ?? [:]
-    case let .workspace(id, serverId):
-      return workspaceDefaults(id: id, serverId: serverId)?
-        .configSelections[harnessId] ?? [:]
-    }
-  }
-
   /// Records an explicit harness picker action immediately.
   public func rememberHarnessSelection(serverId: String, harnessId: String?) {
     rememberHarnessSelection(
@@ -276,48 +253,6 @@ public final class ComposerDefaultsStore {
     var machine = defaults.machines[serverId] ?? MachineDefaults()
     machine.newWorkspaceInWorktree = createsWorktree
     defaults.machines[serverId] = machine
-    persist()
-  }
-
-  /// Merges the latest known model/reasoning/speed values for one harness.
-  /// Missing ids are retained because some options (notably speed) disappear
-  /// temporarily when the selected model does not support them.
-  public func rememberConfigSelections(
-    serverId: String,
-    harnessId: String?,
-    configValues: [String: String]
-  ) {
-    rememberConfigSelections(
-      in: .newWorkspace(serverId: serverId),
-      harnessId: harnessId,
-      configValues: configValues
-    )
-  }
-
-  /// Merges explicit picker changes into the relevant profile.
-  public func rememberConfigSelections(
-    in scope: Scope,
-    harnessId: String?,
-    configValues: [String: String]
-  ) {
-    guard let harnessId, !harnessId.isEmpty, !configValues.isEmpty else { return }
-    switch scope {
-    case let .newWorkspace(serverId):
-      var machine = defaults.machines[serverId] ?? MachineDefaults()
-      var selections = machine.configSelections[harnessId] ?? [:]
-      selections.merge(configValues) { _, latest in latest }
-      machine.configSelections[harnessId] = selections
-      defaults.machines[serverId] = machine
-    case let .workspace(id, serverId):
-      var workspace =
-        workspaceDefaults(id: id, serverId: serverId)
-        ?? WorkspaceDefaults(serverId: serverId)
-      var selections = workspace.configSelections[harnessId] ?? [:]
-      selections.merge(configValues) { _, latest in latest }
-      workspace.serverId = serverId
-      workspace.configSelections[harnessId] = selections
-      defaults.workspaces[id.uuidString] = workspace
-    }
     persist()
   }
 
@@ -438,7 +373,7 @@ public final class ComposerDefaultsStore {
     persist()
   }
 
-  private func workspaceDefaults(id: UUID, serverId: String) -> WorkspaceDefaults? {
+  func workspaceDefaults(id: UUID, serverId: String) -> WorkspaceDefaults? {
     guard let workspace = defaults.workspaces[id.uuidString],
       workspace.serverId == nil || workspace.serverId == serverId
     else {
@@ -468,7 +403,7 @@ public final class ComposerDefaultsStore {
     PersistenceEncoding.drain()
   }
 
-  private func persist(immediately: Bool = false) {
+  func persist(immediately: Bool = false) {
     if persistenceBatchDepth > 0 {
       batchNeedsPersistence = true
       batchNeedsImmediatePersistence = batchNeedsImmediatePersistence || immediately

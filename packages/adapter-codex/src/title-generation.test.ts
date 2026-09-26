@@ -83,7 +83,7 @@ describe("Codex title generation", () => {
     expect(client.requests.find((r) => r.method === "thread/start")?.params).toMatchObject({
       ephemeral: true,
       sandbox: "read-only",
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       config: { "features.apps": false, mcp_servers: { external: { enabled: false } } }
     })
     expect(client.requests.find((r) => r.method === "turn/start")?.params).toMatchObject({

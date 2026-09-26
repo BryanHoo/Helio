@@ -12,7 +12,12 @@ import type { CodexClient } from "./client.js"
 import { closeCommandTerminals, emitCodexBackgroundTasks } from "./command-terminals.js"
 import { configuredMcpServerNames, NATIVE_AUTOMATION_MCP_SERVERS } from "./config-file.js"
 import { isRecord } from "./internal.js"
-import { CODEX_FAST_TIER, currentCodexModelFor, DEFAULT_CODEX_MODE } from "./models.js"
+import {
+  CODEX_FAST_TIER,
+  currentCodexModelFor,
+  DEFAULT_CODEX_MODE,
+  sandboxValueFor
+} from "./models.js"
 import { handleNotification } from "./notifications.js"
 import { killCodexCommandProcesses, type CodexCommandKiller } from "./process-kill.js"
 import { cancelPendingQuestions, serverRequestResponse } from "./questions.js"
@@ -115,7 +120,12 @@ export const makeStartSession = ({
             }
           })
     }
-    let response: { thread?: { id?: string }; model?: string }
+    let response: {
+      thread?: { id?: string }
+      model?: string
+      approvalPolicy?: string
+      sandbox?: Record<string, unknown>
+    }
     if (resumeThreadId === undefined) {
       response = await client.request("thread/start", {
         cwd,
@@ -134,6 +144,19 @@ export const makeStartSession = ({
       client.close()
       throw new Error("codex app-server did not return a thread id")
     }
+    // 新建和恢复响应都返回 Codex 的生效权限；缺失时不能猜测历史任务的权限。
+    if (typeof response.approvalPolicy !== "string" || !isRecord(response.sandbox)) {
+      client.close()
+      throw new Error("codex app-server did not return thread permissions")
+    }
+    const sandboxPolicy = response.sandbox
+    let sandboxValue: string
+    try {
+      sandboxValue = sandboxValueFor(sandboxPolicy)
+    } catch (error) {
+      client.close()
+      throw error
+    }
     const session: CodexSession = {
       activeTurnId: undefined,
       backgroundTerminals: config.backgroundTerminals,
@@ -144,6 +167,9 @@ export const makeStartSession = ({
       killCommandProcesses: config.killCommandProcesses ?? killCodexCommandProcesses,
       currentEffort: undefined,
       currentModeId: DEFAULT_CODEX_MODE,
+      currentSandbox: sandboxValue,
+      currentSandboxPolicy: sandboxPolicy,
+      currentApproval: response.approvalPolicy,
       currentModel: sanitizeModelValue(response.model ?? ""),
       currentSpeed: undefined,
       cwd,

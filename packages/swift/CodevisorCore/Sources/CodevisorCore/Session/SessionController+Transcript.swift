@@ -231,16 +231,14 @@ extension SessionController {
   public var errorRequiresHarnessAuthentication: Bool {
     model?.errorRequiresHarnessAuthentication == true
   }
-  /* Usage state only feeds the temporarily disabled usage gauge and popover.
   public var usage: SessionUsage? { model?.usage }
   public var usageLimits: ServerHarnessUsageLimits? { model?.usageLimits }
   public var isLoadingUsageLimits: Bool { model?.isLoadingUsageLimits == true }
   public var usageLimitsError: String? { model?.usageLimitsError }
 
   public func loadUsageLimits(force: Bool = false) async {
-      await model?.loadUsageLimits(force: force)
+    await model?.loadUsageLimits(force: force)
   }
-  */
 
   @discardableResult
   public func loadOlderHistory() async -> Int {

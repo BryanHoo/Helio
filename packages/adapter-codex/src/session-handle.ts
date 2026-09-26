@@ -10,7 +10,8 @@ import {
   CODEX_STANDARD_TIER,
   configOptionsFor,
   currentCodexModelFor,
-  effectiveSpeed
+  effectiveSpeed,
+  sandboxPolicyFor
 } from "./models.js"
 import { answerCodexQuestion, cancelPendingQuestions } from "./questions.js"
 import type { CodexSession } from "./session.js"
@@ -82,9 +83,9 @@ export const handleFor = (session: CodexSession): AgentSessionHandle => ({
         ...(speed === undefined
           ? {}
           : { serviceTier: speed === "fast" ? CODEX_FAST_TIER : CODEX_STANDARD_TIER }),
-        ...(mode === undefined
-          ? {}
-          : { approvalPolicy: mode.approvalPolicy, sandboxPolicy: mode.sandboxPolicy }),
+        // 权限与 Plan 独立，切换协作模式时保留用户选择。
+        approvalPolicy: session.currentApproval,
+        sandboxPolicy: session.currentSandboxPolicy,
         // EXPERIMENTAL collaboration mode: "plan" makes the model propose a
         // plan (streamed as plan items → plan_document) before implementing;
         // "default" (sent once Plan mode has been left) switches it back to
@@ -113,6 +114,25 @@ export const handleFor = (session: CodexSession): AgentSessionHandle => ({
         session.currentEffort = value
       } else if (configId === "speed") {
         session.currentSpeed = value === "fast" ? "fast" : "standard"
+      } else if (configId === "sandbox") {
+        if (
+          value !== session.currentSandbox &&
+          !["read-only", "workspace-write", "danger-full-access"].includes(value)
+        ) {
+          throw new Error(`Unknown Codex sandbox: ${value}`)
+        }
+        if (value !== session.currentSandbox) {
+          session.currentSandbox = value
+          session.currentSandboxPolicy = sandboxPolicyFor(value)
+        }
+      } else if (configId === "approval") {
+        if (
+          value !== session.currentApproval &&
+          !["untrusted", "on-request", "never"].includes(value)
+        ) {
+          throw new Error(`Unknown Codex approval policy: ${value}`)
+        }
+        session.currentApproval = value
       } else {
         throw new Error(`Unknown config option: ${configId}`)
       }

@@ -16,7 +16,7 @@ describe("CodexProvider", () => {
     await promptPromise
     const turnStart = client.requests.find((request) => request.method === "turn/start")
     expect(turnStart?.params).toMatchObject({
-      approvalPolicy: "never",
+      approvalPolicy: "on-request",
       collaborationMode: {
         mode: "plan",
         settings: {
@@ -25,7 +25,7 @@ describe("CodexProvider", () => {
           reasoning_effort: "medium"
         }
       },
-      sandboxPolicy: { type: "dangerFullAccess" }
+      sandboxPolicy: { type: "workspaceWrite" }
     })
     // After leaving Plan mode, the reset collaboration mode ("default") rides
     // the next turn — codex's collaboration is sticky, so omitting it would
@@ -51,11 +51,38 @@ describe("CodexProvider", () => {
     })
   })
 
-  it("applies modes as approval/sandbox turn overrides and syncs effort to the model", async () => {
+  it("applies sandbox and approval selections independently on the next turn", async () => {
+    const { client, created } = await setup()
+    const options = created!.metadata.configOptions
+    expect(options.find((option) => option.id === "sandbox")?.currentValue).toBe("workspace-write")
+    expect(options.find((option) => option.id === "approval")?.currentValue).toBe("on-request")
+
+    await run(created!.handle.setConfigOption("sandbox", "read-only"))
+    await run(created!.handle.setConfigOption("approval", "never"))
+    const prompt = run(created!.handle.prompt("inspect"))
+    await Promise.resolve()
+    client.emit("turn/completed", {
+      threadId: "thread-new",
+      turn: { id: "t-permissions", status: "completed" }
+    })
+    await prompt
+    expect(
+      client.requests.find((request) => request.method === "turn/start")?.params
+    ).toMatchObject({
+      approvalPolicy: "never",
+      sandboxPolicy: { type: "readOnly" }
+    })
+  })
+
+  it("applies permissions as turn overrides and syncs effort to the model", async () => {
     const { client, created, events } = await setup()
-    await run(created!.handle.setMode("agent-full-access"))
-    expect(events.at(-1)?.payload).toMatchObject({ modeId: "agent-full-access" })
+    await run(created!.handle.setConfigOption("sandbox", "danger-full-access"))
+    await run(created!.handle.setConfigOption("approval", "never"))
+    expect(events.at(-1)?.payload).toMatchObject({ configId: "approval", value: "never" })
     await expect(run(created!.handle.setMode("nonsense"))).rejects.toThrow("Unknown Codex mode")
+    await expect(run(created!.handle.setConfigOption("sandbox", "nonsense"))).rejects.toThrow(
+      "Unknown Codex sandbox"
+    )
 
     // An effort the new model doesn't support clamps to that model's default;
     // xhigh is valid for gpt-5.2-codex but not gpt-5.5.

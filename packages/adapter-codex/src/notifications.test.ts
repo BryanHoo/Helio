@@ -3,6 +3,24 @@ import { describe, expect, it } from "vitest"
 import { run, setup, UNIFIED_DIFF } from "./test-support.js"
 
 describe("CodexProvider", () => {
+  it("reports current context separately from cumulative session tokens", async () => {
+    const { client, events } = await setup()
+    client.emit("thread/tokenUsage/updated", {
+      threadId: "thread-new",
+      tokenUsage: {
+        last: { totalTokens: 41061 },
+        modelContextWindow: 258400,
+        total: { totalTokens: 52011395, inputTokens: 51847383 }
+      }
+    })
+    expect(events.at(-1)?.payload).toMatchObject({
+      sessionUpdate: "usage_update",
+      used: 41061,
+      size: 258400,
+      totalTokens: 52011395
+    })
+  })
+
   it("normalizes Codex context-compaction item lifecycle", async () => {
     const { client, events } = await setup()
     client.emit("item/started", {

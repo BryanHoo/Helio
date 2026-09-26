@@ -53,20 +53,15 @@ describe("CodexProvider", () => {
       "medium",
       "xhigh"
     ])
-    // Approval/sandbox presets are exposed as session modes; full access is
-    // the default posture.
-    expect(created?.metadata.modes?.currentModeId).toBe("agent-full-access")
+    // Plan is a collaboration mode; permissions are independent config options.
+    expect(created?.metadata.modes?.currentModeId).toBe("agent")
     expect(created?.metadata.modes?.availableModes.map((mode) => mode.id)).toEqual([
       "plan",
-      "read-only",
-      "agent",
-      "agent-full-access"
+      "agent"
     ])
     expect(created?.metadata.modes?.availableModes.map((mode) => mode.canonicalId)).toEqual([
       "plan",
-      "readOnly",
-      "ask",
-      "fullAccess"
+      "ask"
     ])
     // Experimental APIs (collaborationMode, requestUserInput) are opted into
     // at initialize.

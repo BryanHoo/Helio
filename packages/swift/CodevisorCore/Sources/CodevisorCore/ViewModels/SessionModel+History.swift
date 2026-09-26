@@ -231,19 +231,17 @@ extension SessionModel {
     }
   }
 
-  /* Usage-limit loading only feeds the temporarily disabled usage popover.
   public func loadUsageLimits(force: Bool = false) async {
-      if isLoadingUsageLimits || (!force && usageLimits != nil) { return }
-      isLoadingUsageLimits = true
-      usageLimitsError = nil
-      defer { isLoadingUsageLimits = false }
-      do {
-          usageLimits = try await transport.usageLimits()
-      } catch {
-          usageLimitsError = serverErrorMessage(error)
-      }
+    if isLoadingUsageLimits || (!force && usageLimits != nil) { return }
+    isLoadingUsageLimits = true
+    usageLimitsError = nil
+    defer { isLoadingUsageLimits = false }
+    do {
+      usageLimits = try await transport.usageLimits()
+    } catch {
+      usageLimitsError = serverErrorMessage(error)
+    }
   }
-  */
 
   /// Prepends one bounded page of older semantic rows. Requests are
   /// deduplicated and stable ids prevent overlap if a retry races a prior load.

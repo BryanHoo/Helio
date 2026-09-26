@@ -236,6 +236,7 @@ private extension ComposerCard {
         } else {
           attachButton
           ModelConfigMenu(controller: controller)
+          CodexPermissionsMenu(controller: controller)
           // Active modes show as removable chips (turned on via
           // the /plan and /goal slash commands).
           if controller.hasPlanMode, controller.isPlanModeOn {
@@ -257,15 +258,14 @@ private extension ComposerCard {
           // While the agent runs, stop takes the send slot; a draft
           // in the composer brings send back with stop beside it.
           HStack(spacing: 4) {
-            /* Usage gauge and popover are temporarily disabled.
             UsageRingButton(
-                usage: controller.usage,
-                limits: controller.usageLimits,
-                isLoadingLimits: controller.isLoadingUsageLimits,
-                limitsError: controller.usageLimitsError,
-                onRequestLimits: { await controller.loadUsageLimits() }
+              usage: controller.usage,
+              limits: controller.usageLimits,
+              isLoadingLimits: controller.isLoadingUsageLimits,
+              limitsError: controller.usageLimitsError,
+              showWhenUnavailable: controller.activeHarnessId == "codex",
+              onRequestLimits: { await controller.loadUsageLimits() }
             )
-            */
             if controller.isSending, !hasComposerDraft {
               stopButton
             } else {

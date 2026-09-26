@@ -6,7 +6,7 @@ import { isRecord } from "./internal.js"
 // Modified for Codevisor's event routing, bounded execution, and cleanup.
 // The temporary thread shares the main session's authenticated
 // connection; its events never enter the user's transcript.
-const TITLE_MODEL = "gpt-5.6-luna"
+const TITLE_MODEL = "gpt-6-luna"
 const TITLE_TIMEOUT_MS = 30_000
 const TITLE_INSTRUCTIONS =
   "Generate a short conversation title from the user's first message. " +

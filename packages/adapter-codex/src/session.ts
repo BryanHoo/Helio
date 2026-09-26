@@ -65,6 +65,10 @@ export interface CodexSession {
   /// Undefined until the user picks a speed — the model's default tier applies.
   currentSpeed: "standard" | "fast" | undefined
   currentModeId: string
+  currentSandbox: string
+  /// Preserve Codex's effective policy, including roots and network access.
+  currentSandboxPolicy: Record<string, unknown>
+  currentApproval: string
   /// True once a Plan-mode turn has run. Codex's collaboration mode is sticky
   /// server-side, so after engaging Plan we keep sending an explicit
   /// collaboration mode every turn ("default" leaves Plan) instead of omitting

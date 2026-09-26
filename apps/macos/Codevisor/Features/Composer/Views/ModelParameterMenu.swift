@@ -13,6 +13,7 @@ enum ModelParameterMenu {
         !option.options.isEmpty
           && option.category != SessionConfigOption.Category.model
           && option.category != SessionConfigOption.Category.mode
+          && option.category != "permission"
           && option.id != "model"
           && option.id != "mode"
       }

@@ -15,8 +15,6 @@ export interface CodexMode {
   readonly name: string
   readonly description: string
   readonly canonicalId: CanonicalModeId
-  readonly approvalPolicy: string
-  readonly sandboxPolicy: Record<string, unknown>
   /// When set, turn/start also sends the EXPERIMENTAL collaborationMode
   /// preset (unlocked by `capabilities.experimentalApi` at initialize).
   readonly collaboration?: "plan"
@@ -24,48 +22,54 @@ export interface CodexMode {
 
 export const CODEX_MODES: ReadonlyArray<CodexMode> = [
   {
-    approvalPolicy: "never",
     canonicalId: "plan",
     collaboration: "plan",
-    description: "Plans first with full system access and no command approvals.",
+    description: "Plans before making changes.",
     id: "plan",
-    name: "Plan",
-    sandboxPolicy: { type: "dangerFullAccess" }
+    name: "Plan"
   },
   {
-    approvalPolicy: "on-request",
-    canonicalId: "readOnly",
-    description: "Requires approval to edit files and run commands.",
-    id: "read-only",
-    name: "Read-only",
-    sandboxPolicy: { networkAccess: false, type: "readOnly" }
-  },
-  {
-    approvalPolicy: "on-request",
     canonicalId: "ask",
-    description: "Read and edit files, and run commands.",
+    description: "Works with the selected sandbox and approval settings.",
     id: "agent",
-    name: "Agent",
-    sandboxPolicy: {
-      excludeSlashTmp: false,
-      excludeTmpdirEnvVar: false,
-      networkAccess: false,
-      type: "workspaceWrite",
-      writableRoots: []
-    }
-  },
-  {
-    approvalPolicy: "never",
-    canonicalId: "fullAccess",
-    description:
-      "Codex can edit files outside this workspace and run commands with network access.",
-    id: "agent-full-access",
-    name: "Agent (full access)",
-    sandboxPolicy: { type: "dangerFullAccess" }
+    name: "Agent"
   }
 ]
 
-export const DEFAULT_CODEX_MODE = "agent-full-access"
+export const DEFAULT_CODEX_MODE = "agent"
+
+export const sandboxValueFor = (policy: Record<string, unknown>): string => {
+  switch (policy.type) {
+    case "readOnly":
+      return "read-only"
+    case "workspaceWrite":
+      return "workspace-write"
+    case "dangerFullAccess":
+      return "danger-full-access"
+    case "externalSandbox":
+      return "external-sandbox"
+    default:
+      if (typeof policy.type === "string") return policy.type
+      throw new Error("Codex sandbox policy has no type")
+  }
+}
+
+export const sandboxPolicyFor = (sandbox: string): Record<string, unknown> => {
+  switch (sandbox) {
+    case "read-only":
+      return { networkAccess: false, type: "readOnly" }
+    case "danger-full-access":
+      return { type: "dangerFullAccess" }
+    default:
+      return {
+        excludeSlashTmp: false,
+        excludeTmpdirEnvVar: false,
+        networkAccess: false,
+        type: "workspaceWrite",
+        writableRoots: []
+      }
+  }
+}
 
 export const configOptionsFor = (session: CodexSession): ReadonlyArray<SessionConfigOption> => {
   const options: Array<SessionConfigOption> = []
@@ -107,6 +111,36 @@ export const configOptionsFor = (session: CodexSession): ReadonlyArray<SessionCo
       ]
     })
   }
+  options.push(
+    {
+      category: "permission",
+      currentValue: session.currentSandbox,
+      id: "sandbox",
+      name: "Sandbox",
+      options: [
+        { name: "Read-only", value: "read-only" },
+        { name: "Workspace write", value: "workspace-write" },
+        { name: "Full access", value: "danger-full-access" },
+        ...(["read-only", "workspace-write", "danger-full-access"].includes(session.currentSandbox)
+          ? []
+          : [{ name: session.currentSandbox, value: session.currentSandbox }])
+      ]
+    },
+    {
+      category: "permission",
+      currentValue: session.currentApproval,
+      id: "approval",
+      name: "Approvals",
+      options: [
+        { name: "Untrusted commands", value: "untrusted" },
+        { name: "On request", value: "on-request" },
+        { name: "Never", value: "never" },
+        ...(["untrusted", "on-request", "never"].includes(session.currentApproval)
+          ? []
+          : [{ name: session.currentApproval, value: session.currentApproval }])
+      ]
+    }
+  )
   return options
 }
 

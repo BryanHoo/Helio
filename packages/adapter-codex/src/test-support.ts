@@ -36,6 +36,8 @@ export class FakeCodexClient implements CodexClient {
   closed = false
   failResume = false
   startModel = "gpt-5.2-codex"
+  approvalPolicy = "on-request"
+  sandboxPolicy: Record<string, unknown> = { type: "workspaceWrite" }
   listedThreads: Array<Record<string, unknown>> = []
   threadName: string | null = null
   threadPreview = ""
@@ -58,12 +60,22 @@ export class FakeCodexClient implements CodexClient {
       case "initialize":
         return {} as T
       case "thread/start":
-        return { model: this.startModel, thread: { id: "thread-new" } } as T
+        return {
+          approvalPolicy: this.approvalPolicy,
+          model: this.startModel,
+          sandbox: this.sandboxPolicy,
+          thread: { id: "thread-new" }
+        } as T
       case "thread/resume":
         if (this.failResume) {
           throw new Error("thread not found")
         }
-        return { model: this.startModel, thread: { id: "thread-resumed" } } as T
+        return {
+          approvalPolicy: this.approvalPolicy,
+          model: this.startModel,
+          sandbox: this.sandboxPolicy,
+          thread: { id: "thread-resumed" }
+        } as T
       case "thread/list":
         return { data: this.listedThreads, nextCursor: null } as T
       case "thread/read":
@@ -194,6 +206,8 @@ export const setup = async (
     failResume?: boolean
     resume?: string
     startModel?: string
+    approvalPolicy?: string
+    sandboxPolicy?: Record<string, unknown>
     toolGateway?: ToolGatewayConfig
     /// `null` models a machine with no codex config.toml at all.
     codexConfigToml?: string | null
@@ -202,6 +216,8 @@ export const setup = async (
   const client = new FakeCodexClient()
   client.failResume = options.failResume ?? false
   client.startModel = options.startModel ?? "gpt-5.2-codex"
+  client.approvalPolicy = options.approvalPolicy ?? "on-request"
+  client.sandboxPolicy = options.sandboxPolicy ?? { type: "workspaceWrite" }
   const spawns: Array<CodexSpawnRequest> = []
   const provider = makeCodexProvider(environment, {
     connector: async (request) => {
