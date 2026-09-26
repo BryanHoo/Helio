@@ -155,3 +155,26 @@ extension ProjectListModel {
     } ?? group.primary
   }
 }
+
+/// Sidebar presentation only; workspaces keep their machine-scoped ownership.
+public struct ProjectWorkspaceSection: Identifiable {
+  public let id: String
+  public let project: ProjectGroup?
+  public let workspaces: [Workspace]
+
+  public static func sections(
+    projects: [ProjectGroup], workspaces: [Workspace], scratchProjects: [Project]
+  ) -> [Self] {
+    let visible = workspaces.filter { !$0.isArchived }
+    let scratchKeys = Set(scratchProjects.map { "\($0.serverId)|\($0.id.uuidString)" })
+    var remaining = visible
+    let grouped = projects.map { group in
+      let members = Set(group.members.map { "\($0.serverId)|\($0.id.uuidString)" })
+      let tasks = remaining.filter { members.contains("\($0.serverId)|\($0.projectId.uuidString)") }
+      remaining.removeAll { members.contains("\($0.serverId)|\($0.projectId.uuidString)") }
+      return Self(id: group.id, project: group, workspaces: tasks)
+    }
+    let scratch = remaining.filter { scratchKeys.contains("\($0.serverId)|\($0.projectId.uuidString)") }
+    return scratch.isEmpty ? grouped : grouped + [Self(id: "scratch", project: nil, workspaces: scratch)]
+  }
+}

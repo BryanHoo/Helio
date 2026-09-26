@@ -233,6 +233,14 @@ struct SessionContainerView: View {
     // device materializes in the mounted workspace immediately.
     let workspace = selectedWorkspace
     return VStack(spacing: 0) {
+      WorkspaceTabStrip(
+        workspace: workspace,
+        sessions: environment.projectList.sessions,
+        onSelect: selectCenterTab,
+        onClose: closeCenterTab,
+        onNewTab: addCenterTab,
+        onRename: { renameCenterTab($0, to: $1) }
+      )
       SessionScreen(
         controller: controller,
         centerGroup: activeCenterModel(in: workspace),

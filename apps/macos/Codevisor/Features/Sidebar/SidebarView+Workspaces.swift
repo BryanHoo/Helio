@@ -41,9 +41,7 @@ extension SidebarView {
     workspaceRevision += 1
   }
 
-  /// One workspace: its header (the reorder handle) over its tab rows.
-  /// Both report their frames so a drag can compare the lifted header
-  /// against whole sections and land back on the header precisely.
+  /// One task row. The tab strip now belongs to the workspace content.
   func workspaceSection(_ item: SidebarWorkspaceListItem) -> some View {
     let id = item.workspace.id
     return VStack(alignment: .leading, spacing: 1) {
@@ -55,9 +53,8 @@ extension SidebarView {
         } action: { frame in
           recordWorkspaceHeaderFrame(frame, for: id)
         }
-        .gesture(workspaceReorderGesture(for: id))
+        .simultaneousGesture(workspaceReorderGesture(for: id))
 
-      workspaceTabRows(item)
     }
     .onGeometryChange(for: CGRect.self) { proxy in
       proxy.frame(in: .named(Self.reorderSpace))
@@ -67,18 +64,22 @@ extension SidebarView {
     .onDisappear { forgetWorkspaceGeometry(for: id) }
   }
 
-  /// Where the workspace lives. Nil when its machine is unknown — an
-  /// unresolved server isn't necessarily this one, so it stays unlabeled.
+  /// Show the machine only when this project has tasks on multiple machines.
   func machineName(for item: SidebarWorkspaceListItem) -> String? {
+    guard let section = section(containing: item.workspace.id),
+      Set(section.workspaces.map(\.serverId)).count > 1
+    else { return nil }
     let machine = environment.machines.machine(for: item.workspace.serverId)
     return machine.map { $0.isLocal ? "This Mac" : $0.name }
   }
 
   private func workspaceHeader(_ item: SidebarWorkspaceListItem) -> some View {
     SidebarWorkspaceHeader(
-      name: item.workspace.name,
+      name: item.title,
       machineName: machineName(for: item),
+      isSelected: routesSelectedSession(item.workspace),
       isReordering: isReordering,
+      onActivate: { activateWorkspace(item) },
       onArchive: { archiveWorkspace(item.workspace) },
       onRename: {
         workspaceRenameTitle = item.workspace.name
@@ -86,6 +87,32 @@ extension SidebarView {
       },
       onNewTab: { addTab(in: item) }
     )
+  }
+
+  func activateWorkspace(_ item: SidebarWorkspaceListItem) {
+    let workspace = item.workspace
+    guard store?.selectDestination(.tab(workspace.selectedCenterTabId), in: workspace.id) == true else { return }
+    let activeChatID = workspace.selectedCenterTab.flatMap { tab in
+      tab.root.group(id: tab.activeLeafId)?.selectedPane?.chatSessionId
+    }
+    let route = workspace.selectionRoute(
+      activatedChatSessionId: activeChatID,
+      routingSessionId: item.routingSession?.id,
+      selectionAlreadyRoutesWorkspace: routesSelectedSession(workspace)
+    )
+    switch route {
+    case let .session(serverId, id):
+      selection = .session(serverId: serverId, id: id)
+    case let .workspace(serverId, id):
+      selection = .workspace(serverId: serverId, id: id)
+    case nil:
+      break
+    }
+  }
+
+  func addTab(in item: SidebarWorkspaceListItem) {
+    activateWorkspace(item)
+    store?.centerTabRequest = CenterTabRequest(workspaceId: item.workspace.id, action: .new)
   }
 
   /// Whether the sidebar's selection is showing this workspace: its selected
@@ -113,6 +140,10 @@ extension SidebarView {
     if case let .session(serverId, sessionId) = selection,
       serverId == workspace.serverId,
       environment.workspaces.workspaceId(forSession: sessionId) == workspace.id
+    {
+      selectionLeaves = true
+    } else if case let .workspace(serverId, id) = selection,
+      serverId == workspace.serverId && id == workspace.id
     {
       selectionLeaves = true
     } else {

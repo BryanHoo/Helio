@@ -23,7 +23,7 @@ extension SessionContainerView {
     return configuredCenterModel(leafId: leafId)
   }
 
-  /// A sidebar-originated tab action for this workspace.
+  /// A task-row context-menu action for this workspace.
   func performCenterTabRequest(_ request: CenterTabRequest) {
     switch request.action {
     case let .close(tabId): closeCenterTab(tabId)
@@ -34,7 +34,20 @@ extension SessionContainerView {
 
   func selectCenterTab(_ tabId: UUID) {
     let workspace = selectedWorkspace
-    store.selectDestination(.tab(tabId), in: workspace.id)
+    guard let tab = workspace.centerTabs.first(where: { $0.id == tabId }),
+      store.selectDestination(.tab(tabId), in: workspace.id)
+    else { return }
+    // A chat tab changes the routing session as well as the persisted layout.
+    let active = tab.root.group(id: tab.activeLeafId)?.selectedPane.map { [$0] } ?? []
+    let panes = active + tab.root.allGroups.flatMap(\.state.panes)
+    if let chatID = panes.first(where: { pane in
+      pane.kind == .chat
+        && environment.projectList.sessions.contains {
+          $0.id == pane.chatSessionId && $0.serverId == workspace.serverId
+        }
+    })?.chatSessionId, chatID != session?.id {
+      onFocusedChatChanged?(chatID)
+    }
   }
 
   /// Focus follows committed navigation. A delayed callback from an earlier
@@ -67,9 +80,12 @@ extension SessionContainerView {
   }
 
   func renameCenterTab(_ tabId: UUID, to customTitle: String?) {
+    let chatID = selectedWorkspace.centerTabs.first { $0.id == tabId }.flatMap { tab in
+      tab.root.group(id: tab.activeLeafId)?.selectedPane?.chatSessionId
+    }
     environment.workspaceSync.renameTab(
       workspaceId: selectedWorkspace.id, tabId: tabId,
-      chatSessionId: activePaneDescriptor?.chatSessionId, to: customTitle ?? ""
+      chatSessionId: chatID, to: customTitle ?? ""
     )
   }
 

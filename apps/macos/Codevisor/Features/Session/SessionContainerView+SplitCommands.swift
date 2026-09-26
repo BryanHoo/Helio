@@ -44,7 +44,7 @@ extension SessionContainerView {
     case let .selectTab(index):
       let workspace = navigationWorkspace
       guard workspace.centerTabs.indices.contains(index) else { return true }
-      store.selectDestination(.tab(workspace.centerTabs[index].id), in: workspace.id)
+      selectCenterTab(workspace.centerTabs[index].id)
     case let .split(edge):
       splitActiveLeaf(edge: edge)
     case let .focusSplit(edge):
@@ -62,13 +62,12 @@ extension SessionContainerView {
   }
 
   func selectRelativeCenterTab(offset: Int) {
-    if store.sidebarTabStepHandler?(offset) == true { return }
     let workspace = navigationWorkspace
     guard workspace.centerTabs.count > 1,
       let index = workspace.selectedCenterTabIndex
     else { return }
     let target = (index + offset + workspace.centerTabs.count) % workspace.centerTabs.count
-    store.selectDestination(.tab(workspace.centerTabs[target].id), in: workspace.id)
+    selectCenterTab(workspace.centerTabs[target].id)
   }
 
   func splitActiveLeaf(edge: SplitEdge) {

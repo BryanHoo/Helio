@@ -59,6 +59,18 @@
       title: title, createdAt: date, updatedAt: date
     )
 
+    static var workspace: Workspace {
+      let pane = PaneDescriptorState(
+        id: paneID, kind: .chat, name: title,
+        terminalKey: paneID.uuidString, chatSessionId: sessionID
+      )
+      let tab = WorkspaceTab(root: .leaf(PaneGroupState(panes: [pane], selectedPaneId: paneID)))
+      return Workspace(
+        name: title, rootDirectory: "/projects/daylight", serverId: machineID,
+        projectId: projectID, centerTabs: [tab]
+      )
+    }
+
     static func id(_ value: Int) -> UUID {
       UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", value))!
     }

@@ -14,7 +14,7 @@ import SwiftUI
 struct SidebarWorkspaceGeometry: Equatable {
   /// The header row alone: what the ghost mimics and lands on.
   var header: CGRect = .zero
-  /// The header plus its tab rows: what the ghost is compared against.
+  /// The task row's full frame: what the ghost is compared against.
   var section: CGRect = .zero
 }
 
@@ -95,10 +95,11 @@ extension SidebarView {
 
   private func moveDraggedWorkspace() {
     guard let drag = workspaceDrag, !drag.isSettling else { return }
-    let order = workspaceItems.map(\.workspace.id)
+    guard let section = section(containing: drag.workspaceID) else { return }
+    let order = section.workspaces.map(\.id)
     let sections = workspaceGeometry.frames.compactMapValues {
       $0.section == .zero ? nil : $0.section
-    }
+    }.filter { order.contains($0.key) }
     guard
       let index = ListReorder.destinationIndex(
         of: drag.workspaceID, in: order, frames: sections, midY: drag.ghostFrame.midY
@@ -127,7 +128,7 @@ extension SidebarView {
     {
       let frame = drag.ghostFrame
       SidebarWorkspaceDragGhost(
-        name: item.workspace.name,
+        name: item.title,
         machineName: machineName(for: item)
       )
       .frame(width: frame.width, height: frame.height)

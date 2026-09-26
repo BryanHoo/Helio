@@ -2,11 +2,9 @@ import CodevisorCore
 import Foundation
 
 extension SidebarView {
-  /// Only local sessions contribute to the Mac workspace list.
+  /// Sessions on every machine can anchor a task in the project tree.
   var activeSessionItems: [SidebarSessionListItem] {
-    let projects = list.projects.filter {
-      $0.serverId == CodevisorMachine.local.id
-    }
+    let projects = list.projects
     let projectsByID = Dictionary(
       projects.map { ($0.sidebarFleetItemID, $0) },
       uniquingKeysWith: { first, _ in first }
@@ -30,7 +28,7 @@ extension SidebarView {
       uniquingKeysWith: { first, _ in first }
     )
     let workspaces = environment.workspaces.loadAll()
-      .filter { !$0.isArchived && $0.serverId == CodevisorMachine.local.id }
+      .filter { !$0.isArchived }
       .sorted(by: WorkspaceSidebarOrder.precedes)
     let items = workspaces.compactMap { workspace -> SidebarWorkspaceListItem? in
       let routedSessionIDs = workspace.chatSessionIds.filter {

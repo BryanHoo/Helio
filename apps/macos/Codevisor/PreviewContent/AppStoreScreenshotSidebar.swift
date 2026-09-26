@@ -17,17 +17,22 @@
         ScrollView {
           VStack(alignment: .leading, spacing: 1) {
             ForEach(AppStoreScreenshotData.sections) { section in
-              SidebarWorkspaceHeader(
-                name: section.name, machineName: section.machineName, isReordering: false,
-                onArchive: {}, onRename: {}, onNewTab: {}
-              )
-              ForEach(section.rows) { row in
-                SidebarWorkspaceTabRow(
-                  title: row.title, kind: row.kind, isAgentOwned: false,
-                  chatSession: row.session, store: store,
+              HStack(spacing: 8) {
+                Image(systemName: "chevron.down").font(.caption2)
+                Image(systemName: "folder")
+                Text(section.name).font(.subheadline.weight(.semibold))
+                Spacer()
+                Image(systemName: "plus")
+              }
+              .padding(.horizontal, 10)
+              .frame(height: 32)
+              ForEach(section.rows.filter { $0.session != nil }) { row in
+                SidebarWorkspaceHeader(
+                  name: row.title, machineName: nil,
                   isSelected: scene == "conversation" && row.id == AppStoreScreenshotData.id(11),
-                  isReordering: false, titleFont: .body, onActivate: {}, onClose: {}
+                  isReordering: false, onActivate: {}, onArchive: {}, onRename: {}, onNewTab: {}
                 )
+                .padding(.leading, 20)
               }
             }
           }
@@ -40,14 +45,6 @@
   }
 
   private extension ScreenshotSidebarTabRow {
-    var kind: PaneKind {
-      switch icon {
-      case .chat: .chat
-      case .terminal: .terminal
-      case .document: .document
-      }
-    }
-
     var session: ChatSession? {
       guard case let .chat(harnessId, _) = icon else { return nil }
       return ChatSession(

@@ -149,6 +149,34 @@ struct ProjectGroupTests {
     #expect(ordered.map(\.id) == ["repo|github.com/acme/widget", "repo|github.com/acme/docs"])
   }
 
+  @Test("Project task sections keep remote workspaces together and scratch separate")
+  func workspaceSections() {
+    let laptop = project("widget", serverId: "laptop", repoKey: "github.com/acme/widget")
+    let desktop = project("widget", serverId: "desktop", repoKey: "github.com/acme/widget")
+    let empty = project("empty", serverId: "laptop")
+    let scratch = project("temporary", serverId: "laptop", isScratch: true)
+    let projects = ProjectGroup.grouping([laptop, desktop, empty])
+    func workspace(_ project: Project, name: String) -> Workspace {
+      Workspace(
+        name: name, rootDirectory: nil, serverId: project.serverId,
+        projectId: project.id, centerTree: .leaf(PaneGroupState()))
+    }
+    let desktopTask = workspace(desktop, name: "desktop task")
+    let laptopTask = workspace(laptop, name: "laptop task")
+    let scratchTask = workspace(scratch, name: "scratch task")
+
+    let sections = ProjectWorkspaceSection.sections(
+      projects: projects,
+      workspaces: [desktopTask, scratchTask, laptopTask],
+      scratchProjects: [scratch]
+    )
+
+    #expect(sections.map(\.id) == [projects[0].id, projects[1].id, "scratch"])
+    #expect(sections[0].workspaces.map(\.id) == [desktopTask.id, laptopTask.id])
+    #expect(sections[1].workspaces.isEmpty)
+    #expect(sections[2].workspaces.map(\.id) == [scratchTask.id])
+  }
+
   @Test("Repo identity survives the client cache round trip")
   func codableRoundTrip() throws {
     let original = project("widget", serverId: "laptop", repoKey: "github.com/acme/widget")

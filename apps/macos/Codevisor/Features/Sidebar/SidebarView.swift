@@ -4,7 +4,7 @@ import CodevisorTheming
 import CodevisorUI
 import os
 
-/// The sidebar: a New Chat action and fleet-wide workspaces with their tabs.
+/// Projects and their workspace tasks; tabs live in the center column.
 ///
 /// Built on `ScrollView` + `VStack` (not `List`), because the sidebar-styled
 /// `List` outline coordinator crashes on the current macOS SDK.
@@ -19,8 +19,8 @@ struct SidebarView: View {
   @State private var pendingImport: PendingSessionImport?
   @State var renamingWorkspace: Workspace?
   @State var workspaceRenameTitle = ""
-  @State var renamingTab: SidebarTabRenameRequest?
-  @State var tabRenameTitle = ""
+  @ClientPreference("sidebar.expandedProjects.v1", default: Optional<[String]>.none)
+  var expandedProjectIDs: [String]?
   /// Bumped after workspace mutations (backfill sweep, renames) so the
   /// non-observable repository is re-read.
   @State var workspaceRevision = 0
@@ -49,8 +49,7 @@ struct SidebarView: View {
 
   private var sidebarContent: some View {
     VStack(spacing: 0) {
-      // Development identity and New chat stay pinned; workspace
-      // sections scroll together with their tabs.
+      // Development identity and New chat stay pinned above the project tree.
       VStack(alignment: .leading, spacing: 1) {
         if CodevisorAppVariant.isDevelopment {
           SidebarDevelopmentWorktreeRow()
@@ -75,11 +74,11 @@ struct SidebarView: View {
           // `.geometryGroup()` makes each section translate as one
           // rigid unit during reflows. Without it a row whose
           // content changes in the same transaction as its move
-          // (the state change that reorders a chat also restyles
-          // its leading icon) animates each subview's position
+          // (the state change that reorders a task also restyles
+          // its selection) animates each subview's position
           // independently, which reads as shearing/jitter.
-          ForEach(workspaceItems) { item in
-            workspaceSection(item)
+          ForEach(projectSections) { section in
+            projectSection(section)
               .geometryGroup()
               .transition(.identity)
           }
@@ -87,8 +86,8 @@ struct SidebarView: View {
         }
         .padding(.horizontal, 8)
         .padding(.bottom, 8)
+        .animation(Motion.listReflow(reduceMotion: reduceMotion), value: projectSections.map(\.id))
         .animation(Motion.listReflow(reduceMotion: reduceMotion), value: workspaceItems.map(\.id))
-        .animation(Motion.listReflow(reduceMotion: reduceMotion), value: workspaceTabRowIDs)
       }
       .scrollContentBackground(.hidden)
       .scrollBounceBehavior(.basedOnSize)
@@ -127,12 +126,6 @@ struct SidebarView: View {
           },
         )
       )
-      .modifier(
-        SidebarTabRenameAlert(
-          request: $renamingTab,
-          title: $tabRenameTitle,
-          onRename: { renameTab($0, to: $1) }
-        ))
   }
 
   private var sidebarChangeObserversView: some View {
@@ -148,14 +141,19 @@ struct SidebarView: View {
   private var sidebarConfiguredView: some View {
     sidebarChangeObserversView
       .onAppear(perform: ensureSessionWorkspaces)
-      // The docked sidebar answers ⇧⌘[ / ⇧⌘] (the drawer copy
-      // stays passive so there is exactly one owner of the step).
-      .task(id: store.map(ObjectIdentifier.init)) {
-        guard publishesSceneActions else { return }
-        store?.sidebarTabStepHandler = { offset in stepSidebarTab(offset) }
-      }
-      .onDisappear {
-        if publishesSceneActions { store?.sidebarTabStepHandler = nil }
+      .onChange(of: selection, initial: true) { _, route in
+        let workspaceID: UUID?
+        switch route {
+        case let .workspace(_, id): workspaceID = id
+        case let .session(_, id): workspaceID = environment.workspaces.workspaceId(forSession: id)
+        case .newChat, .none: workspaceID = nil
+        }
+        guard let workspaceID, let section = section(containing: workspaceID),
+          !isProjectExpanded(section.id)
+        else { return }
+        var ids = expandedProjectIDs ?? (projectSections.first.map { [$0.id] } ?? [])
+        ids.append(section.id)
+        expandedProjectIDs = ids
       }
       .focusedSceneValue(
         \.sidebarActions,
@@ -165,7 +163,6 @@ struct SidebarView: View {
           ? SidebarActions(
             newChat: { selection = .newChat(nil) },
             newProject: { startAddProject() },
-            stepTab: { _ = stepSidebarTab($0) }
           )
           : nil
       )

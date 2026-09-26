@@ -1,47 +1,56 @@
 import SwiftUI
+import CodevisorUI
 
-/// A compact section heading above a workspace's always-visible tabs.
+/// One selectable task under its project.
 struct SidebarWorkspaceHeader: View {
   let name: String
   /// Where the workspace lives: a remote machine's name, or "This Mac" for
   /// local ones. Nil only when the workspace's machine is unknown.
   let machineName: String?
+  let isSelected: Bool
   let isReordering: Bool
+  let onActivate: () -> Void
   let onArchive: () -> Void
   let onRename: () -> Void
   let onNewTab: () -> Void
 
-  @State private var isHovered = false
-
   /// Insets around the label. The reorder ghost reuses these so it can
   /// land pixel-for-pixel on the row it was lifted from.
   static let horizontalPadding: CGFloat = 10
-  static let topPadding: CGFloat = 12
-  static let bottomPadding: CGFloat = 4
+  static let topPadding: CGFloat = 6
+  static let bottomPadding: CGFloat = 6
 
   var body: some View {
-    HStack(spacing: 6) {
-      SidebarWorkspaceHeaderLabel(name: name, machineName: machineName)
-
-      Spacer(minLength: 0)
-
-      if isHovered && !isReordering {
-        Button(action: onArchive) {
-          Image(systemName: "archivebox")
-            .font(.caption2)
+    HoverableRow(isSelected: isSelected, isHoverEnabled: !isReordering, isHoverForced: false) { hovered in
+      HStack(spacing: 4) {
+        Button(action: onActivate) {
+          HStack(spacing: 7) {
+            Image(systemName: "square.stack")
+              .font(.caption)
+              .frame(width: 16)
+              .foregroundStyle(.secondary)
+            SidebarWorkspaceHeaderLabel(name: name, machineName: machineName)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
+          .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("Archive workspace")
-        .accessibilityLabel("Archive \(title)")
-        .frame(width: 24, height: 14, alignment: .trailing)
+        .accessibilityLabel("Open \(title)")
+
+        if hovered && !isReordering {
+          Button(action: onArchive) {
+            Image(systemName: "archivebox").font(.caption2)
+          }
+          .buttonStyle(.plain)
+          .help("Archive task")
+          .accessibilityLabel("Archive \(title)")
+          .frame(width: 24, height: 20)
+        }
       }
+      .padding(.horizontal, Self.horizontalPadding)
+      .padding(.top, Self.topPadding)
+      .padding(.bottom, Self.bottomPadding)
     }
-    .foregroundStyle(.secondary)
-    .padding(.horizontal, Self.horizontalPadding)
-    .padding(.top, Self.topPadding)
-    .padding(.bottom, Self.bottomPadding)
-    .contentShape(Rectangle())
-    .hoverTracking($isHovered)
     .contextMenu {
       Button(action: onNewTab) {
         Label("New Tab", systemImage: "plus")
@@ -53,7 +62,7 @@ struct SidebarWorkspaceHeader: View {
           .labelStyle(.titleAndIcon)
       }
       Button(action: onArchive) {
-        Label("Archive", systemImage: "archivebox")
+        Label("Archive Task", systemImage: "archivebox")
           .labelStyle(.titleAndIcon)
       }
     }
@@ -94,7 +103,6 @@ struct SidebarWorkspaceHeaderLabel: View {
     .font(.subheadline.weight(.semibold))
     .lineLimit(1)
     .accessibilityElement(children: .combine)
-    .accessibilityAddTraits(.isHeader)
     .help(machineName.map { "\(title) · \($0)" } ?? title)
   }
 }
