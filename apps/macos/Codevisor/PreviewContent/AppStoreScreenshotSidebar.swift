@@ -14,6 +14,17 @@
           title: "New chat", systemImage: "square.and.pencil", isSelected: scene == "new-chat", isHoverEnabled: false
         ) {}
         .padding(.top, 8)
+        HStack {
+          Text("Projects")
+            .font(.subheadline.weight(.semibold))
+          Spacer(minLength: 0)
+          Image(systemName: "plus")
+            .frame(width: 24, height: 24)
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 4)
+        .padding(.top, 14)
+        .padding(.bottom, 4)
         ScrollView {
           VStack(alignment: .leading, spacing: 1) {
             ForEach(AppStoreScreenshotData.sections) { section in
@@ -22,7 +33,6 @@
                 Image(systemName: "folder")
                 Text(section.name).font(.subheadline.weight(.semibold))
                 Spacer()
-                Image(systemName: "plus")
               }
               .padding(.horizontal, 10)
               .frame(height: 32)
@@ -38,6 +48,13 @@
           }
         }
         .scrollContentBackground(.hidden)
+        Divider()
+        Label("Settings", systemImage: "gearshape")
+          .font(.subheadline)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 8)
+          .frame(height: 36)
+          .padding(.vertical, 6)
       }
       .padding(.horizontal, 8)
       .themedSurface(.sidebar)

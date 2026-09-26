@@ -67,6 +67,24 @@ struct SidebarView: View {
       .padding(.horizontal, 8)
       .padding(.top, 8)
 
+      HStack {
+        Text("Projects")
+          .font(.subheadline.weight(.semibold))
+          .accessibilityAddTraits(.isHeader)
+        Spacer(minLength: 0)
+        Button(action: startAddProject) {
+          Image(systemName: "plus")
+            .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.plain)
+        .help("Add Project")
+        .accessibilityLabel("Add Project")
+      }
+      .padding(.leading, 16)
+      .padding(.trailing, 12)
+      .padding(.top, 14)
+      .padding(.bottom, 4)
+
       ScrollView {
         // A plain VStack: lazy row materialization re-measures the
         // content mid-bounce, which reads as random overscroll snaps.
@@ -92,6 +110,19 @@ struct SidebarView: View {
       .scrollContentBackground(.hidden)
       .scrollBounceBehavior(.basedOnSize)
 
+      Divider()
+      SettingsLink {
+        Label("Settings", systemImage: "gearshape")
+          .font(.subheadline)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 16)
+          .frame(height: 36)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .help("Settings")
+      .padding(.vertical, 6)
+
     }
     // Section frames and the reorder ghost share this space, so the ghost
     // can be placed over whichever row it was lifted from or lands on.
@@ -105,6 +136,7 @@ struct SidebarView: View {
       .themedSurface(.sidebar)
       .contentShape(Rectangle())
       .addProjectFlow(addProjectFlow) { project in
+        expandProject(ProjectGroup.groupID(for: project))
         selection = .newChat(NewChatTarget(project))
         offerSessionImport(for: project)
       }

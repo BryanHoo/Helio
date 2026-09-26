@@ -29,45 +29,44 @@ extension SidebarView {
     expandedProjectIDs = ids
   }
 
+  func expandProject(_ id: String) {
+    guard !isProjectExpanded(id) else { return }
+    expandedProjectIDs = (expandedProjectIDs ?? defaultExpandedProjectIDs) + [id]
+  }
+
   @ViewBuilder
   func projectSection(_ section: ProjectWorkspaceSection) -> some View {
     VStack(alignment: .leading, spacing: 1) {
-      HStack(spacing: 4) {
-        Button {
-          toggleProject(section.id)
-        } label: {
-          HStack(spacing: 8) {
-            Image(systemName: isProjectExpanded(section.id) ? "chevron.down" : "chevron.right")
-              .font(.caption2.weight(.semibold))
-              .frame(width: 12)
-            Image(systemName: section.project == nil ? "tray" : "folder")
-              .frame(width: 18)
-            Text(section.project?.name ?? "Temporary Tasks")
-              .lineLimit(1)
-              .frame(maxWidth: .infinity, alignment: .leading)
-          }
-          .font(.subheadline.weight(.semibold))
-          .padding(.horizontal, 10)
-          .frame(height: 32)
-          .contentShape(Rectangle())
+      Button {
+        toggleProject(section.id)
+      } label: {
+        HStack(spacing: 8) {
+          Image(systemName: isProjectExpanded(section.id) ? "chevron.down" : "chevron.right")
+            .font(.caption2.weight(.semibold))
+            .frame(width: 12)
+          Image(systemName: section.project == nil ? "tray" : "folder")
+            .frame(width: 18)
+          Text(section.project?.name ?? "Temporary Tasks")
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(section.project?.name ?? "Temporary Tasks")
-        .accessibilityValue(isProjectExpanded(section.id) ? "Expanded" : "Collapsed")
-
-        if let project = section.project {
-          Button {
-            selection = .newChat(NewChatTarget(list.mostRecentlyUsedMember(of: project)))
-          } label: {
-            Image(systemName: "plus").frame(width: 20, height: 24)
-          }
-          .buttonStyle(.plain)
-          .help("New task in \(project.name)")
-          .accessibilityLabel("New task in \(project.name)")
-        }
+        .font(.subheadline.weight(.semibold))
+        .padding(.horizontal, 10)
+        .frame(height: 32)
+        .contentShape(Rectangle())
       }
+      .buttonStyle(.plain)
+      .accessibilityLabel(section.project?.name ?? "Temporary Tasks")
+      .accessibilityValue(isProjectExpanded(section.id) ? "Expanded" : "Collapsed")
 
       if isProjectExpanded(section.id) {
+        if section.workspaces.isEmpty {
+          Text("No tasks yet")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.leading, 38)
+            .frame(height: 28)
+        }
         ForEach(section.workspaces) { workspace in
           if let item = workspaceItems.first(where: { $0.workspace.id == workspace.id }) {
             workspaceSection(item)
