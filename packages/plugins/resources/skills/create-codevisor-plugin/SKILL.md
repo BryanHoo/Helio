@@ -260,17 +260,11 @@ namespace (`owner.name` ⇒ `github.com/owner/...`). Others install it with
 `plugins.discover_remote` → user consent → `plugins.install`, or
 `codevisor plugin install owner/repo`.
 
-To list it in the plugin registry (Settings ▸ Plugins ▸ Browse and
-codevisor.dev/plugins), add the `codevisor-plugin` GitHub topic to the
-repo; the registry indexes it within ~15 minutes. The manifest must sit at
-the repo root and its id namespace must equal the repo owner, or the entry
-is rejected (rejections and reasons appear in the index's `rejected` list).
-Untag the repo to delist it.
-
-Publishing to the registry agrees to the [plugin publisher terms](https://codevisor.dev/terms#plugins).
+There is no hosted plugin registry or automatic marketplace listing. Share
+the Git repository or local path directly with people who want to install it.
 Set `ageRating` honestly to 4, 9, 13, 16, or 18 using Apple’s age-rating criteria.
 iOS accepts ratings up to 16; a missing or higher rating prevents opening there.
-Codevisor may restrict a plugin or publisher on iOS after review. Mac execution is unaffected.
+Locally blocked publishers cannot be opened on iOS. Mac execution is unaffected.
 Keep content, metadata, and data practices accurate, and moderate user-generated content.
 The native install screens explain the plugin’s access and record consent.
 There is no separate consent prompt when viewing or opening an installed plugin.

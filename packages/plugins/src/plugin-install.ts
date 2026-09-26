@@ -1,4 +1,4 @@
-import { lstat, mkdir, mkdtemp, readFile, rename, rm, stat, symlink } from "node:fs/promises"
+import { lstat, mkdir, mkdtemp, readFile, rm, stat, symlink } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { basename, isAbsolute, join, normalize, resolve, sep } from "node:path"
 
@@ -13,13 +13,9 @@ import type {
 import { makePluginCandidatePreparer } from "./plugin-candidate.js"
 import { displayPluginCommand, pluginSetupCommands } from "./plugin-command.js"
 import { describePlugin } from "./plugin-discovery.js"
-import type {
-  PreparedPluginUpdate,
-  PreparePluginUpdateRequest,
-  StagedPlugin
-} from "./plugin-install-types.js"
+import type { StagedPlugin } from "./plugin-install-types.js"
 import { parsePluginManifest, PLUGIN_MANIFEST_FILENAME } from "./plugin-manifest.js"
-import { readPluginInstallReceipt, type PluginInstallSourceReceipt } from "./plugin-receipt.js"
+import type { PluginInstallSourceReceipt } from "./plugin-receipt.js"
 import { assertGitAvailable, type FindExecutable } from "./plugin-requirements.js"
 import { makePluginRestore, type PluginRestore } from "./plugin-restore.js"
 import {
@@ -84,12 +80,6 @@ export interface PluginInstaller extends PluginRestore {
   /// Installs (or updates a managed install of) the plugin the source
   /// provides and resolves its manifest.
   readonly importRemote: (request: ImportRemotePluginRequest) => Promise<PluginManifest>
-  /// Fetches, validates, and runs setup for an exact update candidate without
-  /// stopping or changing the installed plugin.
-  readonly prepareUpdate: (request: PreparePluginUpdateRequest) => Promise<PreparedPluginUpdate>
-  /// Applies only the bytes represented by a prepared handle.
-  readonly applyPreparedUpdate: (prepared: PreparedPluginUpdate) => Promise<PluginManifest>
-  readonly discardPreparedUpdate: (prepared: PreparedPluginUpdate) => Promise<void>
   /// Repairs or finishes any transaction journal left by a process crash.
   readonly recover: () => Promise<void>
   /// Managed-marker-gated uninstall; linked plugins are never deleted.
@@ -130,7 +120,6 @@ export const makePluginInstaller = (deps: PluginInstallerDeps): PluginInstaller 
     stop: deps.stop,
     verifyInstalled: deps.verifyInstalled
   })
-  const updatePlansRoot = join(deps.pluginsRoot, ".codevisor-update-plans")
 
   /// Stage a source into a fresh temp clone and read its manifest. The
   /// verbatim install/run commands surfaced from here are exactly what the
@@ -281,24 +270,12 @@ export const makePluginInstaller = (deps: PluginInstallerDeps): PluginInstaller 
     ...(deps.findExecutable === undefined ? {} : { findExecutable: deps.findExecutable })
   })
 
-  const preparedDirectory = (pluginId: string, planId: string): string => {
-    if (!/^[0-9a-z-]{1,128}$/i.test(planId)) {
-      throw new PluginsError("invalid", `Invalid plugin update plan id: ${planId}`)
-    }
-    const directory = join(updatePlansRoot, `${pluginId}.${planId}`)
-    /* v8 ignore next 3 -- the manifest and plan-id patterns make this unreachable. */
-    if (!isPathSafe(updatePlansRoot, directory)) {
-      throw new PluginsError("invalid", `Invalid plugin update plan path: ${planId}`)
-    }
-    return directory
-  }
-
   const importStaged = async (staged: StagedPlugin): Promise<void> => {
     await transactions.withLock(staged.manifest.id, async () => {
       await transactions.recoverPlugin(staged.manifest.id)
       const transactionPaths = transactions.paths(staged.manifest.id)
       try {
-        const context = await candidates.prepare(staged, transactionPaths.candidate, false)
+        const context = await candidates.prepare(staged, transactionPaths.candidate)
         await transactions.apply(staged.manifest.id, context.hadExisting)
       } catch (cause) {
         await rm(transactionPaths.candidate, { force: true, recursive: true })
@@ -332,85 +309,8 @@ export const makePluginInstaller = (deps: PluginInstallerDeps): PluginInstaller 
         await staged.cleanup()
       }
     },
-    prepareUpdate: async (request) => {
-      const staged = await stage(request.source, request.sourceReceipt)
-      try {
-        if (staged.manifest.id !== request.expectedPluginId) {
-          throw new PluginsError(
-            "invalid",
-            `Registry update for ${request.expectedPluginId} provided manifest id ${staged.manifest.id}`
-          )
-        }
-        return await transactions.withLock(staged.manifest.id, async () => {
-          await transactions.recoverPlugin(staged.manifest.id)
-          const directory = preparedDirectory(staged.manifest.id, request.planId)
-          try {
-            const context = await candidates.prepare(staged, directory, true)
-            if (context.previousManifest === undefined || context.previousReceipt === undefined) {
-              throw new PluginsError(
-                "conflict",
-                `Plugin ${staged.manifest.id} has no trusted install receipt; reinstall it before updating`
-              )
-            }
-            return {
-              directory,
-              manifest: staged.manifest,
-              planId: request.planId,
-              pluginId: staged.manifest.id,
-              previousManifest: context.previousManifest,
-              previousResolvedCommit: context.previousReceipt.resolvedCommit,
-              resolvedCommit: staged.resolvedCommit
-            }
-          } catch (cause) {
-            await rm(directory, { force: true, recursive: true })
-            throw cause
-          }
-        })
-      } finally {
-        await staged.cleanup()
-      }
-    },
-    applyPreparedUpdate: async (prepared) =>
-      transactions.withLock(prepared.pluginId, async () => {
-        await transactions.recoverPlugin(prepared.pluginId)
-        if (prepared.directory !== preparedDirectory(prepared.pluginId, prepared.planId)) {
-          throw new PluginsError("invalid", "Plugin update plan directory is not trusted")
-        }
-        const existing = installedWithId(prepared.pluginId)
-        const receipt = readPluginInstallReceipt(managedDirectory(prepared.pluginId))
-        if (
-          existing?.manifest.version !== prepared.previousManifest.version ||
-          receipt?.resolvedCommit !== prepared.previousResolvedCommit
-        ) {
-          throw new PluginsError(
-            "conflict",
-            `Plugin ${prepared.pluginId} changed after this update was prepared; prepare a new plan`
-          )
-        }
-        const transactionPaths = transactions.paths(prepared.pluginId)
-        await rm(transactionPaths.candidate, { force: true, recursive: true })
-        try {
-          await rename(prepared.directory, transactionPaths.candidate)
-        } catch {
-          throw new PluginsError(
-            "notFound",
-            `Plugin update plan is missing or expired: ${prepared.planId}`
-          )
-        }
-        await transactions.apply(prepared.pluginId, true)
-        return prepared.manifest
-      }),
-    discardPreparedUpdate: async (prepared) => {
-      if (prepared.directory !== preparedDirectory(prepared.pluginId, prepared.planId)) {
-        throw new PluginsError("invalid", "Plugin update plan directory is not trusted")
-      }
-      await rm(prepared.directory, { force: true, recursive: true })
-    },
     recover: async () => {
       await transactions.recover()
-      // Plans are process-local capabilities. They cannot be applied after a
-      // restart, so abandoned staged bytes are removed during recovery.
-      await rm(updatePlansRoot, { force: true, recursive: true })
     },
     link: async (request) => {
       if (!isAbsolute(request.path)) {

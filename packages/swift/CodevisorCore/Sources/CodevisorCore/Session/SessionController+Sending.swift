@@ -67,7 +67,7 @@ extension SessionController {
     // A brand-new chat renders its pre-chat steps as setup sections; a
     // resumed session's transcript shouldn't grow one retroactively.
     let showsSetupPhases =
-      (pendingNewChatAnalytics || (!hasSentFirst && onFirstSend != nil))
+      (pendingNewChatSetup || (!hasSentFirst && onFirstSend != nil))
       && resumeAgentSessionId?.isEmpty != false
     // Clear the durable draft before mounting any first-send destination.
     // The source UIKit editor keeps its already-rendered pixels until the
@@ -99,7 +99,7 @@ extension SessionController {
     if !hasSentFirst {
       hasSentFirst = true
       if onFirstSend != nil {
-        pendingNewChatAnalytics = true
+        pendingNewChatSetup = true
       }
       onFirstSend?(text)
       onFirstSend = nil
@@ -305,7 +305,7 @@ extension SessionController {
       // session remains registered; only this controller's draft-facing
       // state is reset.
       hasSentFirst = false
-      pendingNewChatAnalytics = false
+      pendingNewChatSetup = false
       showsNewChatAfterSetupFailure = true
       status = .failed(message)
       onSetupFailed?()

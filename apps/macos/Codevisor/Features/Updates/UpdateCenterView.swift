@@ -148,8 +148,6 @@ struct UpdateCenterView: View {
         .accessibilityHidden(true)
     case .harness:
       HarnessIcon(harnessId: component.subjectId, fallbackSymbolName: "brain", size: 15)
-    case .plugin:
-      Image(systemName: "puzzlepiece.extension")
     }
   }
 

@@ -9,7 +9,7 @@ import type { HarnessAuthManager } from "@codevisor/harness-manager"
 import type { HarnessLifecycleManager } from "@codevisor/harness-manager"
 import type { McpManager } from "@codevisor/mcp"
 import type { NativeMcpManager } from "@codevisor/mcp"
-import type { PluginRegistryClient, PluginsManager } from "@codevisor/plugins"
+import type { PluginsManager } from "@codevisor/plugins"
 import type { SkillsManager } from "@codevisor/skills"
 import type { TerminalManagerService } from "@codevisor/terminal"
 import type { ServerUpdateChannel } from "@codevisor/updater"
@@ -139,10 +139,6 @@ export interface CodevisorServerServices {
   /// under /v1/plugins/:id/app/*. Absent on hosts that don't support it —
   /// routes 501.
   readonly plugins?: PluginsManager
-  /// Read-through cache over the hosted plugin registry index, so clients
-  /// browse plugins through their machine instead of the cloud. Absent on
-  /// hosts that don't support it — the registry route 501s.
-  readonly pluginRegistry?: PluginRegistryClient
   /// Content-addressed archive store for the config plane's big payloads
   /// (skill directories, keyed by tree hash). Absent on hosts without a
   /// data directory — the blob routes 501.

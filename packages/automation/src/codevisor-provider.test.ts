@@ -37,8 +37,16 @@ afterEach(() => {
 describe("Codevisor MCP provider", () => {
   it("publishes a unique, resource-oriented tool contract", async () => {
     const names = codevisorTools.map((tool) => tool.name)
-    expect(names).toHaveLength(148)
+    expect(names).toHaveLength(144)
     expect(new Set(names).size).toBe(names.length)
+    for (const removed of [
+      "plugins.registry_search",
+      "plugins.updates",
+      "plugins.update_prepare",
+      "plugins.update_apply"
+    ]) {
+      expect(names).not.toContain(removed)
+    }
     expect(names).not.toContain("settings.browser_status")
     expect(names).not.toContain("settings.browser_select_backend")
     expect(names).toEqual(
@@ -52,7 +60,6 @@ describe("Codevisor MCP provider", () => {
         "files.upload",
         "mcps.create",
         "skills.create",
-        "plugins.registry_search",
         "plugins.discover_remote",
         "plugins.install",
         "plugins.open_pane_url",

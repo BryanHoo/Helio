@@ -111,10 +111,6 @@ extension MachineController {
   ) async {
     // Events from every machine apply: all row stores and refreshes are
     // explicitly serverId-keyed.
-    DiagnosticsClient.shared.noteSyncEvent(
-      machineIsLocal: serverId == CodevisorMachine.local.id,
-      kind: event.kind
-    )
     switch event.kind {
     case "navigation.changed":
       do {

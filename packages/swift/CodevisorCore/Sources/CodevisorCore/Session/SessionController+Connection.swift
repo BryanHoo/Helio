@@ -167,9 +167,7 @@ extension SessionController {
   public func selectHarness(_ id: String) async {
     guard id != selectedHarnessId else { return }
     clearAutomaticSelection()
-    let previousHarnessId = selectedHarnessId
     selectedHarnessId = id
-    captureHarnessSelected(harnessId: id, previousHarnessId: previousHarnessId)
     if acceptsNewChatDefaults {
       // Start the new harness from its own remembered selections rather
       // than pending edits made under the previous harness.
@@ -418,15 +416,13 @@ extension SessionController {
       modeState: modeStateByHarness[harnessId],
       configOptions: initialConfigOptions
     )
-    model.onTurnEnded = { [weak self, weak model] in
+    model.onTurnEnded = { [weak self] in
       self?.liveTurnEndRevision &+= 1
-      if let model { self?.captureTurnEnded(model) }
       self?.noteTurnEndedForPlanApproval()
       self?.onTurnEnded?()
     }
-    model.onPromptAccepted = { [weak self, weak model] attachmentCount, isQueued in
+    model.onPromptAccepted = { [weak self] _, _ in
       self?.configurationAdjustmentMessage = nil
-      self?.captureMessageSent(model: model, attachmentCount: attachmentCount, isQueued: isQueued)
     }
     model.onLocalUserMessageAppended = { [weak self] messageID in
       guard let self, pendingUserMessage?.id == messageID else { return }
@@ -451,7 +447,6 @@ extension SessionController {
     if loadsExistingHistory {
       finishInitialHistoryLoading(sessionId: session.id, outcome: "ready")
     }
-    analyticsUsageBaseline = model.usage
 
     // Publish established history immediately. First-send setup keeps its
     // model private until setup succeeds so Retry can start cleanly.
@@ -470,7 +465,7 @@ extension SessionController {
     didFinishExistingRuntimeConfiguration = true
     updateConfigurationValidationState()
 
-    captureChatCreatedIfNeeded(model: model, harnessId: harnessId)
+    pendingNewChatSetup = false
 
     // A runtime that reported no options (see `configOptions`) must not
     // erase the cached catalog the composer is falling back to.

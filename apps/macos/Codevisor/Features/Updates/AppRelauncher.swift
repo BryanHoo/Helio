@@ -51,8 +51,7 @@ enum AppRelauncher {
       )
       Task { @MainActor in
         ErrorReporter.shared.report(
-          .appRelaunchFailed,
-          title: "Couldn't Restart Helio",
+          "Couldn't Restart Helio",
           message: "Quit and reopen Helio manually."
         )
       }

@@ -31,9 +31,7 @@ let package = Package(
     .library(name: "CodevisorTestSupport", targets: ["CodevisorTestSupport"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/PostHog/posthog-ios.git", exact: "3.59.3"),
-    .package(url: "https://github.com/getsentry/sentry-cocoa.git", exact: "9.23.0"),
-    .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", exact: "1.26.2"),
+    .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", exact: "1.26.2")
   ],
   targets: [
     // MARK: ScreenSharing (本机 Computer Use 预览使用的帧、捕获与 Metal 渲染)
@@ -261,8 +259,6 @@ let package = Package(
         "CodevisorClient",
         "CodevisorCloud",
         "CodevisorTheming",
-        .product(name: "PostHog", package: "posthog-ios"),
-        .product(name: "Sentry", package: "sentry-cocoa"),
       ],
       path: "CodevisorCore/Sources/CodevisorCore",
       swiftSettings: [.swiftLanguageMode(.v6)],
@@ -277,7 +273,6 @@ let package = Package(
         "CodevisorTestSupport",
         "CodevisorCore",
         "ACPKit",
-        .product(name: "Sentry", package: "sentry-cocoa"),
       ],
       path: "CodevisorCore/Tests/CodevisorCoreTests",
       swiftSettings: [.swiftLanguageMode(.v6)]

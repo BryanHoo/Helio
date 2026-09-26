@@ -62,23 +62,12 @@ struct UpdateCenterTests {
     )
   }
 
-  func makePluginUpdate() -> ServerPluginUpdateStatus {
-    ServerPluginUpdateStatus(
-      pluginId: "notes",
-      installedVersion: "1.0.0",
-      state: .available,
-      checkedAt: "2026-06-30T00:00:00.000Z",
-      registryVersion: "1.1.0"
-    )
-  }
-
-  @Test("Components fold servers, harnesses, and plugins across machines")
+  @Test("Components fold servers and harnesses across machines")
   func componentsFold() async throws {
     let remote = makeRemote("remote-a")
     let fake = SyncFakeServerClient(projects: [], sessions: [])
     fake.configureUpdate(current: "0.1.0", latest: "0.2.0")
     fake.configureHarnesses([makeHarness(updateAvailable: true)])
-    fake.configurePluginUpdates([makePluginUpdate()])
     let controller = try makeController(
       fakes: ["local": SyncFakeServerClient(projects: [], sessions: []), remote.id: fake],
       remotes: [remote]
@@ -95,23 +84,21 @@ struct UpdateCenterTests {
     #expect(
       ids == [
         "harness:remote-a:claude-code",
-        "plugin:remote-a:notes",
         "server:remote-a",
       ])
-    #expect(center.availableCount == 3)
+    #expect(center.availableCount == 2)
     let server = center.components.first { $0.kind == .server }
     #expect(server?.machineName == "remote-a")
     #expect(server?.latestVersion == "0.2.0")
     controller.stopEventSync()
   }
 
-  @Test("updateAll runs plugins, then harnesses, then servers, app last")
+  @Test("updateAll runs harnesses, then servers, app last")
   func updateAllOrder() async throws {
     let remote = makeRemote("remote-a")
     let fake = SyncFakeServerClient(projects: [], sessions: [])
     fake.configureUpdate(current: "0.1.0", latest: "0.2.0")
     fake.configureHarnesses([makeHarness(updateAvailable: true)])
-    fake.configurePluginUpdates([makePluginUpdate()])
     let controller = try makeController(
       fakes: ["local": SyncFakeServerClient(projects: [], sessions: []), remote.id: fake],
       remotes: [remote]
@@ -127,7 +114,7 @@ struct UpdateCenterTests {
 
     await controller.refreshStatus(for: remote.id)
     await center.refresh()
-    #expect(center.availableCount == 4)
+    #expect(center.availableCount == 3)
 
     await center.updateAll()
 
@@ -135,12 +122,10 @@ struct UpdateCenterTests {
     // app — whose install restarts this client.
     #expect(
       fake.operationLog == [
-        "plugin.prepare:notes",
-        "plugin.apply:notes",
         "harness.update:claude-code",
         "server.apply",
       ])
-    #expect(appInstalledAfterOperations == 4)
+    #expect(appInstalledAfterOperations == 2)
     controller.stopEventSync()
   }
 
@@ -380,13 +365,12 @@ struct UpdateCenterTests {
 /// Grouping, row text, and the pre-sweep probe: kept in an extension so the
 /// suite stays within the type-body budget.
 extension UpdateCenterTests {
-  @Test("Machine groups put each machine's Helio first, then harnesses, then plugins")
+  @Test("Machine groups put each machine's Helio first, then harnesses")
   func machineGroups() async throws {
     let remote = makeRemote("remote-a")
     let fake = SyncFakeServerClient(projects: [], sessions: [])
     fake.configureUpdate(current: "0.1.0", latest: "0.2.0")
     fake.configureHarnesses([makeHarness(updateAvailable: true)])
-    fake.configurePluginUpdates([makePluginUpdate()])
     let controller = try makeController(
       fakes: ["local": SyncFakeServerClient(projects: [], sessions: []), remote.id: fake],
       remotes: [remote]
@@ -409,11 +393,11 @@ extension UpdateCenterTests {
     #expect(groups.last?.codevisor?.kind == .server)
     #expect(groups.last?.codevisor?.title == "Helio")
     #expect(groups.last?.codevisor?.detailText == "0.1.0 → 0.2.0")
-    #expect(groups.last?.components.map(\.kind) == [.harness, .plugin])
+    #expect(groups.last?.components.map(\.kind) == [.harness])
     // The Codevisor update counts toward the machine's total.
-    #expect(groups.last?.availableCount == 3)
+    #expect(groups.last?.availableCount == 2)
     // One line per row, whatever the state.
-    #expect(groups.last?.components.map(\.detailText) == ["1.0.0 → 1.2.0", "1.0.0 → 1.1.0"])
+    #expect(groups.last?.components.map(\.detailText) == ["1.0.0 → 1.2.0"])
     controller.stopEventSync()
   }
 

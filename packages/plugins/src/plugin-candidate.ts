@@ -33,15 +33,14 @@ export interface PluginCandidatePreparerDeps {
 export interface PluginCandidatePreparer {
   readonly prepare: (
     staged: StagedPlugin,
-    candidateDirectory: string,
-    requireExisting: boolean
+    candidateDirectory: string
   ) => Promise<PreparedCandidateContext>
 }
 
 export const makePluginCandidatePreparer = (
   deps: PluginCandidatePreparerDeps
 ): PluginCandidatePreparer => ({
-  prepare: async (staged, candidateDirectory, requireExisting) => {
+  prepare: async (staged, candidateDirectory) => {
     const destination = deps.managedDirectory(staged.manifest.id)
     const existing = deps.installedWithId(staged.manifest.id)
     if (existing !== undefined && resolve(existing.path) !== resolve(destination)) {
@@ -49,9 +48,6 @@ export const makePluginCandidatePreparer = (
         "conflict",
         `Plugin ${staged.manifest.id} is already provided by ${existing.directoryName} (${existing.source})`
       )
-    }
-    if (requireExisting && existing === undefined) {
-      throw new PluginsError("notFound", `Plugin not installed: ${staged.manifest.id}`)
     }
     await assertPluginRequirements({
       env: staged.env,
@@ -112,10 +108,6 @@ export const makePluginCandidatePreparer = (
       source: staged.source,
       updatedAt: timestamp
     })
-    return {
-      hadExisting: destinationStats !== undefined,
-      ...(existing === undefined ? {} : { previousManifest: existing.manifest }),
-      ...(previousReceipt === undefined ? {} : { previousReceipt })
-    }
+    return { hadExisting: destinationStats !== undefined }
   }
 })

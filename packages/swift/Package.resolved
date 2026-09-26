@@ -1,5 +1,5 @@
 {
-  "originHash" : "024c0d195fa69cbc398f23ee3e46b91b33fc37d30ba6d9f0caedbef32ef19261",
+  "originHash" : "7a2065ea96bd968b71d8602d792dffd0128ffaff4bfd9b3e606ccbc74c206d73",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -8,24 +8,6 @@
       "state" : {
         "revision" : "114354e8c1667a2edc4993700fb9fa4f90157b56",
         "version" : "1.2.2"
-      }
-    },
-    {
-      "identity" : "posthog-ios",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/PostHog/posthog-ios.git",
-      "state" : {
-        "revision" : "179438b8e0c9a357ab0caf453577f766ffddbcb3",
-        "version" : "3.59.3"
-      }
-    },
-    {
-      "identity" : "sentry-cocoa",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/getsentry/sentry-cocoa.git",
-      "state" : {
-        "revision" : "afa7510e05b99f35c1febe47566bfd868fa53fb9",
-        "version" : "9.23.0"
       }
     },
     {

@@ -18,12 +18,7 @@ import { credentialFerrySources } from "@codevisor/harness-manager"
 import { makeHarnessLifecycleManager } from "@codevisor/harness-manager"
 import { makeHarnessAuthManager } from "@codevisor/harness-manager"
 import { makeMcpManager, makeNativeMcpManager } from "@codevisor/mcp"
-import {
-  makePluginRegistryClient,
-  makePluginsManager,
-  managedPluginSkill,
-  resolvePluginRegistryUrl
-} from "@codevisor/plugins"
+import { makePluginsManager, managedPluginSkill } from "@codevisor/plugins"
 import { makeSkillsManager, managedAttachmentSkill } from "@codevisor/skills"
 import { makeBlobStore } from "@codevisor/sync"
 import { makeTerminalManager } from "@codevisor/terminal"
@@ -274,9 +269,6 @@ export const runServe = (
     const skills = initializeOptionalServerFeature("Skills", () => makeSkillsManager({ agents }))
     // Content-addressed archives the config plane replicates skills through.
     const syncBlobs = makeBlobStore(join(dirname(databasePath), "sync-blobs"))
-    const pluginRegistryClient = initializeOptionalServerFeature("Plugin registry", () =>
-      makePluginRegistryClient({ baseUrl: resolvePluginRegistryUrl(process.env) })
-    )
     const plugins = initializeOptionalServerFeature("Plugins", () =>
       makePluginsManager({
         ...(version === undefined ? {} : { codevisorVersion: version }),
@@ -286,16 +278,9 @@ export const runServe = (
         // (sessionId `plugin:{id}`) so clients can offer "Show Output".
         registerExternalTerminal: (config, process) =>
           terminal.registerExternalTerminal(config, process),
-        resolveEnv: () => resolveShellEnv(),
-        ...(pluginRegistryClient === undefined
-          ? {}
-          : { fetchPluginRegistry: pluginRegistryClient.fetchIndex })
+        resolveEnv: () => resolveShellEnv()
       })
     )
-    // Registry browsing only makes sense where the install pipeline exists,
-    // so the read-through cache over the hosted index follows the manager's
-    // availability. Env overrides (or the dev cloud) rewire the base URL.
-    const pluginRegistry = plugins === undefined ? undefined : pluginRegistryClient
     // File delivery is available in every harness independently of optional
     // tools. Plugin authoring follows feature availability. Skill sync must
     // never block or fail server boot.
@@ -365,7 +350,6 @@ export const runServe = (
         ...(mcp === undefined ? {} : { mcp }),
         ...(nativeMcp === undefined ? {} : { nativeMcp }),
         ...(plugins === undefined ? {} : { plugins }),
-        ...(pluginRegistry === undefined ? {} : { pluginRegistry }),
         ...(skills === undefined ? {} : { skills }),
         syncBlobs
       },

@@ -16,8 +16,7 @@ struct PluginsSettingsView: View {
     var id: String { "install" }
   }
 
-  /// Fleet-level installs land on the local machine; registry plugins
-  /// sync out from there.
+  /// Fleet-level installs land on the local machine.
   private var localClient: any CodevisorServerClienting {
     environment.machines.client(for: CodevisorMachine.local.id)
   }

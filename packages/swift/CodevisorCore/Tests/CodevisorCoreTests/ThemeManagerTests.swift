@@ -89,7 +89,6 @@ struct ThemeManagerTests {
     let legacy = Data("{\"hasCompletedOnboarding\": true}".utf8)
     let decoded = try JSONDecoder().decode(AppSettings.self, from: legacy)
     #expect(decoded.hasCompletedOnboarding)
-    #expect(decoded.shareAnalytics)
     #expect(decoded.themeMode == .system)
     #expect(decoded.lightThemeId == ThemeCatalog.systemLightID)
     #expect(decoded.darkThemeId == ThemeCatalog.systemDarkID)
@@ -100,10 +99,4 @@ struct ThemeManagerTests {
     #expect(decoded.actionRequiredSoundPath == AppSettings.defaultNotificationSoundPath)
   }
 
-  @Test("Pre-onboarding legacy settings remain opted out")
-  func preOnboardingLegacyAnalyticsDefault() throws {
-    let legacy = Data("{\"hasCompletedOnboarding\": false}".utf8)
-    let decoded = try JSONDecoder().decode(AppSettings.self, from: legacy)
-    #expect(decoded.shareAnalytics == false)
-  }
 }

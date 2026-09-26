@@ -80,13 +80,13 @@ extension SessionController {
     status = .idle
     isSubmitting = true
     let showsSetupPhases =
-      (pendingNewChatAnalytics || (!hasSentFirst && onFirstSend != nil))
+      (pendingNewChatSetup || (!hasSentFirst && onFirstSend != nil))
       && resumeAgentSessionId?.isEmpty != false
     // Navigate first, exactly like a first prompt send.
     if !hasSentFirst {
       hasSentFirst = true
       if onFirstSend != nil {
-        pendingNewChatAnalytics = true
+        pendingNewChatSetup = true
       }
       onFirstSend?(objective)
       onFirstSend = nil

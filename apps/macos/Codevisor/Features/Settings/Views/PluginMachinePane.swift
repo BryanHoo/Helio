@@ -12,7 +12,6 @@ struct PluginMachinePane: View {
   @Environment(\.theme) private var theme
   let machine: CodevisorMachine
   @State private var plugins: [ServerPluginSummary]?
-  @State private var updates: [String: ServerPluginUpdateStatus] = [:]
   @State private var isLoading = true
   @State private var errorMessage: String?
   @State private var actionError: String?
@@ -21,16 +20,9 @@ struct PluginMachinePane: View {
   @State private var pluginPendingRestore: ServerPluginSummary?
   @State private var isMutating = false
 
-  /// 安装与更新共用一个 sheet，避免同一时间叠加多个操作面板。
   private enum PluginsSheet: Identifiable {
     case install(initialSource: String?)
-    case update(ServerPluginUpdatePlan)
-    var id: String {
-      switch self {
-      case .install: "install"
-      case .update(let plan): "update:\(plan.planId)"
-      }
-    }
+    var id: String { "install" }
   }
 
   /// The machine whose plugins this pane manages.
@@ -68,19 +60,6 @@ struct PluginMachinePane: View {
             onInstall: { source in
               _ = try await mutate {
                 try await client.importRemotePlugin(source: source)
-              }
-              await reload()
-            }
-          )
-        case .update(let plan):
-          PluginUpdateSheet(
-            plan: plan,
-            onApply: {
-              _ = try await mutate {
-                try await client.applyPluginUpdate(
-                  pluginId: plan.pluginId,
-                  planId: plan.planId
-                )
               }
               await reload()
             }
@@ -209,9 +188,6 @@ struct PluginMachinePane: View {
             .font(.caption)
             .foregroundStyle(.secondary)
           stateChip(pluginRuntimeState(plugin))
-          if let update = updates[plugin.id] {
-            updateChip(update)
-          }
         }
         Text(sourceText(plugin))
           .font(.caption)
@@ -221,12 +197,8 @@ struct PluginMachinePane: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       Menu {
-        if updates[plugin.id]?.state == .available {
-          Button("Update…") { prepareUpdate(plugin) }
-          Divider()
-        }
-        if updates[plugin.id]?.state == .sourceUnknown {
-          Button("Reinstall to Enable Updates…") {
+        if plugin.source == "managed" {
+          Button("Reinstall from Source…") {
             activeSheet = .install(initialSource: nil)
           }
         }
@@ -306,54 +278,8 @@ struct PluginMachinePane: View {
     }
   }
 
-  private func updateChip(_ update: ServerPluginUpdateStatus) -> some View {
-    Text(updateTitle(update))
-      .font(.caption2.weight(.medium))
-      .padding(.horizontal, 5)
-      .padding(.vertical, 1)
-      .background(
-        RoundedRectangle(cornerRadius: 4)
-          .fill(theme.isSystem ? AnyShapeStyle(.quaternary) : AnyShapeStyle(theme.cardQuietBackground))
-      )
-      .foregroundStyle(updateStyle(update.state))
-      .help(update.reason ?? updateTitle(update))
-  }
-
-  private func updateTitle(_ update: ServerPluginUpdateStatus) -> String {
-    switch update.state {
-    case .current: "Current"
-    case .available: "Update \(update.registryVersion ?? "available")"
-    case .pinned: "Pinned"
-    case .incompatible: "Incompatible"
-    case .sourceUnknown: "Source unknown"
-    case .checkFailed: "Check failed"
-    }
-  }
-
-  private func updateStyle(_ state: ServerPluginUpdateState) -> AnyShapeStyle {
-    switch state {
-    case .current: AnyShapeStyle(theme.statusOK)
-    case .available: AnyShapeStyle(theme.accent)
-    case .incompatible, .checkFailed: AnyShapeStyle(theme.statusWarn)
-    case .pinned, .sourceUnknown: AnyShapeStyle(.secondary)
-    }
-  }
-
   private func accessibilityLabel(for plugin: ServerPluginSummary) -> String {
-    guard let update = updates[plugin.id] else {
-      return "\(plugin.name), \(pluginRuntimeState(plugin)), \(sourceText(plugin))"
-    }
-    return "\(plugin.name), \(pluginRuntimeState(plugin)), \(updateTitle(update)), \(sourceText(plugin))"
-  }
-
-  private func prepareUpdate(_ plugin: ServerPluginSummary) {
-    Task {
-      if let plan = try? await mutate({
-        try await client.preparePluginUpdate(pluginId: plugin.id)
-      }) {
-        activeSheet = .update(plan)
-      }
-    }
+    "\(plugin.name), \(pluginRuntimeState(plugin)), \(sourceText(plugin))"
   }
 
   private func reload() async {
@@ -368,14 +294,6 @@ struct PluginMachinePane: View {
     do {
       plugins = try await client.listPlugins()
       errorMessage = nil
-      do {
-        let statuses = try await client.listPluginUpdates()
-        updates = Dictionary(uniqueKeysWithValues: statuses.map { ($0.pluginId, $0) })
-      } catch {
-        // Plugin listing remains useful against an older server or
-        // during a transient registry outage.
-        updates = [:]
-      }
     } catch {
       errorMessage = ErrorReporter.userFacingMessage(for: error)
     }

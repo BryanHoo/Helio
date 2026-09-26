@@ -9,10 +9,7 @@ import type {
   PluginListResponse,
   PluginPaneTokenRequest,
   PluginPaneTokenResponse,
-  PluginRegistryIndex,
-  PluginSummary,
-  PluginUpdatePlan,
-  PluginUpdatesResponse
+  PluginSummary
 } from "@codevisor/api"
 
 import type { PluginIconAsset } from "./plugin-icon.js"
@@ -48,10 +45,6 @@ export interface PluginsManagerConfig extends Omit<
   ) => Promise<ClonePluginSourceResult>
   /// Version used by protocol v2 compatibility checks.
   readonly codevisorVersion?: string
-  /// Registry fetch used for update checks and exact prepared plans.
-  readonly fetchPluginRegistry?: () => Promise<PluginRegistryIndex>
-  readonly createUpdatePlanId?: () => string
-  readonly updatePlanTtlMs?: number
 }
 
 /// Runtime state transition for one plugin, shaped for the server's event
@@ -101,9 +94,6 @@ export interface PluginsManager {
   /// Installs (or updates a managed install of) the plugin the source
   /// provides, running its manifest install command.
   readonly importRemote: (request: ImportRemotePluginRequest) => Promise<PluginSummary>
-  readonly listUpdates: () => Promise<PluginUpdatesResponse>
-  readonly prepareUpdate: (pluginId: string) => Promise<PluginUpdatePlan>
-  readonly applyUpdate: (pluginId: string, planId: string) => Promise<PluginSummary>
   /// Swap to the retained known-good code/data backup.
   readonly restore: (pluginId: string) => Promise<PluginSummary>
   /// Persistently enable or disable runtime, pane, and tool access.

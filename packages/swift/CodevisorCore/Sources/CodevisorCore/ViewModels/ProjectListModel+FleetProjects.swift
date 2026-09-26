@@ -71,8 +71,7 @@ extension ProjectListModel {
         "Failed to sync project \(local.id.uuidString, privacy: .public) to the server: \(String(describing: error), privacy: .public)"
       )
       ErrorReporter.shared.report(
-        .projectSyncFailed,
-        title: "Couldn't Sync the Project to the Server",
+        "Couldn't Sync the Project to the Server",
         error: error
       )
       return local

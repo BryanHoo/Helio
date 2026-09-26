@@ -1,53 +1,30 @@
 import Foundation
 import Observation
 
+public struct PluginAccessError: LocalizedError {
+  public var errorDescription: String? { message }
+  public let message: String
+  public init(_ message: String) { self.message = message }
+}
+
 @MainActor
 @Observable
 public final class PluginAccessController {
   private let store: any PersistenceStore
   private let preferencesKey = "pluginAccess.blockedPublishers"
-  public let catalog: PluginCatalogClient
-  private var currentPolicy: PluginAccessPolicy?
   public private(set) var revision = 0
   public private(set) var blockedPublishers: [String] = []
 
-  public init(
-    store: any PersistenceStore = InMemoryStore(),
-    catalog: PluginCatalogClient = PluginCatalogClient()
-  ) {
+  public init(store: any PersistenceStore = InMemoryStore()) {
     self.store = store
-    self.catalog = catalog
     // 用户屏蔽名单只读写本机数据库，不需要账号会话。
     self.blockedPublishers =
       store.loadData(forKey: preferencesKey)
       .flatMap { try? JSONDecoder().decode([String].self, from: $0) } ?? []
   }
 
-  public func snapshot() async throws -> (PluginAccessPolicy, PluginPreferences) {
-    let policy = try await refreshPolicy()
-    return (policy, PluginPreferences(blockedPublishers: blockedPublishers))
-  }
-
-  @discardableResult
-  public func refreshPolicy() async throws -> PluginAccessPolicy {
-    let policy = try await catalog.policy()
-    currentPolicy = policy
-    return policy
-  }
-
-  public func review(_ plugin: ServerPluginRemoteDiscovery) async throws -> Bool {
-    let (policy, preferences) = try await snapshot()
-    if let reason = policy.restriction(
-      pluginId: plugin.id, ageRating: plugin.ageRating, blockedPublishers: preferences.blockedPublishers)
-    {
-      throw PluginAccessError(reason)
-    }
-    let registry = try await catalog.index()
-    return registry.entries.contains { $0.id == plugin.id && $0.repo.lowercased() == plugin.sourceRepo?.lowercased() }
-  }
-
   public func ageRating(pluginId: String, declared: Int?) -> Int? {
-    currentPolicy?.ageRating(pluginId: pluginId, declared: declared) ?? declared
+    declared
   }
 
   public func requireAccess(to plugin: ServerPluginSummary) async throws {
@@ -55,11 +32,13 @@ public final class PluginAccessController {
   }
 
   public func requireEligible(pluginId: String, ageRating: Int?) async throws {
-    let (policy, preferences) = try await snapshot()
-    if let reason = policy.restriction(
-      pluginId: pluginId, ageRating: ageRating, blockedPublishers: preferences.blockedPublishers)
-    {
-      throw PluginAccessError(reason)
+    let publisher = String(pluginId.split(separator: ".").first ?? "")
+    if blockedPublishers.contains(publisher) {
+      throw PluginAccessError("You blocked this publisher.")
+    }
+    // 仅依赖插件声明与本机偏好，不请求远端审核服务。
+    guard let ageRating, [4, 9, 13, 16].contains(ageRating) else {
+      throw PluginAccessError("This plugin needs a supported age rating to open on iOS.")
     }
   }
 

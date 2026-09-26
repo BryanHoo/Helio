@@ -88,8 +88,7 @@ extension ProjectListModel {
           "Failed to sync project \(project.id.uuidString, privacy: .public) to the server: \(String(describing: error), privacy: .public)"
         )
         ErrorReporter.shared.report(
-          .projectSyncFailed,
-          title: "Couldn't Sync the Project to the Server",
+          "Couldn't Sync the Project to the Server",
           error: error
         )
       }
@@ -151,8 +150,7 @@ extension ProjectListModel {
       }
       if failureCount > 0 {
         ErrorReporter.shared.report(
-          .bulkSyncFailed,
-          title: "Couldn't Sync to the Server",
+          "Couldn't Sync to the Server",
           message: "Some items couldn't be uploaded. They'll be retried the next time they change."
         )
       }
@@ -245,8 +243,7 @@ extension ProjectListModel {
   /// fails for several records.
   func reportServerDeleteFailure() {
     ErrorReporter.shared.report(
-      .serverDeleteFailed,
-      title: "Couldn't Delete on the Server",
+      "Couldn't Delete on the Server",
       message: "It may reappear the next time the list refreshes."
     )
   }

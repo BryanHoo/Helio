@@ -132,11 +132,6 @@ public final class AppEnvironment {
     updateCenter = UpdateCenter(machines: machines, appUpdate: self.appUpdate)
     configSync = ConfigSync(machines: machines)
     self.pluginAccess = PluginAccessController(store: machineStore)
-    #if os(iOS)
-      updateCenter.reviewPluginUpdate = { [pluginAccess] _, plan in
-        try await pluginAccess.requireEligible(pluginId: plan.pluginId, ageRating: plan.candidate.ageRating)
-      }
-    #endif
     projectList.showsImportedSessions = settings.importExternalSessions
     machines.serverUpdateChannel = settings.alphaUpdatesEnabled ? .alpha : .stable
     machines.onHarnessLifecycleChanged = { [weak self] in self?.noteHarnessLifecycle(onServer: $0) }
@@ -284,8 +279,6 @@ public final class AppEnvironment {
   /// Deletes all Codevisor data (projects, sessions, cached config, settings)
   /// and re-triggers onboarding. Does not touch the harnesses' own sessions.
   public func deleteAllData() {
-    AnalyticsClient.shared.setEnabled(false)
-    DiagnosticsClient.shared.setEnabled(false)
     projectList.removeAll()
     configCache.clear()
     composerDefaults.clear()
@@ -304,20 +297,6 @@ public final class AppEnvironment {
     settings.reset()
     appUpdate.setAllowsAlphaUpdates(settings.alphaUpdatesEnabled)
     projectList.showsImportedSessions = settings.importExternalSessions
-  }
-
-  /// Persists analytics consent and immediately applies it to the delivery
-  /// client. This is the only path the onboarding and Settings UI use.
-  public func setShareAnalytics(_ enabled: Bool) {
-    settings.setShareAnalytics(enabled)
-    AnalyticsClient.shared.setEnabled(enabled)
-  }
-
-  /// Persists native diagnostics consent and applies it immediately. Sentry
-  /// remains completely uninitialized until this preference is enabled.
-  public func setShareCrashReports(_ enabled: Bool) {
-    settings.setShareCrashReports(enabled)
-    DiagnosticsClient.shared.setEnabled(enabled)
   }
 
   /// Applies the user's onboarding choice and imports if requested.
@@ -400,7 +379,6 @@ public final class AppEnvironment {
     }
     if hasOnboarded {
       settings.completeOnboarding(importExternalSessions: false)
-      settings.setShareCrashReports(false)
     }
     return AppEnvironment(
       projectRepository: projectRepository,

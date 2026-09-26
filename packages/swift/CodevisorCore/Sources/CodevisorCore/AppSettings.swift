@@ -28,13 +28,6 @@ public struct AppSettings: Sendable, Codable, Equatable {
   /// user actually closes it. Cleared by Continue or Set Up Later.
   public var permissionsReviewInProgress: Bool
   public var importExternalSessions: Bool
-  /// Whether this device may send anonymous product usage events. Content
-  /// such as prompts, responses, code, paths, and terminal commands must
-  /// never be included in those events.
-  public var shareAnalytics: Bool
-  /// Whether this installation may send privacy-filtered native crash and
-  /// allowlisted internal error reports to Sentry.
-  public var shareCrashReports: Bool
   /// Opts this installation into signed Alpha builds in addition to Stable.
   public var alphaUpdatesEnabled: Bool
   /// Whether ⌘Q asks "Are you sure you want to quit?" first. A stray ⌘Q
@@ -68,8 +61,6 @@ public struct AppSettings: Sendable, Codable, Equatable {
     onboardingStep: Int? = nil,
     permissionsReviewInProgress: Bool = false,
     importExternalSessions: Bool = false,
-    shareAnalytics: Bool = false,
-    shareCrashReports: Bool = false,
     alphaUpdatesEnabled: Bool = false,
     confirmBeforeQuitting: Bool = true,
     disabledHarnessIds: Set<String> = [],
@@ -88,8 +79,6 @@ public struct AppSettings: Sendable, Codable, Equatable {
     self.onboardingStep = onboardingStep
     self.permissionsReviewInProgress = permissionsReviewInProgress
     self.importExternalSessions = importExternalSessions
-    self.shareAnalytics = shareAnalytics
-    self.shareCrashReports = shareCrashReports
     self.alphaUpdatesEnabled = alphaUpdatesEnabled
     self.confirmBeforeQuitting = confirmBeforeQuitting
     self.disabledHarnessIds = disabledHarnessIds
@@ -106,8 +95,7 @@ public struct AppSettings: Sendable, Codable, Equatable {
   private enum CodingKeys: String, CodingKey {
     case hasCompletedOnboarding, permissionsReviewedVersion, permissionsSetupSkipped
     case onboardingStep, permissionsReviewInProgress
-    case importExternalSessions, shareAnalytics
-    case shareCrashReports, alphaUpdatesEnabled
+    case importExternalSessions, alphaUpdatesEnabled
     /// Read-only migration key written by the former custom updater.
     case betaUpdatesEnabled
     case confirmBeforeQuitting
@@ -129,15 +117,6 @@ public struct AppSettings: Sendable, Codable, Equatable {
         forKey: .permissionsReviewInProgress
       ) ?? false
     importExternalSessions = try container.decodeIfPresent(Bool.self, forKey: .importExternalSessions) ?? false
-    // Existing installations completed onboarding before this preference
-    // existed. Enable analytics for that migration cohort; fresh installs
-    // remain disabled until the final onboarding step is completed.
-    shareAnalytics =
-      try container.decodeIfPresent(Bool.self, forKey: .shareAnalytics)
-      ?? hasCompletedOnboarding
-    // Native diagnostics are a separate data class. Never extend an older
-    // analytics choice to Sentry without a new, explicit decision.
-    shareCrashReports = try container.decodeIfPresent(Bool.self, forKey: .shareCrashReports) ?? false
     alphaUpdatesEnabled =
       try container.decodeIfPresent(Bool.self, forKey: .alphaUpdatesEnabled)
       ?? container.decodeIfPresent(Bool.self, forKey: .betaUpdatesEnabled)
@@ -171,8 +150,6 @@ public struct AppSettings: Sendable, Codable, Equatable {
     try container.encodeIfPresent(onboardingStep, forKey: .onboardingStep)
     try container.encode(permissionsReviewInProgress, forKey: .permissionsReviewInProgress)
     try container.encode(importExternalSessions, forKey: .importExternalSessions)
-    try container.encode(shareAnalytics, forKey: .shareAnalytics)
-    try container.encode(shareCrashReports, forKey: .shareCrashReports)
     try container.encode(alphaUpdatesEnabled, forKey: .alphaUpdatesEnabled)
     try container.encode(confirmBeforeQuitting, forKey: .confirmBeforeQuitting)
     try container.encode(disabledHarnessIds, forKey: .disabledHarnessIds)
@@ -222,8 +199,6 @@ public final class AppSettingsModel {
   public var onboardingStep: Int? { settings.onboardingStep }
   public var permissionsReviewInProgress: Bool { settings.permissionsReviewInProgress }
   public var importExternalSessions: Bool { settings.importExternalSessions }
-  public var shareAnalytics: Bool { settings.shareAnalytics }
-  public var shareCrashReports: Bool { settings.shareCrashReports }
   public var alphaUpdatesEnabled: Bool { settings.alphaUpdatesEnabled }
   public var confirmBeforeQuitting: Bool { settings.confirmBeforeQuitting }
   /// Whether ⌘Q should ask first. Never during onboarding: granting a
@@ -288,18 +263,6 @@ public final class AppSettingsModel {
 
   public func setImportExternalSessions(_ value: Bool) {
     settings.importExternalSessions = value
-    persist()
-  }
-
-  /// Updates the privacy preference used as the single gate for analytics.
-  public func setShareAnalytics(_ value: Bool) {
-    settings.shareAnalytics = value
-    persist()
-  }
-
-  /// Updates the privacy preference used as the single gate for diagnostics.
-  public func setShareCrashReports(_ value: Bool) {
-    settings.shareCrashReports = value
     persist()
   }
 

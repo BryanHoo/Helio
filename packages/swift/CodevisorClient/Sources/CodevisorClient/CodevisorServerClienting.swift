@@ -39,7 +39,7 @@ public protocol CodevisorServerClienting: Sendable {
   /// One harness-plane reconcile pass (enabled set, desired installs,
   /// custom specs) against the machine's replica.
   func reconcileHarnessesSync() async throws -> ServerHarnessSyncStatus
-  /// One plugin-plane reconcile pass (registry plugins as desired state).
+  /// One plugin-plane reconcile pass (explicitly installed sources as desired state).
   func reconcilePluginsSync() async throws -> ServerPluginSyncStatus
   func reconcileCredentialsSync() async throws -> JSONValue
   /// Publishes the machine's harness-account roster (metadata only).
@@ -187,12 +187,6 @@ public protocol CodevisorServerClienting: Sendable {
   /// Plugins installed on this machine (`GET /v1/plugins`). Empty on
   /// servers without the plugins feature.
   func listPlugins() async throws -> [ServerPluginSummary]
-  /// Explicit registry-update state for every installed plugin.
-  func listPluginUpdates() async throws -> [ServerPluginUpdateStatus]
-  /// Stage and validate one exact candidate for review before applying it.
-  func preparePluginUpdate(pluginId: String) async throws -> ServerPluginUpdatePlan
-  /// Atomically apply the already-reviewed staged plan.
-  func applyPluginUpdate(pluginId: String, planId: String) async throws -> ServerPluginSummary
   /// Fetches plugin or pane artwork. The server accepts SVG/PNG/WebP from
   /// the plugin process and returns a normalized PNG to clients.
   func pluginIcon(pluginId: String, paneType: String?) async throws -> ServerPluginIconAsset
@@ -207,10 +201,6 @@ public protocol CodevisorServerClienting: Sendable {
     cwd: String?,
     themeMode: String?
   ) async throws -> ServerPluginPaneTokenResponse
-  /// The public plugin registry index, fetched and cached by the machine so
-  /// clients never talk to the cloud themselves
-  /// (`GET /v1/plugins/registry`). `query` filters entries server-side.
-  func fetchPluginRegistry(query: String?) async throws -> ServerPluginRegistryIndex
   /// Stage a plugin source and describe what installing it would run —
   /// the consent step's data (`POST /v1/plugins/discover-remote`).
   func discoverRemotePlugin(source: String) async throws -> ServerPluginRemoteDiscovery

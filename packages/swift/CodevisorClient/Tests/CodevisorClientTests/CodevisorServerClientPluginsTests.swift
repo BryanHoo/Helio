@@ -97,43 +97,6 @@ struct CodevisorServerClientPluginsTests {
     #expect(bareTokenResponse.url == nil)
   }
 
-  @Test("Registry indexes decode entries and skip author-facing diagnostics")
-  func registryDecoding() throws {
-    let wire = Data(
-      """
-      {"generatedAt":"2026-08-18T00:00:00.000Z",
-      "entries":[{"id":"acme.git-diff","name":"Git Diff","version":"0.1.0",
-      "description":"Live git diff viewer",
-      "panes":[{"type":"diff","title":"Git Diff","path":"/panes/diff/"}],
-      "tools":[{"name":"diff_summary","description":"Summarize the diff","path":"/tools/summary"}],
-      "repo":"acme/git-diff","stars":12,"pushedAt":"2026-08-17T00:00:00Z"},
-      {"id":"beta.notes","name":"Notes","version":"1.0.0","panes":[],
-      "repo":"beta/notes","stars":0,"pushedAt":"2026-08-16T00:00:00Z"}],
-      "rejected":[{"repo":"x/y","reason":"codevisor-plugin.json not found"}]}
-      """.utf8)
-    let index = try JSONDecoder().decode(ServerPluginRegistryIndex.self, from: wire)
-    #expect(index.generatedAt == "2026-08-18T00:00:00.000Z")
-    #expect(index.entries.count == 2)
-    let entry = try #require(index.entries.first)
-    #expect(entry.id == "acme.git-diff")
-    #expect(entry.repo == "acme/git-diff")
-    #expect(entry.stars == 12)
-    #expect(entry.tools?.first?.name == "diff_summary")
-    // Description/tools stay optional, exactly like installed summaries;
-    // `verified` is curation groundwork the indexer never sets yet.
-    let bare = try #require(index.entries.last)
-    #expect(bare.description == nil)
-    #expect(bare.tools == nil)
-    #expect(bare.verified == nil)
-
-    // Before the indexer's first poll, the cloud serves an honest empty
-    // index whose generatedAt is null.
-    let empty = Data(#"{"generatedAt":null,"entries":[],"rejected":[]}"#.utf8)
-    let emptyIndex = try JSONDecoder().decode(ServerPluginRegistryIndex.self, from: empty)
-    #expect(emptyIndex.generatedAt == nil)
-    #expect(emptyIndex.entries.isEmpty)
-  }
-
   @Test("Install request bodies carry the raw source and path strings")
   func installBodyEncoding() throws {
     let source = String(
@@ -152,13 +115,6 @@ struct CodevisorServerClientPluginsTests {
     #expect(link.contains("path"))
     #expect(link.contains("plugin"))
 
-    let apply = String(
-      decoding: try JSONEncoder().encode(
-        CodevisorServerClient.PluginUpdateApplyBody(planId: "plan-1")
-      ),
-      as: UTF8.self
-    )
-    #expect(apply == #"{"planId":"plan-1"}"#)
     let disabled = String(
       decoding: try JSONEncoder().encode(
         CodevisorServerClient.PluginSetEnabledBody(enabled: false)
@@ -166,46 +122,6 @@ struct CodevisorServerClientPluginsTests {
       as: UTF8.self
     )
     #expect(disabled == #"{"enabled":false}"#)
-  }
-
-  @Test("Update status and prepared review plans decode exactly")
-  func updateDecoding() throws {
-    let statuses = Data(
-      """
-      {"updates":[
-      {"pluginId":"acme.git-diff","installedVersion":"1.0.0","state":"available",
-      "checkedAt":"2026-08-23T00:00:00.000Z","registryVersion":"2.0.0"},
-      {"pluginId":"local.dev","installedVersion":"0.1.0","state":"pinned",
-      "checkedAt":"2026-08-23T00:00:00.000Z","reason":"Linked plugins are pinned"}]}
-      """.utf8)
-    struct UpdatesEnvelope: Decodable { var updates: [ServerPluginUpdateStatus] }
-    let decodedStatuses = try JSONDecoder().decode(UpdatesEnvelope.self, from: statuses)
-    #expect(decodedStatuses.updates.map(\.state) == [.available, .pinned])
-    #expect(decodedStatuses.updates.first?.registryVersion == "2.0.0")
-    #expect(decodedStatuses.updates.last?.reason == "Linked plugins are pinned")
-
-    let planData = Data(
-      """
-      {"planId":"plan-1","pluginId":"acme.git-diff","name":"Git Diff",
-      "resolvedCommit":"0123456789012345678901234567890123456789",
-      "expiresAt":"2026-08-23T00:15:00.000Z",
-      "current":{"version":"1.0.0","setupCommands":[],"runCommand":"node server.js",
-      "panes":[{"type":"diff","title":"Diff","path":"/diff/"}]},
-      "candidate":{"version":"2.0.0","setupCommands":["npm ci"],
-      "runCommand":"node server.js --port $PORT","panes":[],
-      "tools":[{"name":"diff_summary","description":"Summarize","path":"/tools/summary"}],
-      "requirements":{"executables":[{"name":"node","installHint":"Install Node.js",
-      "helpUrl":"https://nodejs.org"}]}},
-      "paneChanges":{"added":[],"removed":["diff"],"changed":[]},
-      "toolChanges":{"added":["diff_summary"],"removed":[],"changed":[]}}
-      """.utf8)
-    let plan = try JSONDecoder().decode(ServerPluginUpdatePlan.self, from: planData)
-    #expect(plan.id == "plan-1")
-    #expect(plan.current.version == "1.0.0")
-    #expect(plan.candidate.setupCommands == ["npm ci"])
-    #expect(plan.candidate.requirements?.executables?.first?.name == "node")
-    #expect(plan.paneChanges.removed == ["diff"])
-    #expect(plan.toolChanges.added == ["diff_summary"])
   }
 
   @Test("Remote discovery decodes the verbatim install and run commands")

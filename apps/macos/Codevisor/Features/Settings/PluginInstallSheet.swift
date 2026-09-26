@@ -3,8 +3,7 @@ import CodevisorUI
 import SwiftUI
 
 /// Two-stage install: enter a source, discover what it offers, then consent
-/// to the exact commands it will run. A registry selection auto-discovers,
-/// skipping the typing but never the consent.
+/// to the exact commands it will run.
 struct PluginInstallSheet: View {
   @Environment(AppEnvironment.self) private var environment
   @Environment(\.dismiss) private var dismiss

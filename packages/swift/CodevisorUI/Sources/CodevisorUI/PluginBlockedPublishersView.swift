@@ -32,10 +32,5 @@ public struct PluginBlockedPublishersView: View {
       }
     }
     .navigationTitle("Blocked Publishers")
-    .task {
-      do { _ = try await environment.pluginAccess.snapshot() } catch {
-        errorMessage = ErrorReporter.userFacingMessage(for: error)
-      }
-    }
   }
 }

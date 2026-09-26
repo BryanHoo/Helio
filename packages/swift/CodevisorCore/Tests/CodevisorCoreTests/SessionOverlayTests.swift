@@ -29,22 +29,16 @@ struct SessionOverlayTests {
     let store = InMemoryStore()
     let model = AppSettingsModel(store: store)
     #expect(model.hasCompletedOnboarding == false)
-    #expect(model.shareAnalytics == false)
-    #expect(model.shareCrashReports == false)
     #expect(model.alphaUpdatesEnabled == false)
     #expect(model.settings.notificationsEnabled)
     #expect(model.settings.systemNotificationsEnabled)
     #expect(model.settings.notificationSoundsEnabled)
     model.completeOnboarding(importExternalSessions: true)
-    model.setShareAnalytics(true)
-    model.setShareCrashReports(true)
     model.setAlphaUpdatesEnabled(true)
     model.setChatFinishedSoundPath("/System/Library/Sounds/Ping.aiff")
     model.setActionRequiredSoundPath("/System/Library/Sounds/Hero.aiff")
     #expect(AppSettingsModel(store: store).hasCompletedOnboarding)
     #expect(AppSettingsModel(store: store).importExternalSessions)
-    #expect(AppSettingsModel(store: store).shareAnalytics)
-    #expect(AppSettingsModel(store: store).shareCrashReports)
     #expect(AppSettingsModel(store: store).alphaUpdatesEnabled)
     #expect(AppSettingsModel(store: store).settings.chatFinishedSoundPath.hasSuffix("Ping.aiff"))
     #expect(AppSettingsModel(store: store).settings.actionRequiredSoundPath.hasSuffix("Hero.aiff"))
@@ -54,12 +48,11 @@ struct SessionOverlayTests {
   func legacySettingsDefaultToStableUpdates() throws {
     let store = InMemoryStore()
     try store.saveData(
-      Data(#"{"hasCompletedOnboarding":true,"shareAnalytics":true}"#.utf8),
+      Data(#"{"hasCompletedOnboarding":true,"shareAnalytics":true,"shareCrashReports":true}"#.utf8),
       forKey: "settings"
     )
 
     #expect(!AppSettingsModel(store: store).alphaUpdatesEnabled)
-    #expect(!AppSettingsModel(store: store).shareCrashReports)
   }
 
   @Test("Importing creates projects by cwd and dedups")

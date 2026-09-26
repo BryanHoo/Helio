@@ -161,8 +161,7 @@ final class GhosttyTerminalSurface: TerminalSurface {
       Ghostty.logger.error(
         "terminal surface creation failed for \(descriptor.workingDirectory.path, privacy: .public)")
       ErrorReporter.shared.report(
-        .terminalOpenFailed,
-        title: "Couldn't Open the Terminal",
+        "Couldn't Open the Terminal",
         message: "Try closing and reopening the pane."
       )
     }

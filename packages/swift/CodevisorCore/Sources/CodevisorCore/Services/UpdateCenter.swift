@@ -2,14 +2,13 @@ import Foundation
 import Observation
 
 /// One updatable thing somewhere in the fleet: the app itself, a machine's
-/// server, or a harness/plugin on a machine. The row identity every update
+/// server, or a harness on a machine. The row identity every update
 /// surface (settings page, footer count, update-all) folds over.
 public struct UpdateComponent: Identifiable, Equatable, Sendable {
   public enum Kind: String, Sendable {
     case app
     case server
     case harness
-    case plugin
   }
 
   public enum Phase: Equatable, Sendable {
@@ -22,7 +21,7 @@ public struct UpdateComponent: Identifiable, Equatable, Sendable {
   public let kind: Kind
   public let machineId: String
   public let machineName: String
-  /// The harness/plugin id on its machine; empty for app/server rows.
+  /// The harness id on its machine; empty for app/server rows.
   public let subjectId: String
   public let title: String
   public let installedVersion: String?
@@ -66,7 +65,7 @@ extension UpdateComponent {
 
 /// One machine in the Updates pane: the machine's own Codevisor (the app
 /// locally, the server remotely) as the first row when it needs attention,
-/// followed by the harnesses and plugins on it.
+/// followed by harnesses on it.
 public struct UpdateMachineGroup: Identifiable, Equatable, Sendable {
   /// The machine id.
   public let id: String
@@ -76,7 +75,7 @@ public struct UpdateMachineGroup: Identifiable, Equatable, Sendable {
   /// report through (development builds of the app; a server whose
   /// release state is not known yet).
   public let codevisor: UpdateComponent?
-  /// Harnesses first, then plugins.
+  /// Harness updates on this machine.
   public let components: [UpdateComponent]
 
   public var availableCount: Int {
@@ -84,16 +83,14 @@ public struct UpdateMachineGroup: Identifiable, Equatable, Sendable {
   }
 }
 
-/// The fleet-wide update fold: app + every machine's server, harnesses, and
-/// plugins, as one observable component list with per-row actions and a
+/// The fleet-wide update fold: app + every machine's server and harnesses,
+/// as one observable component list with per-row actions and a
 /// properly ordered "update all". Server rows read live per-connection
-/// state (updated by polls and `update.changed` events); harness and plugin
-/// inventories are swept on `refresh` and re-fetched when lifecycle events
-/// arrive.
+/// state (updated by polls and `update.changed` events); harness inventories
+/// are swept on `refresh` and re-fetched when lifecycle events arrive.
 @MainActor
 @Observable
 public final class UpdateCenter {
-  @ObservationIgnored public var reviewPluginUpdate: (@MainActor (String, ServerPluginUpdatePlan) async throws -> Void)?
   private let machines: MachineController
   private let appUpdate: AppUpdateModel
   /// Durable home of the update-all session, so a run interrupted by the
@@ -113,10 +110,8 @@ public final class UpdateCenter {
   /// restart was skipped). Cleared when the next run starts.
   public private(set) var updateAllNotice: String?
   private var harnessesByMachine: [String: [ServerHarness]] = [:]
-  private var pluginUpdatesByMachine: [String: [ServerPluginUpdateStatus]] = [:]
   /// Operation state for rows whose progress isn't streamed back into
-  /// machine state (plugin updates; the harness trigger round-trip before
-  /// lifecycle events take over).
+  /// machine state (the harness trigger round-trip before lifecycle events take over).
   private var transientPhases: [String: UpdateComponent.Phase] = [:]
   /// Older servers retain failed lifecycle reports after a fresh check.
   /// Dismiss that exact attempt until it changes or the user retries it.
@@ -141,7 +136,7 @@ public final class UpdateCenter {
   // MARK: - Components
 
   public var components: [UpdateComponent] {
-    appComponents + serverComponents + harnessComponents + pluginComponents
+    appComponents + serverComponents + harnessComponents
   }
 
   /// How many components currently have an update to install — the number
@@ -163,7 +158,7 @@ public final class UpdateCenter {
         machineName: machine.name,
         isLocal: machine.isLocal,
         codevisor: rows.first { $0.kind == .app || $0.kind == .server },
-        components: [.harness, .plugin].flatMap { kind in rows.filter { $0.kind == kind } }
+        components: rows.filter { $0.kind == .harness }
       )
     }
   }
@@ -300,28 +295,6 @@ public final class UpdateCenter {
     ["installing", "updating", "pendingUpdate"].contains(harness.lifecycle?.phase ?? "")
   }
 
-  private var pluginComponents: [UpdateComponent] {
-    orderedMachineIds.flatMap { machineId in
-      (pluginUpdatesByMachine[machineId] ?? []).compactMap { status -> UpdateComponent? in
-        let id = "plugin:\(machineId):\(status.pluginId)"
-        let phase = transientPhases[id] ?? .idle
-        guard status.state == .available || phase != .idle else { return nil }
-        return UpdateComponent(
-          id: id,
-          kind: .plugin,
-          machineId: machineId,
-          machineName: machineName(for: machineId),
-          subjectId: status.pluginId,
-          title: status.pluginId,
-          installedVersion: status.installedVersion,
-          latestVersion: status.registryVersion,
-          updateAvailable: status.state == .available,
-          phase: phase
-        )
-      }
-    }
-  }
-
   private func machineName(for machineId: String) -> String {
     machines.machine(for: machineId)?.name ?? machineId
   }
@@ -350,7 +323,7 @@ public final class UpdateCenter {
     return retryMachines
   }
 
-  /// Sweeps every reachable machine's harness and plugin inventories.
+  /// Sweeps every reachable machine's harness inventory.
   /// `force` additionally re-checks the app and every server's release
   /// feeds (the explicit "Check for Updates" action); the plain sweep
   /// reads what the servers already know.
@@ -390,9 +363,6 @@ public final class UpdateCenter {
       if let harnesses {
         harnessesByMachine[machine.id] = harnesses
       }
-      if let plugins = try? await client.listPluginUpdates() {
-        pluginUpdatesByMachine[machine.id] = plugins
-      }
     }
     lastRefreshedAt = Date()
   }
@@ -411,17 +381,10 @@ public final class UpdateCenter {
     harnessesByMachine[machineId] = harnesses
   }
 
-  private func refreshPlugins(onMachine machineId: String) async {
-    guard let plugins = try? await machines.client(for: machineId).listPluginUpdates()
-    else { return }
-    pluginUpdatesByMachine[machineId] = plugins
-  }
-
   // MARK: - Actions
 
   /// Installs one component's update and waits for the outcome the row can
-  /// observe (server convergence; harness trigger accepted; plugin
-  /// prepared and applied; the app handed to its updater).
+  /// observe (server convergence; harness trigger accepted; app updater handoff).
   public func update(_ component: UpdateComponent) async {
     switch component.kind {
     case .app:
@@ -439,26 +402,11 @@ public final class UpdateCenter {
       } catch {
         transientPhases[component.id] = .failed(serverErrorMessage(error))
       }
-    case .plugin:
-      transientPhases[component.id] = .updating
-      do {
-        let client = machines.client(for: component.machineId)
-        let plan = try await client.preparePluginUpdate(pluginId: component.subjectId)
-        try await reviewPluginUpdate?(component.machineId, plan)
-        _ = try await client.applyPluginUpdate(
-          pluginId: component.subjectId,
-          planId: plan.planId
-        )
-        transientPhases[component.id] = nil
-        await refreshPlugins(onMachine: component.machineId)
-      } catch {
-        transientPhases[component.id] = .failed(serverErrorMessage(error))
-      }
     }
   }
 
-  /// Installs every available update in dependency order: plugins and
-  /// harnesses first (no restarts), then remote servers, and the app LAST
+  /// Installs every available update in dependency order: harnesses first,
+  /// then remote servers, and the app LAST
   /// — its update restarts this client, so everything it orchestrates must
   /// already be done.
   public func updateAll() async {
@@ -481,7 +429,7 @@ public final class UpdateCenter {
     var remaining = Set(snapshot.map(\.id))
     persistSession(remaining)
     let harnessMachines = Set(snapshot.filter { $0.kind == .harness }.map(\.machineId))
-    for kind in [UpdateComponent.Kind.plugin, .harness, .server, .app] {
+    for kind in [UpdateComponent.Kind.harness, .server, .app] {
       if kind == .app {
         for machineId in harnessMachines.sorted() {
           await waitForHarnessUpdatesToSettle(onMachine: machineId)

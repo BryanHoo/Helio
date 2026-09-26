@@ -3,8 +3,7 @@ import { connect } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import type { PluginRegistryIndex } from "@codevisor/api"
-import { PluginsError, type PluginRegistryClient, type PluginStateEvent } from "@codevisor/plugins"
+import { type PluginStateEvent } from "@codevisor/plugins"
 import { Effect } from "effect"
 import { describe, expect, it, onTestFinished } from "vitest"
 
@@ -78,91 +77,12 @@ const seedPane = async (
   })
 }
 
-const registryIndex: PluginRegistryIndex = {
-  generatedAt: "2026-08-18T00:00:00.000Z",
-  entries: [
-    {
-      commit: "a".repeat(40),
-      id: "acme.git-diff",
-      name: "Git Diff",
-      version: "0.1.0",
-      description: "Live git diff viewer",
-      panes: [{ path: "/panes/diff/", title: "Git Diff", type: "diff" }],
-      protocolVersion: 1,
-      repo: "acme/git-diff",
-      stars: 12,
-      pushedAt: "2026-08-17T00:00:00Z"
-    },
-    {
-      commit: "b".repeat(40),
-      id: "beta.notes",
-      name: "Notes",
-      version: "1.0.0",
-      panes: [],
-      protocolVersion: 1,
-      repo: "beta/notes",
-      stars: 3,
-      pushedAt: "2026-08-16T00:00:00Z"
-    }
-  ],
-  rejected: []
-}
-
-const registryStub = (calls: Array<Array<unknown>>): PluginRegistryClient => ({
-  fetchIndex: async () => {
-    calls.push(["fetchIndex"])
-    return registryIndex
-  }
-})
-
 describe("plugin registry route", () => {
-  it("501s when no registry client is wired", async () => {
+  it("does not expose a hosted registry endpoint", async () => {
     const { services } = await makeServices("server-a")
     const server = await startWithApp({ ...services, plugins: pluginsStub([]) })
     runningServers.push(server)
-    // Registry availability is independent of the runtime manager: its 501
-    // fires before the manager's :pluginId matching could turn this into 404.
-    expect((await jsonRequest(server, "/v1/plugins/registry")).status).toBe(501)
-  })
-
-  it("serves the cached index verbatim and filters on ?q=", async () => {
-    const { services } = await makeServices("server-a")
-    const calls: Array<Array<unknown>> = []
-    const server = await startWithApp({
-      ...services,
-      pluginRegistry: registryStub(calls),
-      plugins: pluginsStub([])
-    })
-    runningServers.push(server)
-
-    const full = await jsonRequest(server, "/v1/plugins/registry")
-    expect(full.status).toBe(200)
-    expect(full.body).toEqual(registryIndex)
-
-    const filtered = await jsonRequest(server, "/v1/plugins/registry?q=GIT")
-    expect(filtered.status).toBe(200)
-    expect(filtered.body).toEqual({
-      ...registryIndex,
-      entries: [registryIndex.entries[0]]
-    })
-    expect(calls).toEqual([["fetchIndex"], ["fetchIndex"]])
-  })
-
-  it("maps a registry outage onto 503", async () => {
-    const { services } = await makeServices("server-a")
-    const server = await startWithApp({
-      ...services,
-      pluginRegistry: {
-        fetchIndex: async () => {
-          throw new PluginsError("unavailable", "Plugin registry is unreachable: network down")
-        }
-      },
-      plugins: pluginsStub([])
-    })
-    runningServers.push(server)
-    const outage = await jsonRequest(server, "/v1/plugins/registry")
-    expect(outage.status).toBe(503)
-    expect(outage.body).toMatchObject({ code: "unavailable" })
+    expect((await jsonRequest(server, "/v1/plugins/registry")).status).toBe(404)
   })
 })
 

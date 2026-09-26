@@ -2,7 +2,6 @@ import type { IncomingMessage, ServerResponse } from "node:http"
 
 import type { PluginSummary, WorkspacePane } from "@codevisor/api"
 import {
-  ApplyPluginUpdateRequest as ApplyPluginUpdateRequestSchema,
   DiscoverRemotePluginRequest as DiscoverRemotePluginRequestSchema,
   ImportRemotePluginRequest as ImportRemotePluginRequestSchema,
   InvokePluginToolRequest as InvokePluginToolRequestSchema,
@@ -10,7 +9,6 @@ import {
   PluginPaneTokenRequest as PluginPaneTokenRequestSchema,
   SetPluginEnabledRequest as SetPluginEnabledRequestSchema
 } from "@codevisor/api"
-import { filterPluginRegistryIndex } from "@codevisor/plugins"
 
 import {
   appendAndPublish,
@@ -94,23 +92,13 @@ export const routePlugins = async (
     return false
   }
 
-  // Registry passthrough: the machine (not the client) talks to the hosted
-  // index, so apps browse plugins with no cloud connectivity of their own.
-  // Independent of the runtime manager — handled before its 501 gate.
-  if (url.pathname === "/v1/plugins/registry" && request.method === "GET") {
-    const registry = services.pluginRegistry
-    if (registry === undefined) {
-      throw new HttpFailure(501, "The plugin registry is unavailable")
-    }
-    const index = await registry.fetchIndex()
-    const query = url.searchParams.get("q")
-    writeJson(response, 200, query === null ? index : filterPluginRegistryIndex(index, query))
-    return true
-  }
-
   const manager = services.plugins
   if (manager === undefined) {
     throw new HttpFailure(501, "Plugins are unavailable")
+  }
+
+  if (url.pathname === "/v1/plugins/registry") {
+    return false
   }
 
   if (url.pathname === "/v1/plugins" && request.method === "GET") {
@@ -120,11 +108,6 @@ export const routePlugins = async (
         list.plugins.map((summary) => withOpenPaneCount(services, summary))
       )
     })
-    return true
-  }
-
-  if (url.pathname === "/v1/plugins/updates" && request.method === "GET") {
-    writeJson(response, 200, await manager.listUpdates())
     return true
   }
 
@@ -241,21 +224,6 @@ export const routePlugins = async (
     const changed = await manager.setEnabled(enabledId, payload.enabled)
     await appendAndPublish(services.db, fanout, "plugin.updated", changed.id, changed)
     writeJson(response, 200, changed)
-    return true
-  }
-
-  const prepareUpdateId = matchRoute(url.pathname, "/v1/plugins/:pluginId/update/prepare")
-  if (prepareUpdateId !== undefined && request.method === "POST") {
-    writeJson(response, 201, await manager.prepareUpdate(prepareUpdateId))
-    return true
-  }
-
-  const applyUpdateId = matchRoute(url.pathname, "/v1/plugins/:pluginId/update/apply")
-  if (applyUpdateId !== undefined && request.method === "POST") {
-    const payload = await readSchema(request, ApplyPluginUpdateRequestSchema)
-    const updated = await manager.applyUpdate(applyUpdateId, payload.planId)
-    await appendAndPublish(services.db, fanout, "plugin.updated", updated.id, updated)
-    writeJson(response, 200, updated)
     return true
   }
 

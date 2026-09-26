@@ -76,9 +76,6 @@ const queryParameters = (endpoint: Endpoint): ReadonlyArray<JsonObject> => {
       { name: "harnessId", in: "query", schema: { type: "string" } }
     ]
   }
-  if (endpoint === "GET /v1/plugins/registry") {
-    return [{ name: "q", in: "query", schema: { type: "string" } }]
-  }
   if (endpoint === "GET /v1/sessions/:id/transcript") {
     return [
       {

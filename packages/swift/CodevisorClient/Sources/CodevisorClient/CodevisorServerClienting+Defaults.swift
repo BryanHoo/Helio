@@ -129,16 +129,6 @@ public extension CodevisorServerClienting {
   /// overrides both with the real requests.
   func listPlugins() async throws -> [ServerPluginSummary] { [] }
 
-  func listPluginUpdates() async throws -> [ServerPluginUpdateStatus] { [] }
-
-  func preparePluginUpdate(pluginId: String) async throws -> ServerPluginUpdatePlan {
-    throw CodevisorServerClientError.invalidResponse
-  }
-
-  func applyPluginUpdate(pluginId: String, planId: String) async throws -> ServerPluginSummary {
-    throw CodevisorServerClientError.invalidResponse
-  }
-
   func pluginIcon(pluginId: String, paneType: String?) async throws -> ServerPluginIconAsset {
     throw CodevisorServerClientError.invalidResponse
   }
@@ -151,10 +141,6 @@ public extension CodevisorServerClienting {
     cwd: String?,
     themeMode: String?
   ) async throws -> ServerPluginPaneTokenResponse {
-    throw CodevisorServerClientError.invalidResponse
-  }
-
-  func fetchPluginRegistry(query: String?) async throws -> ServerPluginRegistryIndex {
     throw CodevisorServerClientError.invalidResponse
   }
 

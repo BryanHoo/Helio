@@ -265,7 +265,7 @@ final public class SessionController {
   @ObservationIgnored var isRestoringDraft = false
   /// Set only while a promoted new-chat draft is waiting for a successful
   /// agent connection. Failed setup rolls it back without counting a chat.
-  var pendingNewChatAnalytics = false
+  var pendingNewChatSetup = false
   /// The in-flight eager connect, owned by the controller so a pane remount
   /// (whose SwiftUI task dies with the view) cannot cancel it mid-flight.
   /// Callers of `connectIfNeeded()` join this attempt instead of racing the
@@ -280,7 +280,6 @@ final public class SessionController {
   @ObservationIgnored var isFirstSendConnecting = false
   /// Usage snapshots are cumulative for a session; retain the previous one
   /// so turn events report coarse deltas instead of cumulative totals.
-  var analyticsUsageBaseline: SessionUsage?
   /// The user's requested plan state while the harness/server transition is
   /// in flight. Keeping this separate from the authoritative session state
   /// makes the composer respond immediately without letting duplicate clicks

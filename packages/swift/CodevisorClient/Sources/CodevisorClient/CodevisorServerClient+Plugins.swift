@@ -127,119 +127,6 @@ public struct ServerPluginRequirements: Codable, Equatable, Sendable {
   }
 }
 
-/// Exhaustive registry-update state for one installed plugin.
-public enum ServerPluginUpdateState: String, Codable, Equatable, Sendable {
-  case current
-  case available
-  case pinned
-  case incompatible
-  case sourceUnknown
-  case checkFailed
-}
-
-public struct ServerPluginUpdateStatus: Codable, Equatable, Identifiable, Sendable {
-  public var pluginId: String
-  public var installedVersion: String
-  public var state: ServerPluginUpdateState
-  public var checkedAt: String
-  public var registryVersion: String?
-  public var reason: String?
-
-  public var id: String { pluginId }
-
-  public init(
-    pluginId: String,
-    installedVersion: String,
-    state: ServerPluginUpdateState,
-    checkedAt: String,
-    registryVersion: String? = nil,
-    reason: String? = nil
-  ) {
-    self.pluginId = pluginId
-    self.installedVersion = installedVersion
-    self.state = state
-    self.checkedAt = checkedAt
-    self.registryVersion = registryVersion
-    self.reason = reason
-  }
-}
-
-/// Commands and capabilities on one side of a prepared update.
-public struct ServerPluginUpdateReview: Codable, Equatable, Sendable {
-  public var ageRating: Int?
-  public var version: String
-  public var setupCommands: [String]
-  public var runCommand: String
-  public var panes: [ServerPluginPaneDescriptor]
-  public var tools: [ServerPluginToolDescriptor]?
-  public var requirements: ServerPluginRequirements?
-
-  public init(
-    version: String,
-    setupCommands: [String],
-    runCommand: String,
-    panes: [ServerPluginPaneDescriptor],
-    tools: [ServerPluginToolDescriptor]? = nil,
-    requirements: ServerPluginRequirements? = nil
-  ) {
-    self.version = version
-    self.setupCommands = setupCommands
-    self.runCommand = runCommand
-    self.panes = panes
-    self.tools = tools
-    self.requirements = requirements
-  }
-}
-
-public struct ServerPluginNamedChanges: Codable, Equatable, Sendable {
-  public var added: [String]
-  public var removed: [String]
-  public var changed: [String]
-
-  public init(added: [String], removed: [String], changed: [String]) {
-    self.added = added
-    self.removed = removed
-    self.changed = changed
-  }
-}
-
-/// A short-lived update prepared from exact, staged source bytes.
-public struct ServerPluginUpdatePlan: Codable, Equatable, Identifiable, Sendable {
-  public var planId: String
-  public var pluginId: String
-  public var name: String
-  public var resolvedCommit: String
-  public var expiresAt: String
-  public var current: ServerPluginUpdateReview
-  public var candidate: ServerPluginUpdateReview
-  public var paneChanges: ServerPluginNamedChanges
-  public var toolChanges: ServerPluginNamedChanges
-
-  public var id: String { planId }
-
-  public init(
-    planId: String,
-    pluginId: String,
-    name: String,
-    resolvedCommit: String,
-    expiresAt: String,
-    current: ServerPluginUpdateReview,
-    candidate: ServerPluginUpdateReview,
-    paneChanges: ServerPluginNamedChanges,
-    toolChanges: ServerPluginNamedChanges
-  ) {
-    self.planId = planId
-    self.pluginId = pluginId
-    self.name = name
-    self.resolvedCommit = resolvedCommit
-    self.expiresAt = expiresAt
-    self.current = current
-    self.candidate = candidate
-    self.paneChanges = paneChanges
-    self.toolChanges = toolChanges
-  }
-}
-
 /// What a staged plugin source offers (mirrors `DiscoverRemotePluginResult`
 /// in packages/api). `installCommand`/`runCommand` are the VERBATIM manifest
 /// command strings — the consent UI shows exactly these before anything runs
@@ -286,77 +173,6 @@ public struct ServerPluginRemoteDiscovery: Codable, Equatable, Sendable {
   }
 }
 
-/// One plugin in the public registry index (mirrors `PluginRegistryEntry` in
-/// packages/api): manifest metadata renderable without running anything, plus
-/// the GitHub facts (repo, stars, push time) that anchor it to a real owner.
-public struct ServerPluginRegistryEntry: Codable, Hashable, Identifiable, Sendable {
-  public var ageRating: Int?
-  /// Owner-namespaced plugin id, lowercase `owner.name`.
-  public var id: String
-  public var name: String
-  public var version: String
-  public var description: String?
-  public var iconPath: String?
-  public var panes: [ServerPluginPaneDescriptor]
-  public var tools: [ServerPluginToolDescriptor]?
-  /// GitHub "owner/name" — the directory always shows the real repo owner.
-  /// Feed this to the discover→consent→install flow as the plugin source.
-  public var repo: String
-  /// GitHub avatar of the repo owner — the only artwork renderable before
-  /// install (`iconPath` is served by the plugin's own server, which isn't
-  /// running yet). Absent from older indexes.
-  public var ownerAvatarUrl: String?
-  public var stars: Int
-  public var pushedAt: String
-  /// Curation groundwork: reserved for first-party verification of an
-  /// entry. The indexer never sets it yet, so it is always absent today.
-  public var verified: Bool?
-
-  public init(
-    id: String,
-    name: String,
-    version: String,
-    description: String? = nil,
-    iconPath: String? = nil,
-    panes: [ServerPluginPaneDescriptor] = [],
-    tools: [ServerPluginToolDescriptor]? = nil,
-    repo: String,
-    ownerAvatarUrl: String? = nil,
-    stars: Int,
-    pushedAt: String,
-    verified: Bool? = nil
-  ) {
-    self.id = id
-    self.name = name
-    self.version = version
-    self.description = description
-    self.iconPath = iconPath
-    self.panes = panes
-    self.tools = tools
-    self.repo = repo
-    self.ownerAvatarUrl = ownerAvatarUrl
-    self.stars = stars
-    self.pushedAt = pushedAt
-    self.verified = verified
-  }
-}
-
-/// The registry index served by `GET /v1/plugins/registry` (mirrors
-/// `PluginRegistryIndex` in packages/api). The wire document also carries
-/// `rejected` diagnostics for plugin authors; clients don't render them, so
-/// decoding simply ignores that key.
-public struct ServerPluginRegistryIndex: Codable, Equatable, Sendable {
-  /// Null until the indexer's first poll completes — the cloud serves an
-  /// honest empty index rather than a 404.
-  public var generatedAt: String?
-  public var entries: [ServerPluginRegistryEntry]
-
-  public init(generatedAt: String? = nil, entries: [ServerPluginRegistryEntry]) {
-    self.generatedAt = generatedAt
-    self.entries = entries
-  }
-}
-
 /// A short-lived pane token plus the server-relative pane URL it unlocks
 /// (mirrors `PluginPaneTokenResponse` in packages/api). Append `path` to the
 /// machine's base URL and load it in a webview; the proxy exchanges the token
@@ -395,10 +211,6 @@ extension CodevisorServerClient {
     var plugins: [ServerPluginSummary]
   }
 
-  private struct PluginUpdatesResponse: Decodable {
-    var updates: [ServerPluginUpdateStatus]
-  }
-
   struct PluginPaneTokenBody: Encodable {
     var paneType: String
     var workspaceId: String?
@@ -414,10 +226,6 @@ extension CodevisorServerClient {
     var path: String
   }
 
-  struct PluginUpdateApplyBody: Encodable {
-    var planId: String
-  }
-
   struct PluginSetEnabledBody: Encodable {
     var enabled: Bool
   }
@@ -425,27 +233,6 @@ extension CodevisorServerClient {
   public func listPlugins() async throws -> [ServerPluginSummary] {
     let response: PluginListResponse = try await get("/v1/plugins")
     return response.plugins
-  }
-
-  public func listPluginUpdates() async throws -> [ServerPluginUpdateStatus] {
-    let response: PluginUpdatesResponse = try await get("/v1/plugins/updates")
-    return response.updates
-  }
-
-  public func preparePluginUpdate(pluginId: String) async throws -> ServerPluginUpdatePlan {
-    try await send(
-      "/v1/plugins/\(pathComponent(pluginId))/update/prepare",
-      method: "POST",
-      body: Optional<EmptyBody>.none
-    )
-  }
-
-  public func applyPluginUpdate(pluginId: String, planId: String) async throws -> ServerPluginSummary {
-    try await send(
-      "/v1/plugins/\(pathComponent(pluginId))/update/apply",
-      method: "POST",
-      body: PluginUpdateApplyBody(planId: planId)
-    )
   }
 
   public func pluginIcon(pluginId: String, paneType: String? = nil) async throws -> ServerPluginIconAsset {
@@ -469,15 +256,6 @@ extension CodevisorServerClient {
       throw CodevisorServerClientError.invalidResponse
     }
     return ServerPluginIconAsset(data: data, contentType: "image/png")
-  }
-
-  public func fetchPluginRegistry(query: String? = nil) async throws -> ServerPluginRegistryIndex {
-    var path = "/v1/plugins/registry"
-    if let query, !query.isEmpty {
-      let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-      path += "?q=\(encoded)"
-    }
-    return try await get(path)
   }
 
   public func discoverRemotePlugin(source: String) async throws -> ServerPluginRemoteDiscovery {

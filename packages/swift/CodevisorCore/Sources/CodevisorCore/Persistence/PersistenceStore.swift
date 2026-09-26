@@ -40,8 +40,7 @@ func handleCorruptPayload(
   guard let reportTitle else { return }
   Task { @MainActor in
     ErrorReporter.shared.report(
-      .corruptPersistedData,
-      title: reportTitle,
+      reportTitle,
       message: reportMessage
     )
   }
@@ -104,8 +103,7 @@ public final class FileSystemStore: PersistenceStore, @unchecked Sendable {
         )
         Task { @MainActor in
           ErrorReporter.shared.report(
-            .dataDirectoryUnavailable,
-            title: "Helio Can't Access Its Data Folder",
+            "Helio Can't Access Its Data Folder",
             message: "Changes made now may not be saved after you quit."
           )
         }
@@ -230,8 +228,7 @@ public final class FileSystemStore: PersistenceStore, @unchecked Sendable {
     guard isFirstForKey else { return }
     Task { @MainActor in
       ErrorReporter.shared.report(
-        .persistenceWriteFailed,
-        title: "Couldn't Save Your Data",
+        "Couldn't Save Your Data",
         message:
           "Helio couldn't write “\(key)” to its data folder, so recent changes may be lost. Check that your disk isn't full."
       )
