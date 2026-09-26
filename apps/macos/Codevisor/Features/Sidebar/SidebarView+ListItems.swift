@@ -37,17 +37,20 @@ extension SidebarView {
       // Suppress superseded automatic workspaces whose chats all moved to
       // another workspace. Empty workspaces have no chat IDs and remain visible.
       guard workspace.chatSessionIds.isEmpty || !routedSessionIDs.isEmpty else { return nil }
+      let sessions = routedSessionIDs.compactMap {
+        sessionsByID[.session(serverId: workspace.serverId, id: $0)]
+      }
       // A terminal-only workspace can still route through an archived chat
       // retained in the session index after its chat tab was closed.
       let routingSession =
-        routedSessionIDs.lazy.compactMap {
-          sessionsByID[.session(serverId: workspace.serverId, id: $0)]
-        }.first
+        sessions.first
         ?? list.sessions.first {
           $0.serverId == workspace.serverId
             && environment.workspaces.workspaceId(forSession: $0.id) == workspace.id
         }
-      return SidebarWorkspaceListItem(workspace: workspace, routingSession: routingSession)
+      return SidebarWorkspaceListItem(
+        workspace: workspace, routingSession: routingSession, sessions: sessions
+      )
     }
     return items
   }

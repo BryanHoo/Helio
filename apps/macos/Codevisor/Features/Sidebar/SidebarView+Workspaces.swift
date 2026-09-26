@@ -77,6 +77,9 @@ extension SidebarView {
     SidebarWorkspaceHeader(
       name: item.title,
       machineName: machineName(for: item),
+      sessions: item.sessions,
+      store: store,
+      lastActivityAt: item.lastActivityAt,
       isSelected: routesSelectedSession(item.workspace),
       isReordering: isReordering,
       onActivate: { activateWorkspace(item) },

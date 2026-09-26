@@ -1,4 +1,5 @@
 import SwiftUI
+import CodevisorCore
 import CodevisorUI
 
 /// One selectable task under its project.
@@ -7,6 +8,9 @@ struct SidebarWorkspaceHeader: View {
   /// Where the workspace lives: a remote machine's name, or "This Mac" for
   /// local ones. Nil only when the workspace's machine is unknown.
   let machineName: String?
+  let sessions: [ChatSession]
+  let store: SessionStore?
+  let lastActivityAt: Date
   let isSelected: Bool
   let isReordering: Bool
   let onActivate: () -> Void
@@ -25,12 +29,27 @@ struct SidebarWorkspaceHeader: View {
       HStack(spacing: 4) {
         Button(action: onActivate) {
           HStack(spacing: 7) {
-            Image(systemName: "square.stack")
-              .font(.caption)
-              .frame(width: 16)
-              .foregroundStyle(.secondary)
+            if let statusSession {
+              ChatSessionLeadingIcon(session: statusSession, store: store)
+                .frame(width: 16)
+            } else {
+              Image(systemName: "square.stack")
+                .font(.caption)
+                .frame(width: 16)
+                .foregroundStyle(.secondary)
+            }
             SidebarWorkspaceHeaderLabel(name: name, machineName: machineName)
               .frame(maxWidth: .infinity, alignment: .leading)
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+              Text(Self.age(since: lastActivityAt, now: context.date))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.tertiary)
+                .frame(width: 42, alignment: .trailing)
+            }
+            .help(lastActivityAt.formatted(date: .abbreviated, time: .shortened))
+            .accessibilityLabel(
+              "Last activity \(lastActivityAt.formatted(date: .abbreviated, time: .shortened))"
+            )
           }
           .contentShape(Rectangle())
         }
@@ -70,6 +89,25 @@ struct SidebarWorkspaceHeader: View {
 
   private var title: String {
     SidebarWorkspaceHeaderLabel.title(for: name)
+  }
+
+  private var statusSession: ChatSession? {
+    _ = store?.activityRevision
+    guard let store else { return sessions.first }
+    // 汇总同一任务内的会话，避免运行中的非首个聊天仍显示空闲图标。
+    return sessions.first(where: store.isWaitingOnUser)
+      ?? sessions.first(where: store.isInProgress)
+      ?? sessions.first(where: store.hasUnreadError)
+      ?? sessions.first(where: { store.unreadCount($0) > 0 })
+      ?? sessions.first
+  }
+
+  static func age(since date: Date, now: Date) -> String {
+    let minutes = max(1, Int(now.timeIntervalSince(date) / 60))
+    if minutes < 60 { return "\(minutes)m" }
+    let hours = minutes / 60
+    if hours < 24 { return "\(hours)h" }
+    return "\(hours / 24)d"
   }
 }
 
