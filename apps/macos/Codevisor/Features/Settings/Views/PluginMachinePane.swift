@@ -122,7 +122,7 @@ struct PluginMachinePane: View {
   /// (`openPaneCount` route enrichment) so users aren't surprised when
   /// tabs disappear on every device.
   private func removalMessage(for plugin: ServerPluginSummary?) -> String {
-    let base = "This stops the plugin and deletes its directory from this machine."
+    let base = "This stops the plugin and deletes its directory."
     guard let count = plugin?.openPaneCount, count > 0 else { return base }
     return "\(base) \(count) open pane\(count == 1 ? "" : "s") will be closed."
   }
@@ -144,7 +144,7 @@ struct PluginMachinePane: View {
             .font(.callout)
         }
         if (plugins ?? []).isEmpty {
-          Text("No plugins installed on this machine.")
+          Text("No plugins installed.")
             .foregroundStyle(.secondary)
         } else {
           ForEach(plugins ?? []) { plugin in

@@ -12,9 +12,13 @@ struct ProjectSettingsDetailView: View {
     environment.projectList.fleetActiveProjectGroups.first { $0.id == groupId }
   }
 
+  private var localProjects: [Project] {
+    group?.members.filter { $0.serverId == CodevisorMachine.local.id } ?? []
+  }
+
   var body: some View {
     Form {
-      if let group {
+      if let group, !localProjects.isEmpty {
         if let repository = group.primary.repoUrl ?? group.repoKey {
           Section("Repository") {
             Text(repository)
@@ -22,10 +26,10 @@ struct ProjectSettingsDetailView: View {
               .foregroundStyle(.secondary)
           }
         }
-        ForEach(group.members, id: \.settingsCheckoutID) { project in
+        ForEach(localProjects, id: \.settingsCheckoutID) { project in
           ProjectCheckoutSettingsSection(
             project: project,
-            allowsCheckoutDeletion: group.members.count > 1
+            allowsCheckoutDeletion: localProjects.count > 1
           ) { saving in
             if saving {
               savingCheckoutIDs.insert(project.settingsCheckoutID)
@@ -36,11 +40,11 @@ struct ProjectSettingsDetailView: View {
         }
         Section {
           ProjectSettingsDeleteButton(
-            projects: group.members,
+            projects: localProjects,
             title: "Delete Project…",
             confirmationTitle: "Delete \(group.name)?",
             message:
-              "This permanently deletes all \(group.members.count) of this project's checkouts and every workspace and chat in them, along with their worktree files. This cannot be undone."
+              "This permanently deletes this project and its workspaces, chats and worktree files. This cannot be undone."
           ) {
             SettingsRouter.shared.panePath = []
           }
@@ -77,10 +81,6 @@ private struct ProjectCheckoutSettingsSection: View {
     _editor = State(initialValue: ProjectWorktreeSettingsModel(worktreeBase: project.worktreeBase))
   }
 
-  private var machineName: String {
-    environment.machines.machine(for: project.serverId)?.name ?? "Unavailable machine"
-  }
-
   private var isReady: Bool {
     environment.machines.availability(for: project.serverId) == .ready
   }
@@ -99,7 +99,7 @@ private struct ProjectCheckoutSettingsSection: View {
           .help(project.folderURL.path)
       }
       if !isReady {
-        Label("Machine unavailable", systemImage: "exclamationmark.triangle")
+        Label("Server unavailable", systemImage: "exclamationmark.triangle")
           .foregroundStyle(.secondary)
       }
       if project.isGitRepository {
@@ -120,14 +120,12 @@ private struct ProjectCheckoutSettingsSection: View {
         ProjectSettingsDeleteButton(
           projects: [project],
           title: "Delete Checkout…",
-          confirmationTitle: "Delete checkout on \(machineName)?",
+          confirmationTitle: "Delete checkout?",
           message:
-            "This permanently deletes \(project.folderURL.path) from Helio along with its workspaces, chats and worktree files on \(machineName). Other checkouts are unchanged. This cannot be undone."
+            "This permanently deletes \(project.folderURL.path) from Helio along with its workspaces, chats and worktree files. Other checkouts are unchanged. This cannot be undone."
         ) {}
         .disabled(editor.isSaving)
       }
-    } header: {
-      Text(machineName)
     } footer: {
       if project.isGitRepository {
         Text("New worktrees start from the latest commit on this checkout's selected remote branch.")

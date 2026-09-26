@@ -129,30 +129,6 @@
     }
   }
 
-  /// An empty file pane: the picker centered on the pane background, the
-  /// same presentation as the New Tab page it was chosen from.
-  struct MacFileOpenPage: View {
-    let model: FilePaneModel
-    @Environment(\.theme) private var theme
-    @State private var focus = Autocomplete.InputFocus()
-
-    private static let cornerRadius: CGFloat = 18
-
-    var body: some View {
-      GeometryReader { geometry in
-        ScrollView {
-          MacFileOpenPicker(model: model, focus: focus)
-            .composerGlassSurface(cornerRadius: Self.cornerRadius)
-            .padding(20)
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: geometry.size.height)
-        }
-      }
-      .background(theme.paneBackground)
-      .onChange(of: model.explorerFocusRequests) { _, _ in focus.focus() }
-    }
-  }
-
   /// The picker anchored to the document title, for switching files without
   /// leaving the pane.
   struct MacFileOpenPopover: View {

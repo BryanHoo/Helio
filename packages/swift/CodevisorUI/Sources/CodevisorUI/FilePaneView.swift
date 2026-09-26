@@ -80,7 +80,10 @@ public struct FilePaneView: View {
   @ViewBuilder private var content: some View {
     if model.isBrowsing {
       #if canImport(AppKit)
-        MacFileOpenPage(model: model)
+        ProjectFileTreeView(model: model) { path in
+          // 文件在独立标签中预览，目录树标签保留以便继续浏览。
+          if openFile?(path) != true { model.navigate(to: path) }
+        }
       #else
         FileBrowserView(model: model)
       #endif

@@ -114,7 +114,7 @@ struct McpManagedServerRow: View {
     case "connected": return "Connected · \(server.toolCount) tool\(server.toolCount == 1 ? "" : "s")"
     case "connecting": return "Connecting…"
     case "needsSetup": return server.detail ?? "Setup required"
-    case "unavailable": return server.detail ?? "Unavailable on this machine"
+    case "unavailable": return server.detail ?? "Unavailable"
     case "needsAuthorization": return "Authorization required"
     case "expired": return "Sign-in expired"
     case "error": return server.detail ?? "Connection failed"

@@ -178,14 +178,14 @@ public struct ServerAvailabilityView: View {
     case let .waiting(reason):
       switch reason {
       case .starting: isLocal ? "Starting Helio Server" : "Connecting to Server"
-      case .connecting: "Connecting to \(machineName)"
+      case .connecting: isLocal ? "Connecting to Helio Server" : "Connecting to \(machineName)"
       case .updating: "Updating Helio Server"
       case .restarting: "Restarting Helio Server"
       }
     case .ready:
       "Server Ready"
     case .failed:
-      "Can't Reach \(machineName)"
+      isLocal ? "Can't Reach Helio Server" : "Can't Reach \(machineName)"
     }
   }
 

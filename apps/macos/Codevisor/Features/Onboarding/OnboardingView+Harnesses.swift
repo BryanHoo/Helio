@@ -18,7 +18,7 @@ extension OnboardingView {
       stepHeader(
         symbol: "terminal",
         title: "Choose your harnesses",
-        subtitle: "Choose the coding agents available on this Mac."
+        subtitle: "Choose your coding agents."
       )
 
       switch detection {
@@ -71,7 +71,7 @@ extension OnboardingView {
           Label {
             VStack(alignment: .leading, spacing: 2) {
               Text("No harnesses yet").fontWeight(.medium)
-              Text("Add one to install it on this Mac. No restart needed.")
+              Text("Add one to install it. No restart needed.")
                 .font(.callout).foregroundStyle(.secondary)
             }
           } icon: {
@@ -151,6 +151,6 @@ extension OnboardingView {
     if case let .unavailable(message) = environment.localServer?.state {
       return message
     }
-    return "The Helio server didn't respond. Try again, or check Settings → Machines."
+    return "The Helio server didn't respond. Try again."
   }
 }

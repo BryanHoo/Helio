@@ -38,7 +38,7 @@
               .frame(height: 32)
               ForEach(section.rows.filter { $0.session != nil }) { row in
                 SidebarWorkspaceHeader(
-                  name: row.title, machineName: nil,
+                  name: row.title,
                   sessions: row.session.map { [$0] } ?? [], store: store,
                   lastActivityAt: Date.now.addingTimeInterval(-7_200),
                   isSelected: scene == "conversation" && row.id == AppStoreScreenshotData.id(11),

@@ -5,9 +5,6 @@ import CodevisorUI
 /// One selectable task under its project.
 struct SidebarWorkspaceHeader: View {
   let name: String
-  /// Where the workspace lives: a remote machine's name, or "This Mac" for
-  /// local ones. Nil only when the workspace's machine is unknown.
-  let machineName: String?
   let sessions: [ChatSession]
   let store: SessionStore?
   let lastActivityAt: Date
@@ -38,7 +35,7 @@ struct SidebarWorkspaceHeader: View {
                 .frame(width: 16)
                 .foregroundStyle(.secondary)
             }
-            SidebarWorkspaceHeaderLabel(name: name, machineName: machineName)
+            SidebarWorkspaceHeaderLabel(name: name)
               .frame(maxWidth: .infinity, alignment: .leading)
             TimelineView(.periodic(from: .now, by: 60)) { context in
               Text(Self.age(since: lastActivityAt, now: context.date))
@@ -119,11 +116,10 @@ struct SidebarWorkspaceHeader: View {
   }
 }
 
-/// The header's name (and machine) text, shared with the reorder ghost so
+/// The header's name text, shared with the reorder ghost so
 /// the lifted row and its stand-in never drift apart in style.
 struct SidebarWorkspaceHeaderLabel: View {
   let name: String
-  let machineName: String?
 
   static func title(for name: String) -> String {
     name.isEmpty ? "Workspace" : name
@@ -132,23 +128,10 @@ struct SidebarWorkspaceHeaderLabel: View {
   private var title: String { Self.title(for: name) }
 
   var body: some View {
-    // 4pt + the glyphs' side bearings lands at ~6pt of visible gap on
-    // each side of the dot.
-    HStack(spacing: 4) {
-      Text(title)
-        .truncationMode(.middle)
-      if let machineName {
-        // Separate view so the dot gets the same spacing on both sides;
-        // inside the string it only had a ~3pt space on the right.
-        Text("·")
-          .foregroundStyle(.tertiary)
-        Text(machineName)
-          .foregroundStyle(.tertiary)
-      }
-    }
-    .font(.subheadline.weight(.semibold))
-    .lineLimit(1)
-    .accessibilityElement(children: .combine)
-    .help(machineName.map { "\(title) · \($0)" } ?? title)
+    Text(title)
+      .font(.subheadline.weight(.semibold))
+      .lineLimit(1)
+      .truncationMode(.middle)
+      .help(title)
   }
 }

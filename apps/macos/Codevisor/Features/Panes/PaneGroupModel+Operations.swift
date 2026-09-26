@@ -88,20 +88,19 @@ extension PaneGroupModel {
     return added
   }
 
-  /// Converts a New Tab placeholder into a real pane in place (the
-  /// page's New Chat / New Terminal choices). Chats pass the eagerly
-  /// created session so the pane is established from birth.
+  /// 将 New Tab 原位转换为所选面板，保留标签位置和选中状态。
   func convertNewTabPane(
     id: UUID,
     to kind: PaneKind,
     chatSessionId: UUID? = nil,
     name: String? = nil,
+    documentPath: String? = nil,
     publishChange: Bool = true
   ) {
     guard let previous = state.panes.first(where: { $0.id == id }),
       let converted = state.convertNewTabPane(
         id: id, to: kind, sessionId: sessionId,
-        chatSessionId: chatSessionId, name: name
+        chatSessionId: chatSessionId, name: name, documentPath: documentPath
       )
     else { return }
     if Self.requiresNewLivePane(previous: previous, next: converted) {

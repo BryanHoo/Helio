@@ -11,7 +11,7 @@ public enum PaneKind: String, Codable, Sendable {
   /// The Chrome-style placeholder spawned when a group's last real pane
   /// closes: the empty state IS a tab (the strip never lies about what's
   /// open), and its page offers what to create. It leaves by conversion —
-  /// picking New Chat/New Terminal replaces it in place.
+  /// picking a tool replaces it in place.
   case newTab
   /// A file on the workspace’s machine. The persisted name retains compatibility with document panes.
   case document
@@ -278,7 +278,7 @@ public struct PaneGroupState: Codable, Sendable, Equatable {
   }
 
   /// Replaces a New Tab placeholder with a real pane IN PLACE (same slot;
-  /// selection follows): a terminal, or a chat — established when
+  /// selection follows): a terminal, document, or chat — established when
   /// `chatSessionId` is provided (the session was created eagerly), a
   /// draft that binds on first send otherwise. Returns nil when the pane
   /// isn't a placeholder (or the target kind is another placeholder).
@@ -288,7 +288,8 @@ public struct PaneGroupState: Codable, Sendable, Equatable {
     to kind: PaneKind,
     sessionId: UUID?,
     chatSessionId: UUID? = nil,
-    name: String? = nil
+    name: String? = nil,
+    documentPath: String? = nil
   ) -> PaneDescriptorState? {
     guard let index = panes.firstIndex(where: { $0.id == id }),
       panes[index].kind == .newTab
@@ -313,7 +314,13 @@ public struct PaneGroupState: Codable, Sendable, Equatable {
         terminalKey: paneId.uuidString,
         chatSessionId: chatSessionId
       )
-    case .newTab, .document:
+    case .document:
+      guard let documentPath, !documentPath.isEmpty else { return nil }
+      pane = PaneDescriptorState(
+        id: paneId, kind: .document, name: name ?? "Project Files",
+        terminalKey: paneId.uuidString, documentPath: documentPath
+      )
+    case .newTab:
       return nil
     }
     panes[index] = pane

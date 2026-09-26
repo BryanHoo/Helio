@@ -134,16 +134,12 @@ final class PaneGroupModel: Identifiable {
   // MARK: - Live panes
 
   func openFiles(id: UUID) {
-    guard let index = state.panes.firstIndex(where: { $0.id == id }) else { return }
-    let context = makeContext(state.panes[index])
+    guard let placeholder = state.panes.first(where: { $0.id == id && $0.kind == .newTab }) else { return }
+    let context = makeContext(placeholder)
     let root = context.workspaceRootDirectory ?? context.session?.cwd ?? context.project.folderURL.path
-    let path = root + "/"
-    let pane = PaneDescriptorState(
-      id: id, kind: .document, name: FileDocumentLocation.name(path), terminalKey: id.uuidString, documentPath: path)
-    discardLivePane(id: id)
-    state.panes[index] = pane
-    persist()
-    onPaneChanged?(pane)
+    let path = root.hasSuffix("/") ? root : root + "/"
+    // 与终端共用转换流程，确保旧的 New Tab 内容卸载并挂载文件面板。
+    convertNewTabPane(id: id, to: .document, documentPath: path)
   }
 
   /// The live pane for a descriptor, built on first use. New pane kinds add

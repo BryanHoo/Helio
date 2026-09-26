@@ -128,8 +128,7 @@ extension SidebarView {
     {
       let frame = drag.ghostFrame
       SidebarWorkspaceDragGhost(
-        name: item.title,
-        machineName: machineName(for: item)
+        name: item.title
       )
       .frame(width: frame.width, height: frame.height)
       .position(x: frame.midX, y: frame.midY)
@@ -145,11 +144,10 @@ extension SidebarView {
 /// landing read as the row itself moving.
 struct SidebarWorkspaceDragGhost: View {
   let name: String
-  let machineName: String?
 
   var body: some View {
     HStack(spacing: 0) {
-      SidebarWorkspaceHeaderLabel(name: name, machineName: machineName)
+      SidebarWorkspaceHeaderLabel(name: name)
       Spacer(minLength: 0)
     }
     .foregroundStyle(.secondary)

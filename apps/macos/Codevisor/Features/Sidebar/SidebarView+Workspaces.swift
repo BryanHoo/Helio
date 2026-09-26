@@ -64,19 +64,9 @@ extension SidebarView {
     .onDisappear { forgetWorkspaceGeometry(for: id) }
   }
 
-  /// Show the machine only when this project has tasks on multiple machines.
-  func machineName(for item: SidebarWorkspaceListItem) -> String? {
-    guard let section = section(containing: item.workspace.id),
-      Set(section.workspaces.map(\.serverId)).count > 1
-    else { return nil }
-    let machine = environment.machines.machine(for: item.workspace.serverId)
-    return machine.map { $0.isLocal ? "This Mac" : $0.name }
-  }
-
   private func workspaceHeader(_ item: SidebarWorkspaceListItem) -> some View {
     SidebarWorkspaceHeader(
       name: item.title,
-      machineName: machineName(for: item),
       sessions: item.sessions,
       store: store,
       lastActivityAt: item.lastActivityAt,

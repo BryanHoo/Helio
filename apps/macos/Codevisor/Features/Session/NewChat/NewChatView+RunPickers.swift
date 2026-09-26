@@ -5,7 +5,7 @@ import SwiftUI
 
 extension NewChatView {
   enum RunPicker {
-    case machine, project, location
+    case project, location
   }
 
   enum ProjectPickerTarget: Hashable {
@@ -43,15 +43,6 @@ extension NewChatView {
   /// run in that workspace's directory.
   var showsRunPickers: Bool { paneDraftId == nil }
 
-  /// Every machine's projects, most recently used first (scratch backing
-  /// projects, when a server has any, are internal and never listed).
-  private var pickerProjects: [Project] {
-    environment.projectList.fleetActiveProjectsByWorkspaceRecency(
-      environment.workspaces.loadAll()
-    )
-    .filter { !$0.isScratch }
-  }
-
   /// The picker's entries for one machine: the linked projects that have
   /// a checkout there, one row per repository. The machine chip is the
   /// first choice, so the project list never reaches past it.
@@ -62,9 +53,6 @@ extension NewChatView {
     .filter { $0.member(on: serverId) != nil }
   }
 
-  /// The machine picker shows only when there is a choice to make.
-  var showsMachinePicker: Bool { false }
-
   /// The live project record. The controller holds a snapshot from when
   /// the project was picked; the server's git probe lands on the list
   /// afterwards, and the worktree picker must follow the probed value.
@@ -72,54 +60,6 @@ extension NewChatView {
     environment.projectList.projects.first {
       $0.serverId == controller.project.serverId && $0.id == controller.project.id
     } ?? controller.project
-  }
-
-  /// Choose the machine this chat runs on. Picking one re-points the draft
-  /// at that machine's remembered (or most recent) project; the project
-  /// picker then lists that machine's projects.
-  func machinePicker(_ controller: SessionController) -> some View {
-    let machines = environment.machines.allMachines
-    let selectedServerId = controller.project.serverId
-    let selectedMachine = environment.machines.machine(for: selectedServerId)
-    let selection = Binding(
-      get: { controller.project.serverId },
-      set: { id in
-        guard let machine = environment.machines.machine(for: id) else { return }
-        selectTargetMachine(machine, controller: controller)
-      }
-    )
-    return RunPickerMenu(
-      chipText: selectedMachine?.name ?? "Machine",
-      chipSymbol: selectedMachine.map(EntitySystemSymbol.machine) ?? EntitySystemSymbol.machine(.local)
-    ) {
-      Autocomplete.Picker("Machines", selection: selection, options: machines) { machine in
-        Autocomplete.Choice(machine.name, value: machine.id) {
-          if case .waiting = environment.machines.availability(for: machine.id) {
-            ProgressView().controlSize(.small)
-          } else {
-            Image(systemName: EntitySystemSymbol.machine(machine))
-          }
-        } label: {
-          Text(machine.name)
-        }
-        .disabled(environment.machines.availability(for: machine.id) != .ready)
-      }
-      .favorites($favoriteMachineIDs)
-      .labelsHidden()
-      Autocomplete.Footer(id: "actions") {
-        Autocomplete.Action("Manage Machines…", systemImage: "gearshape.fill") {
-          SettingsRouter.shared.showMachines()
-          openSettings()
-        }
-        .help("Open Machine Settings")
-      }
-    }
-    .autocompleteSearchLabel("Search machines")
-    .autocompleteEmptyMessage("No matching machines")
-    .onHover { trackHover(.machine, $0) }
-    .help("Choose which machine this chat runs on")
-    .accessibilityLabel("Machine")
-    .accessibilityValue(selectedMachine?.name ?? "Machine")
   }
 
   /// No project is an ordinary choice, including its favorite state.
@@ -165,7 +105,7 @@ extension NewChatView {
       .labelsHidden()
       Autocomplete.Footer(id: "actions") {
         Autocomplete.Action("Manage projects…", systemImage: "gearshape.fill") {
-          SettingsRouter.shared.showProjects(machineId: selected.serverId)
+          SettingsRouter.shared.showProjects()
           openSettings()
         }
         .help("Open Project Settings")
@@ -222,41 +162,6 @@ extension NewChatView {
   /// that checkout is a git repository — or "No project", which every
   /// machine can do. Only when the machine lacks the project does the
   /// draft fall back to that machine's last-used project and location.
-  func selectTargetMachine(_ machine: CodevisorMachine, controller: SessionController) {
-    let current = controller.project
-    guard machine.id != current.serverId else { return }
-    environment.composerDefaults.rememberNewWorkspaceServer(serverId: machine.id)
-    if let linked = environment.projectList.fleetProjectGroup(containing: current)?
-      .member(on: machine.id)
-    {
-      selectTargetProject(
-        linked,
-        controller: controller,
-        wantsWorktree: controller.wantsNewWorktree && linked.isGitRepository
-      )
-      return
-    }
-    let scoped = pickerProjects.filter { $0.serverId == machine.id }
-    let remembered = environment.composerDefaults.lastProjectId(forServer: machine.id)
-    let isNoProject = current.isRunTargetPlaceholder || current.isScratch
-    guard !isNoProject, let project = scoped.first(where: { $0.id == remembered })
-    else {
-      // "No project" is a stable run-target state: keep the draft and
-      // composer in place rather than guessing a project or opening a
-      // dialog.
-      selectedProjectId = nil
-      Task {
-        await controller.retarget(
-          to: .runTargetPlaceholder(serverId: machine.id),
-          serverClient: environment.machines.client(for: machine.id)
-        )
-        await environment.refreshHarnessLifecycle(for: machine.id)
-      }
-      return
-    }
-    selectTargetProject(project, controller: controller)
-  }
-
   /// Picking a linked project uses its checkout on the draft's machine
   /// (the picker only lists such projects); the recency fallback covers a
   /// stale menu.

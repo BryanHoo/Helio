@@ -183,7 +183,7 @@ public struct HarnessAccountsSheet<Editor: View>: View {
       editor(machine.id, harness, request)
         .environment(\.sharedHarnessAccounts, false)
         .environment(\.harnessMachineSignIn, nil)
-        .navigationTitle(machine.name)
+        .navigationTitle(harnessName)
     }
   }
 }
@@ -195,6 +195,7 @@ struct HarnessAccountMachinePicker<Editor: View>: View {
   let editor: (CodevisorMachine, ServerHarness) -> Editor
   @State private var harnesses: [String: ServerHarness] = [:]
   @State private var failed: Set<String> = []
+  @State private var attemptedMachineIds: Set<String> = []
 
   init(harnessId: String, @ViewBuilder editor: @escaping (CodevisorMachine, ServerHarness) -> Editor) {
     self.harnessId = harnessId
@@ -202,33 +203,60 @@ struct HarnessAccountMachinePicker<Editor: View>: View {
   }
 
   var body: some View {
-    Form {
-      Section("Machines") {
-        ForEach(environment.machines.allMachines) { machine in
-          Group {
-            if reachable(machine), let harness = harnesses[machine.id], harness.isReady {
-              NavigationLink {
-                editor(machine, harness)
-              } label: {
-                label(machine)
-              }
-            } else {
-              HStack {
-                label(machine)
-                if failed.contains(machine.id), reachable(machine) {
-                  Button("Retry") { Task { await load(machine) } }.buttonStyle(.borderless)
+    #if os(macOS)
+      localEditor
+        .task(id: "\(environment.harnessCatalogRevision(for: CodevisorMachine.local.id)):\(reachable(.local))") {
+          await load(.local)
+        }
+    #else
+      Form {
+        Section("Machines") {
+          ForEach(environment.machines.allMachines) { machine in
+            Group {
+              if reachable(machine), let harness = harnesses[machine.id], harness.isReady {
+                NavigationLink {
+                  editor(machine, harness)
+                } label: {
+                  label(machine)
+                }
+              } else {
+                HStack {
+                  label(machine)
+                  if failed.contains(machine.id), reachable(machine) {
+                    Button("Retry") { Task { await load(machine) } }.buttonStyle(.borderless)
+                  }
                 }
               }
             }
-          }
-          .task(id: "\(environment.harnessCatalogRevision(for: machine.id)):\(reachable(machine))") {
-            await load(machine)
+            .task(id: "\(environment.harnessCatalogRevision(for: machine.id)):\(reachable(machine))") {
+              await load(machine)
+            }
           }
         }
       }
-    }
-    .formStyle(.grouped)
+      .formStyle(.grouped)
+    #endif
   }
+
+  #if os(macOS)
+    @ViewBuilder private var localEditor: some View {
+      let machine = CodevisorMachine.local
+      // 单机工作台直接打开账号，失败时保留重试入口。
+      if reachable(machine), let harness = harnesses[machine.id], harness.isReady {
+        editor(machine, harness)
+      } else if !attemptedMachineIds.contains(machine.id) {
+        ProgressView()
+      } else {
+        ContentUnavailableView {
+          Label("Account Unavailable", systemImage: "exclamationmark.triangle")
+        } description: {
+          Text(status(machine))
+        } actions: {
+          Button("Retry") { Task { await load(machine) } }
+        }
+      }
+    }
+  #endif
 
   private func label(_ machine: CodevisorMachine) -> some View {
     HStack {
@@ -251,6 +279,7 @@ struct HarnessAccountMachinePicker<Editor: View>: View {
   }
 
   private func load(_ machine: CodevisorMachine) async {
+    defer { attemptedMachineIds.insert(machine.id) }
     guard reachable(machine) else { return }
     do {
       harnesses[machine.id] = try await environment.machines.client(for: machine.id).listHarnesses()

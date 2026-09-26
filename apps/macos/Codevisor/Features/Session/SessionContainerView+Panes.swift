@@ -87,10 +87,7 @@ extension SessionContainerView {
         return AnyView(
           NewTabPageView(
             paneId: descriptor.id,
-            group: model,
-            onNewChat: { [weak model] in
-              createChat(convertingPlaceholder: descriptor.id, in: model)
-            }
+            group: model
           ))
       }
       return AnyView(
@@ -115,31 +112,6 @@ extension SessionContainerView {
     guard isVisible, store.navigationWorkspaceId == selectedWorkspace.id else { return nil }
     // 右栏获得键盘焦点时，中栏聊天仍保持可见和已读归属。
     return session?.id
-  }
-
-  /// "New Chat" from a New tab page: creates the SESSION eagerly — a real
-  /// chat from birth (sidebar row, archive-on-close, focus-follow), not a
-  /// deferred draft — in the workspace's one working directory with the
-  /// default harness, then converts the placeholder in place.
-  func createChat(
-    convertingPlaceholder paneId: UUID,
-    in model: PaneGroupModel?
-  ) {
-    guard let model else { return }
-    guard model.state.panes.contains(where: { $0.id == paneId }) else { return }
-    let workspace = selectedWorkspace
-    guard
-      let created = NewChatPanePromoter.promote(
-        paneId: paneId,
-        in: model,
-        project: project,
-        workspace: workspace,
-        environment: environment
-      )
-    else { return }
-    onFocusedChatChanged?(created.id)
-    if selectedWorkspace.rightPaneDescriptors.isEmpty { addCenterTab() }
-    sessionFocus.requestComposerFocus(forChat: created.id)
   }
 
   /// Removes an emptied split leaf. A layout may need an empty shell, but

@@ -22,16 +22,13 @@ final class FilePane: Pane {
   }
 
   func makeView() -> AnyView {
-    // The picker page has no editor to report focus, so whitespace clicks
-    // activate the group here (the editor's first-responder change covers
-    // an open document).
+    // 文件树没有编辑器焦点回调，点击时通知所属分组变为活动面板。
     AnyView(
       FilePaneView(model: model)
         .simultaneousGesture(
           TapGesture().onEnded { [weak self] in
             guard let self, model.isBrowsing else { return }
             onFocusChanged?(true)
-            model.focusExplorer()
           }
         ))
   }

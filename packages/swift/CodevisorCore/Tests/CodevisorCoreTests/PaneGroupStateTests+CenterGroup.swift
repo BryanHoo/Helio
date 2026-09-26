@@ -175,4 +175,22 @@ extension PaneGroupStateTests {
     let third = state.addNewTabPane()
     #expect(state.convertNewTabPane(id: third.id, to: .newTab, sessionId: sessionId) == nil)
   }
+
+  @Test("Project Files converts a New Tab without a chat session")
+  func projectFilesConversion() {
+    var state = PaneGroupState.centerInitialWithoutChat()
+    let placeholder = state.panes[0]
+
+    let files = state.convertNewTabPane(
+      id: placeholder.id, to: .document, sessionId: nil,
+      documentPath: "/project/"
+    )
+
+    #expect(files?.id == placeholder.id)
+    #expect(files?.kind == .document)
+    #expect(files?.name == "Project Files")
+    #expect(files?.documentPath == "/project/")
+    #expect(state.selectedPaneId == placeholder.id)
+    #expect(state.panes == [files].compactMap { $0 })
+  }
 }

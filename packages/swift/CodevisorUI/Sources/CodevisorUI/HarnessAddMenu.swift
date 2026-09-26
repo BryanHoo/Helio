@@ -14,7 +14,7 @@
 
     private var loadingState: Autocomplete.LoadingState {
       if isLoading && harnesses.isEmpty { return .loading("Loading harnesses…") }
-      if loadFailed && harnesses.isEmpty { return .failure("Machines Unavailable") }
+      if loadFailed && harnesses.isEmpty { return .failure("Server Unavailable") }
       return .ready
     }
 

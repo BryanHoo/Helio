@@ -194,7 +194,7 @@ struct SkillMachinePane: View {
             .font(.callout)
         }
         if globalSkills.isEmpty {
-          Text("No skills on this machine yet.")
+          Text("No skills yet.")
             .foregroundStyle(.secondary)
         } else {
           ForEach(globalSkills) { skill in

@@ -53,7 +53,7 @@ struct PluginInstallSheet: View {
             )
             .onSubmit { Task { await find() } }
           } footer: {
-            Text("A public GitHub repo, a git URL, or a path on this machine.")
+            Text("A public GitHub repo, a git URL, or a local path.")
           }
           .listRowBackground(theme.formRowBackground)
         }
@@ -146,7 +146,7 @@ struct PluginInstallSheet: View {
     } header: {
       Text("Commands")
     } footer: {
-      Text("Installing runs these commands on this machine.")
+      Text("Installing runs these commands locally.")
     }
     .listRowBackground(theme.formRowBackground)
   }

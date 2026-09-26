@@ -88,8 +88,6 @@ struct NewChatView: View {
   /// Which run picker chip the pointer is over; its neighbouring dividers
   /// hide so the hover capsule never butts against a hairline.
   @State var hoveredRunPicker: RunPicker?
-  @ClientPreference("composer.favoriteMachines", default: [])
-  var favoriteMachineIDs: [CodevisorMachine.ID]
   /// Linked checkouts share a group ID, so a favorite follows the repository
   /// when the machine picker changes which checkout is available. The reserved
   /// no-project key represents the choice available on every machine.
@@ -151,10 +149,6 @@ struct NewChatView: View {
                   )
                   if showsRunPickers {
                     HStack(spacing: 4) {
-                      if showsMachinePicker {
-                        machinePicker(controller)
-                        runPickerDivider(between: .machine, and: .project)
-                      }
                       projectPicker(controller)
                       if liveProject(for: controller).isGitRepository {
                         runPickerDivider(between: .project, and: .location)

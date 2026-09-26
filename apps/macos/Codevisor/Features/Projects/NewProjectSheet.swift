@@ -3,14 +3,13 @@ import CodevisorUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Adds a project on one machine. Suggestions exclude folders that are
-/// already registered. The selected machine is local to this sheet.
+/// Adds a local project. Suggestions exclude folders already registered.
 struct NewProjectSheet: View {
   @Environment(AppEnvironment.self) private var environment
   @Environment(\.dismiss) private var dismiss
   @Environment(\.theme) private var theme
 
-  @State private var serverId: String
+  private let serverId = CodevisorMachine.local.id
   let onAdded: (Project) -> Void
 
   @State private var recommendations: [ProjectRecommendation] = []
@@ -18,32 +17,16 @@ struct NewProjectSheet: View {
   @State private var selectedPath: String?
   @State private var isAdding = false
   @State private var showingLocalImporter = false
-  @State private var showingRemoteBrowser = false
   @State private var showingGitClone = false
   @State private var loadError: String?
   @State private var loadGeneration = 0
 
-  init(serverId: String, onAdded: @escaping (Project) -> Void) {
-    _serverId = State(initialValue: serverId)
+  init(onAdded: @escaping (Project) -> Void) {
     self.onAdded = onAdded
   }
 
   private var isTargetReady: Bool {
     environment.machines.availability(for: serverId) == .ready
-  }
-
-  private var machineSelection: Binding<String> {
-    Binding(
-      get: { serverId },
-      set: {
-        loadGeneration += 1
-        serverId = $0
-        recommendations = []
-        selectedPath = nil
-        loadError = nil
-        isLoading = true
-      }
-    )
   }
 
   private var registeredPaths: Set<String> {
@@ -65,14 +48,6 @@ struct NewProjectSheet: View {
     return visibleRecommendations.first {
       $0.folderURL.standardizedFileURL.path == selectedPath
     }
-  }
-
-  private var machine: CodevisorMachine? {
-    environment.machines.machine(for: serverId)
-  }
-
-  private var machineName: String {
-    machine?.name ?? "this machine"
   }
 
   private var client: any CodevisorServerClienting {
@@ -99,13 +74,8 @@ struct NewProjectSheet: View {
         addFolder(url)
       }
     }
-    .sheet(isPresented: $showingRemoteBrowser) {
-      RemoteDirectoryBrowserSheet(client: client, machineName: machineName) { path in
-        addFolder(URL(fileURLWithPath: path))
-      }
-    }
     .sheet(isPresented: $showingGitClone) {
-      GitCloneSheet(client: client, machineName: machineName, serverId: serverId) {
+      GitCloneSheet(client: client, machineName: CodevisorMachine.local.name, serverId: serverId) {
         complete($0)
       }
     }
@@ -115,17 +85,6 @@ struct NewProjectSheet: View {
     VStack(alignment: .leading, spacing: 12) {
       Text("Add Project")
         .font(.title2.weight(.semibold))
-      if environment.machines.allMachines.count > 1 {
-        Picker("Machine", selection: machineSelection) {
-          ForEach(environment.machines.allMachines) { machine in
-            Text(machine.name).tag(machine.id)
-              .disabled(environment.machines.availability(for: machine.id) != .ready)
-          }
-        }
-        .disabled(isAdding || showingLocalImporter || showingRemoteBrowser || showingGitClone)
-      } else {
-        Text(machineName).foregroundStyle(.secondary)
-      }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 20)
@@ -136,8 +95,8 @@ struct NewProjectSheet: View {
   private var content: some View {
     if !isTargetReady {
       ContentUnavailableView(
-        "Machine Unavailable", systemImage: "desktopcomputer",
-        description: Text("Reconnect \(machineName) or choose another machine to add a project.")
+        "Server Unavailable", systemImage: "desktopcomputer",
+        description: Text("Check the local server and try again.")
       )
     } else if isLoading {
       ProgressView()
@@ -240,11 +199,7 @@ struct NewProjectSheet: View {
   }
 
   private func browseFiles() {
-    if machine?.isLocal == true {
-      showingLocalImporter = true
-    } else {
-      showingRemoteBrowser = true
-    }
+    showingLocalImporter = true
   }
 
   private func load(serverId: String) async {

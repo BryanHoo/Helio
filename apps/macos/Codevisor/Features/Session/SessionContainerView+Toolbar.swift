@@ -60,7 +60,6 @@ extension SessionContainerView {
       workspace.name,
       project.name,
       workspace.worktreeName,
-      environment.machines.fleetMachineName(for: workspace.serverId),
     ]
     var parts: [String] = []
     for candidate in candidates {

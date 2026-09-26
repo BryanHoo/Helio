@@ -21,10 +21,6 @@ struct ProjectsSettingsView: View {
       ? [CodevisorMachine.local.id] : []
   }
 
-  private var initialMachineId: String {
-    CodevisorMachine.local.id
-  }
-
   var body: some View {
     Form {
       Section {
@@ -35,23 +31,19 @@ struct ProjectsSettingsView: View {
           )
         } else {
           ForEach(groups) { group in
+            let localProject = group.member(on: CodevisorMachine.local.id) ?? group.primary
             NavigationLink(value: SettingsPaneRoute.project(group.id)) {
               HStack(spacing: 10) {
                 Image(systemName: EntitySystemSymbol.project)
                   .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 3) {
                   Text(group.name)
-                  Text(group.repoKey ?? group.primary.folderURL.path)
+                  Text(group.repoKey ?? localProject.folderURL.path)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 }
-                Spacer(minLength: 12)
-                Text(machineNames(for: group))
-                  .font(.callout)
-                  .foregroundStyle(.secondary)
-                  .lineLimit(1)
               }
             }
           }
@@ -69,8 +61,7 @@ struct ProjectsSettingsView: View {
     }
     .settingsPaneFormStyle(theme)
     .sheet(isPresented: $showingAdd) {
-      NewProjectSheet(serverId: initialMachineId) { project in
-        SettingsRouter.shared.projectCreationMachineId = project.serverId
+      NewProjectSheet { project in
         SettingsRouter.shared.panePath = [.project(ProjectGroup.groupID(for: project))]
       }
     }
@@ -86,12 +77,6 @@ struct ProjectsSettingsView: View {
     }
   }
 
-  private func machineNames(for group: ProjectGroup) -> String {
-    var seen = Set<String>()
-    return group.serverIds.filter { seen.insert($0).inserted }
-      .map { environment.machines.machine(for: $0)?.name ?? "Unavailable machine" }
-      .joined(separator: ", ")
-  }
 }
 
 #Preview("Projects") {

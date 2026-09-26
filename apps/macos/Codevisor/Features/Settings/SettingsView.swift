@@ -12,10 +12,10 @@ enum SettingsTab: String, CaseIterable, Identifiable {
   // Fleet-synced config planes: the panes render the app's selected
   // machine, whose content converges with every other machine.
   case agents, mcps, skills, plugins
-  case projects, machines
+  case projects
 
   static var allCases: [SettingsTab] {
-    [.general, .appearance, .notifications, .shortcuts, .agents, .mcps, .skills, .plugins, .projects, .machines]
+    [.general, .appearance, .notifications, .shortcuts, .agents, .mcps, .skills, .plugins, .projects]
   }
 
   var id: String { rawValue }
@@ -32,7 +32,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case .skills: "Skills"
     case .plugins: "Plugins"
     case .projects: "Projects"
-    case .machines: "Machines"
     }
   }
 
@@ -48,7 +47,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case .skills: "book.closed"
     case .plugins: "puzzlepiece"
     case .projects: "folder"
-    case .machines: "desktopcomputer"
     }
   }
 }
@@ -73,7 +71,7 @@ struct HarnessAccountSettingsRequest: Equatable {
 }
 
 /// Routes programmatic Settings navigation (e.g. the sidebar's
-/// "Manage machines…" opens Settings on the Machines section) and keeps
+/// project actions open their matching Settings section) and keeps
 /// the Xcode-style back/forward history over every visited page — sidebar
 /// selections and pushed machine pages alike.
 @MainActor
@@ -84,8 +82,6 @@ final class SettingsRouter {
   var selectedTab: SettingsTab = .general
   /// Detail pages pushed over the current pane.
   var panePath: [SettingsPaneRoute] = []
-  /// Seeds Add Project without changing the app's selected machine or draft.
-  var projectCreationMachineId: String?
   /// Pages behind and ahead of the current one. Every navigation —
   /// sidebar selection, push, pop, deep link — lands the previous page in
   /// `backHistory`; going back moves the current page to
@@ -137,20 +133,13 @@ final class SettingsRouter {
     panePath = location.panePath
   }
 
-  func showMachines() {
-    panePath = []
-    selectedTab = .machines
-  }
-
-  func showProjects(machineId: String? = nil) {
-    projectCreationMachineId = machineId
+  func showProjects() {
     panePath = []
     selectedTab = .projects
   }
 
   /// Opens the selected repository's details from a composer's checkout.
   func showProject(_ project: Project) {
-    projectCreationMachineId = project.serverId
     panePath = [.project(ProjectGroup.groupID(for: project))]
     selectedTab = .projects
   }
@@ -260,9 +249,7 @@ extension EnvironmentValues {
 /// sidebar style (System Settings, Xcode 26): sections on the left, the
 /// selected section's content on the right with push navigation for
 /// per-item pages. Client-scoped sections (Updates, Privacy & Data, Appearance,
-/// Notifications, Shortcuts) sit alongside Machines, which owns everything
-/// scoped to a specific machine: its server, harnesses, MCP servers, and
-/// skills.
+/// Notifications, Shortcuts) sit alongside project and tool settings.
 struct SettingsView: View {
   @Bindable private var router = SettingsRouter.shared
   @Environment(AppEnvironment.self) private var environment
@@ -339,7 +326,6 @@ struct SettingsView: View {
 
   private func selectSidebarTab(_ tab: SettingsTab) {
     if tab != router.selectedTab { router.panePath = [] }
-    if tab == .projects { router.projectCreationMachineId = nil }
     router.selectedTab = tab
   }
 
@@ -376,9 +362,6 @@ struct SettingsView: View {
     case .projects:
       ProjectsSettingsView()
         .navigationTitle("Projects")
-    case .machines:
-      MachinesSettingsView()
-        .navigationTitle("Machines")
     }
   }
 }
@@ -456,68 +439,6 @@ extension View {
   // `settingsActionTint(_:)` moved to CodevisorUI's ThemedSurfaceModifier so
   // shared sheet chrome can tint its own actions. Same name, so call sites
   // are unchanged.
-}
-
-/// Privacy and local data settings. Everything scoped to a machine (server
-/// status, remote access) lives in Settings ▸ Machines.
-struct GeneralSettingsView: View {
-  @Environment(AppEnvironment.self) private var environment
-  @Environment(\.theme) private var theme
-  @State private var showingConfirmation = false
-
-  var body: some View {
-    Form {
-      Section {
-        Toggle("Ask before quitting", isOn: confirmBeforeQuitting)
-          .toggleStyle(.switch)
-      } header: {
-        Text("General")
-      } footer: {
-        Text("Shows a confirmation when you press ⌘Q, so a stray keystroke can't close every session at once.")
-      }
-
-      Section("Data") {
-        HStack(alignment: .center, spacing: 16) {
-          VStack(alignment: .leading, spacing: 3) {
-            Text("Delete all data")
-            Text("Removes all projects, chats, and settings, then restarts setup.")
-              .font(.callout)
-              .foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-          }
-          Spacer(minLength: 8)
-          Button("Delete…", role: .destructive) {
-            showingConfirmation = true
-          }
-          .settingsActionTint(theme)
-          .fixedSize()
-        }
-      }
-    }
-    .settingsPaneFormStyle(theme)
-    .confirmationDialog(
-      "Delete all Helio data?",
-      isPresented: $showingConfirmation,
-      titleVisibility: .visible
-    ) {
-      Button("Delete everything", role: .destructive) {
-        environment.deleteAllData()
-      }
-      .settingsActionTint(theme)
-      Button("Cancel", role: .cancel) {}
-        .settingsActionTint(theme)
-    } message: {
-      Text("This can't be undone. You'll be taken back through setup.")
-    }
-  }
-
-  private var confirmBeforeQuitting: Binding<Bool> {
-    Binding(
-      get: { environment.settings.confirmBeforeQuitting },
-      set: { environment.settings.setConfirmBeforeQuitting($0) }
-    )
-  }
-
 }
 
 #Preview("Settings") {

@@ -19,8 +19,7 @@ public final class FilePaneModel {
   public var findText = ""
   public var replacement = ""
   public var lineText = ""
-  /// Incremented when the inline picker (an empty pane) should take keyboard
-  /// focus: the pane becoming active, or ⌘O while it is already showing.
+  /// 标签被选中时把键盘焦点交给文件树。
   public private(set) var explorerFocusRequests = 0
   @ObservationIgnored public var onNavigate: ((String) -> Void)?
   @ObservationIgnored private let sessions: FileEditorSessions
@@ -50,18 +49,17 @@ public final class FilePaneModel {
   public func close() { sessions.close() }
 
   public var isBrowsing: Bool { path.hasSuffix("/") }
-  public var title: String { isBrowsing ? "Open File" : document.name }
+  public var title: String { isBrowsing ? "Project Files" : document.name }
   public var canSave: Bool {
     document.isDirty && document.isEditable && !document.isSaving && document.conflict == nil
   }
 
-  /// Open File… — presents the picker over a document, or focuses the
-  /// picker an empty pane already shows.
+  /// 文档中打开快速搜索弹窗；文件树标签则将焦点移回树。
   public func openExplorer() {
     if isBrowsing { focusExplorer() } else { showsExplorer = true }
   }
 
-  /// Routes keyboard focus into an empty pane's picker.
+  /// 请求文件树获取键盘焦点。
   public func focusExplorer() {
     guard isBrowsing else { return }
     explorerFocusRequests += 1

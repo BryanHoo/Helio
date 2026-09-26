@@ -8,7 +8,9 @@ struct HarnessBlockedMachine: Identifiable, Equatable {
   let harnessName: String
   let reason: String
   var id: String { machineId }
-  var title: String { "\(harnessName) on \(machineName)" }
+  var title: String {
+    machineId == CodevisorMachine.local.id ? harnessName : "\(harnessName) on \(machineName)"
+  }
 }
 
 extension View {
