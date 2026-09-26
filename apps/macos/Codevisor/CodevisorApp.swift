@@ -375,8 +375,8 @@ struct RootView: View {
 
   /// The top-level split: the NATIVE NavigationSplitView + NSToolbar pair
   /// (Finder's model) — sidebar tracking, the collapse animation, window
-  /// dragging, and fullscreen are all system behavior. The pane tab bar is
-  /// ordinary content BELOW the toolbar (see SessionContainerView).
+  /// dragging, and fullscreen are all system behavior. The right pane's tabs
+  /// live below the toolbar inside SessionContainerView.
   private var mainSplit: some View {
     NavigationSplitView(columnVisibility: sidebarColumnVisibility) {
       // No per-machine remount and no machine switcher: the sidebar is
@@ -394,8 +394,7 @@ struct RootView: View {
         }
       }
       .themedToolbarBackground(theme, role: .content)
-      // The pane tab bar draws its own bottom divider; a system hairline
-      // above it would box the tab strip in between two rules.
+      // The right pane draws its own tab divider below the native toolbar.
       .hidesTitlebarSeparator()
     }
     .overlay {

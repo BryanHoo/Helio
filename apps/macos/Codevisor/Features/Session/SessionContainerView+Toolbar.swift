@@ -19,8 +19,7 @@ extension SessionContainerView {
   /// change and its focus callback. A stale split must never own pane controls.
   private var activeToolbarGroup: PaneGroupModel? {
     let _ = (workspaceRevision, store.workspaceLayoutRevision, environment.workspaceSync.revision)
-    let workspace = selectedWorkspace
-    guard let leafId = workspace.selectedCenterTab?.resolvedActiveLeafId(preferred: activeLeafId) else { return nil }
+    guard let leafId = activeRightLeafID else { return nil }
     return configuredCenterModel(leafId: leafId)
   }
 
@@ -30,7 +29,9 @@ extension SessionContainerView {
   }
 
   var activeFileModel: FilePaneModel? {
-    guard let group = activeToolbarGroup, group.state.selectedPane?.kind == .document else { return nil }
+    guard !rightPaneCollapsed, activeRightPane?.kind == .document,
+      let group = activeToolbarGroup, group.state.selectedPane?.kind == .document
+    else { return nil }
     return (group.selectedPane as? FilePane)?.model
   }
 
@@ -43,21 +44,17 @@ extension SessionContainerView {
   var activePaneTitle: Binding<String> {
     Binding(
       get: {
-        guard let descriptor = activePaneDescriptor else { return "New Tab" }
-        let workspace = selectedWorkspace
-        if descriptor.kind == .chat { return paneTitle(descriptor) }
-        return workspace.selectedCenterTab?.customTitle ?? paneTitle(descriptor)
+        session?.title ?? selectedWorkspace.name
       },
       set: { title in
-        guard !paneControlsReplaceTitle, activeFileModel == nil else { return }
-        let workspace = selectedWorkspace
-        renameCenterTab(workspace.selectedCenterTabId, to: title)
+        guard let session else { return }
+        environment.projectList.renameSession(session, to: title)
       }
     )
   }
 
   var activePaneSubtitle: String {
-    guard activePaneDescriptor?.kind == .chat else { return "" }
+    guard session != nil else { return "" }
     let workspace = selectedWorkspace
     let candidates: [String?] = [
       workspace.name,

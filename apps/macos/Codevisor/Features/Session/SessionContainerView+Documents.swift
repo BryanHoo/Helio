@@ -23,6 +23,8 @@ extension SessionContainerView {
             file.model.editor.goToLine(line)
           }
           store.selectDestination(.pane(pane.id), in: workspace.id)
+          rightPaneID = pane.id
+          rightPaneCollapsed = false
           return true
         }
       }
@@ -38,6 +40,8 @@ extension SessionContainerView {
     workspace.centerTabs.append(tab)
     environment.workspaces.save(workspace)
     store.selectDestination(.tab(tab.id), in: workspace.id)
+    rightPaneID = pane.id
+    rightPaneCollapsed = false
     publishPane(pane, workspaceId: workspace.id)
     if let line = FileDocumentLocation.line(target), let leaf = tab.root.allGroups.first,
       let file = configuredCenterModel(leafId: leaf.id).pane(for: pane) as? FilePane

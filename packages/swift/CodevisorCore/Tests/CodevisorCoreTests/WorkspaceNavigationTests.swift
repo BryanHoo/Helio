@@ -19,6 +19,50 @@ struct WorkspaceNavigationTests {
     )
   }
 
+  @Test("Right pane keeps tools and placeholders separate from chats")
+  func rightPaneDescriptors() {
+    let chat = tab(.chat, chatId: UUID())
+    let file = tab(.document)
+    let terminal = tab(.terminal)
+    let placeholder = tab(.newTab)
+    let workspace = workspace([chat, file, terminal, placeholder])
+
+    #expect(self.workspace([chat]).rightPaneDescriptors.isEmpty)
+    #expect(workspace.rightPaneDescriptors.map(\.kind) == [.document, .terminal, .newTab])
+    #expect(
+      workspace.rightPaneDescriptors.map(\.id) == [
+        file.root.allGroups[0].state.panes[0].id,
+        terminal.root.allGroups[0].state.panes[0].id,
+        placeholder.root.allGroups[0].state.panes[0].id,
+      ])
+
+    let chatPane = chat.root.allGroups[0].state.panes[0]
+    let filePane = file.root.allGroups[0].state.panes[0]
+    let mixed = WorkspaceTab(
+      root: .leaf(
+        PaneGroupState(panes: [chatPane, filePane], selectedPaneId: chatPane.id)
+      ))
+    #expect(self.workspace([mixed]).rightPaneDescriptors.map(\.id) == [filePane.id])
+  }
+
+  @Test("Right pane split projection excludes the selected chat leaf")
+  func rightPaneSplitProjection() throws {
+    let chat = tab(.chat, chatId: UUID())
+    let file = tab(.document)
+    let mixed = WorkspaceTab(
+      root: chat.root.splitting(
+        groupId: chat.activeLeafId,
+        edge: .trailing,
+        newGroupId: file.activeLeafId,
+        newGroupState: try #require(file.root.group(id: file.activeLeafId))
+      ))
+
+    let visible = try #require(mixed.rightPaneTree)
+    #expect(visible.group(id: chat.activeLeafId) == nil)
+    #expect(visible.group(id: file.activeLeafId) != nil)
+    #expect(mixed.root.group(id: chat.activeLeafId) != nil)
+  }
+
   @Test(
     "Every pane kind selects its complete destination synchronously",
     arguments: [

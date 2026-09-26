@@ -30,17 +30,10 @@
       } detail: {
         Group {
           if scene == "conversation" {
-            VStack(spacing: 0) {
-              WorkspaceTabStrip(
-                workspace: AppStoreScreenshotData.workspace,
-                sessions: [AppStoreScreenshotData.session],
-                onSelect: { _ in }, onClose: { _ in }, onNewTab: {}, onRename: { _, _ in }
-              )
-              ChatScreen(
-                controller: fixture.controller, focus: fixture.focus,
-                presentationSurface: fixture.transcript
-              )
-            }
+            ChatScreen(
+              controller: fixture.controller, focus: fixture.focus,
+              presentationSurface: fixture.transcript
+            )
             .navigationTitle(AppStoreScreenshotData.title)
           } else {
             NewChatView(

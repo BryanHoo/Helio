@@ -32,10 +32,8 @@ struct SessionContainerView: View {
     if case let .chat(_, controller) = mount { return controller }
     return nil
   }
-  /// Fired when the user's focus lands in a DIFFERENT chat of this
-  /// workspace (composer/transcript click, chat tab) — the sidebar
-  /// selection follows, keeping its tab rows in sync with focus.
-  /// Non-chat focus (terminals) fires nothing: the last chat stays.
+  /// Fired when a new chat becomes the visible middle-column conversation.
+  /// Non-chat focus in the right pane leaves the sidebar route unchanged.
   var onFocusedChatChanged: ((UUID) -> Void)? = nil
   @Environment(AppEnvironment.self) var environment
   @Environment(\.accessibilityReduceMotion) var reduceMotion
@@ -43,10 +41,11 @@ struct SessionContainerView: View {
   /// Global geometry + pointer state for rearranging split leaves inside
   /// the selected top tab by dragging their headers.
   @State var splitDragCoordinator = WorkspaceSplitDragCoordinator()
-  /// The session's focus coordinator (composer ⇄ terminals). Owned here so
-  /// every center leaf's chat content — any group can host chats — wires
-  /// against the same instance.
+  /// The middle chat and right-side tools share one keyboard focus coordinator.
   @State var sessionFocus = TerminalFocusController()
+  @ClientPreference("workspace.rightPane.collapsed", default: true) var rightPaneCollapsed
+  @State var rightPaneID: UUID?
+  @State var attachmentImages: AttachmentImageStore?
 
   /// Divider previews are valid only for the persisted tab they started
   /// from. A navigation or remote layout change takes effect immediately.
@@ -101,8 +100,15 @@ struct SessionContainerView: View {
       .navigationSubtitle(activePaneSubtitle)
       .toolbar(removing: paneControlsReplaceTitle ? .title : nil)
       .toolbar {
-        if let model = activeFileModel {
+        if !rightPaneCollapsed, let model = activeFileModel {
           FilePaneToolbar(model: model, onNewTab: addCenterTab)
+        }
+        ToolbarItem(placement: .primaryAction) {
+          Button(action: toggleRightPane) {
+            Image(systemName: "sidebar.right")
+          }
+          .help(rightPaneCollapsed ? "Show Right Sidebar" : "Hide Right Sidebar")
+          .accessibilityLabel(rightPaneCollapsed ? "Show Right Sidebar" : "Hide Right Sidebar")
         }
       }
       .focusedSceneValue(\.filePane, activeFileModel)
@@ -113,8 +119,7 @@ struct SessionContainerView: View {
           newTab: addCenterTab,
           closeSplit: closeActiveLeaf,
           closeTab: {
-            let workspace = selectedWorkspace
-            closeCenterTab(workspace.selectedCenterTabId)
+            if let pane = activeRightPane { closeRightPane(pane.id) }
           },
           reopenClosedPane: reopenClosedPane,
           previousTab: { selectRelativeCenterTab(offset: -1) },
@@ -149,7 +154,30 @@ struct SessionContainerView: View {
         performCenterTabRequest(request)
       }
       .onChange(of: activePaneDescriptor?.id, initial: true) { _, _ in
-        focusSelectedCenterPane()
+        if activePaneDescriptor?.id == activeRightPane?.id {
+          focusSelectedCenterPane()
+        } else {
+          restoreRightPaneSelection()
+        }
+      }
+      .onChange(of: selectedWorkspace.selectedCenterTabId) { _, _ in
+        restoreRightPaneSelection()
+      }
+      .onChange(of: selectedWorkspace.rightPaneDescriptors.map(\.id)) { _, _ in
+        if !rightPaneCollapsed { ensureRightPaneContent() }
+      }
+      .onChange(of: rightPaneCollapsed, initial: true) { _, collapsed in
+        if !collapsed { ensureRightPaneContent() }
+      }
+      .onChange(of: controller?.previewCacheNamespace, initial: true) { _, _ in
+        installAttachmentImageStoreIfNeeded()
+      }
+      .onChange(of: session?.id, initial: true) { _, _ in
+        sessionFocus.persistentChatId = session?.id
+        sessionFocus.canFocusChat = { chatId in
+          isVisible && store.navigationWorkspaceId == selectedWorkspace.id
+            && session?.id == chatId
+        }
       }
       .onChange(of: selectedWorkspace.selectedCenterTabId) { _, _ in
         openingSplit = nil
@@ -161,10 +189,8 @@ struct SessionContainerView: View {
         isVisible = true
         store.navigationWorkspaceId = selectedWorkspace.id
         sessionFocus.navigationRevision = { store.navigationRevision }
-        sessionFocus.canFocusChat = { chatId in
-          isVisible && store.navigationWorkspaceId == selectedWorkspace.id
-            && activePaneDescriptor?.chatSessionId == chatId
-        }
+        sessionFocus.workspaceCommandHandler = handleWorkspaceCommand
+        sessionFocus.startTypeToFocus()
         focusSelectedCenterPane()
       }
       // Read = focus: publish the chat pane facing the user in this
@@ -180,6 +206,7 @@ struct SessionContainerView: View {
       // The incoming container can publish before this one disappears.
       .onDisappear {
         isVisible = false
+        sessionFocus.stopTypeToFocus()
         store.clearFocusedChat(sourceId: focusSourceId)
       }
       .task(id: mountIdentity) {
@@ -204,14 +231,8 @@ struct SessionContainerView: View {
         // selection follows the focused chat.
         sessionFocus.onChatComposerFocused = { chatId in
           guard isVisible,
-            store.navigationWorkspaceId == selectedWorkspace.id,
-            selectedWorkspace.centerTree.groupId(containingChat: chatId) != nil
+            store.navigationWorkspaceId == selectedWorkspace.id
           else { return }
-          if let leaf = selectedWorkspace.centerTree.groupId(containingChat: chatId),
-            leaf != activeLeafId
-          {
-            activateLeaf(leaf)
-          }
           rememberWorkspaceDefaults(from: chatId)
           if chatId != session?.id {
             onFocusedChatChanged?(chatId)
@@ -224,46 +245,31 @@ struct SessionContainerView: View {
       }
   }
 
-  /// The selected sidebar tab's split layout.
-  /// System themes reveal the native window backdrop. Custom themes paint
-  /// one explicit page color behind every workspace pane.
+  /// 聊天固定在中栏，工具面板以可折叠的右栏展示。
   var contentColumn: some View {
-    // WorkspaceRepository is intentionally non-observable. Server pane
-    // reconciliation bumps this shared token so a tab created on another
-    // device materializes in the mounted workspace immediately.
-    let workspace = selectedWorkspace
-    return VStack(spacing: 0) {
-      WorkspaceTabStrip(
-        workspace: workspace,
-        sessions: environment.projectList.sessions,
-        onSelect: selectCenterTab,
-        onClose: closeCenterTab,
-        onNewTab: addCenterTab,
-        onRename: { renameCenterTab($0, to: $1) }
-      )
-      SessionScreen(
-        controller: controller,
-        centerGroup: activeCenterModel(in: workspace),
-        focus: sessionFocus,
-        onWorkspaceCommand: handleWorkspaceCommand,
-        centerTree: liveCenterTree ?? workspace.centerTree,
-        primaryLeafId: session.flatMap { workspace.centerTree.groupId(containingChat: $0.id) },
-        activeLeafId: activeLeafId,
-        centerLeafModel: { leafId in configuredCenterModel(leafId: leafId) },
-        centerPaneTitle: paneTitle,
-        sessionStore: store,
-        splitDragCoordinator: splitDragCoordinator,
-        onSplitLeaf: splitLeaf,
-        onRenameLeaf: renameLeaf,
-        onCloseLeaf: closeLeaf,
-        openingSplit: openingSplit,
-        onSplitOpeningFinished: finishSplitOpening,
-        onCenterTreeChanged: { tree in
-          liveCenterTree = tree
-          saveSelectedTree(tree, workspaceId: workspace.id)
-        },
-        onCenterTreeLiveChanged: { tree in liveCenterTree = tree }
-      )
+    GeometryReader { geometry in
+      if rightPaneCollapsed {
+        chatColumn
+      } else if geometry.size.width >= 780 {
+        HSplitView {
+          chatColumn
+            .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+          rightColumn
+            .frame(minWidth: 300, idealWidth: 390, maxWidth: 560)
+        }
+      } else {
+        chatColumn
+          .overlay {
+            Color.black.opacity(0.12)
+              .contentShape(Rectangle())
+              .onTapGesture { rightPaneCollapsed = true }
+          }
+          .overlay(alignment: .trailing) {
+            rightColumn
+              .frame(width: min(400, geometry.size.width - 24))
+              .shadow(color: .black.opacity(0.18), radius: 14, x: -3)
+          }
+      }
     }
     .background(theme.contentBackground)
     // The sidebar stays seamless under the toolbar; the content has a hairline.

@@ -43,8 +43,9 @@ extension SessionContainerView {
       selectRelativeCenterTab(offset: 1)
     case let .selectTab(index):
       let workspace = navigationWorkspace
-      guard workspace.centerTabs.indices.contains(index) else { return true }
-      selectCenterTab(workspace.centerTabs[index].id)
+      let panes = workspace.rightPaneDescriptors
+      guard panes.indices.contains(index) else { return true }
+      selectRightPane(panes[index].id)
     case let .split(edge):
       splitActiveLeaf(edge: edge)
     case let .focusSplit(edge):
@@ -54,7 +55,7 @@ extension SessionContainerView {
     case .nextSplit:
       focusRelativeSplit(offset: 1)
     case .closeTab:
-      closeActiveLeaf()
+      if let pane = activeRightPane { closeRightPane(pane.id) }
     case .reopenClosedPane:
       reopenClosedPane()
     }
@@ -63,11 +64,11 @@ extension SessionContainerView {
 
   func selectRelativeCenterTab(offset: Int) {
     let workspace = navigationWorkspace
-    guard workspace.centerTabs.count > 1,
-      let index = workspace.selectedCenterTabIndex
-    else { return }
-    let target = (index + offset + workspace.centerTabs.count) % workspace.centerTabs.count
-    selectCenterTab(workspace.centerTabs[target].id)
+    let panes = workspace.rightPaneDescriptors
+    guard panes.count > 1 else { return }
+    let index = panes.firstIndex(where: { $0.id == activeRightPane?.id }) ?? 0
+    let target = (index + offset + panes.count) % panes.count
+    selectRightPane(panes[target].id)
   }
 
   func splitActiveLeaf(edge: SplitEdge) {
@@ -99,6 +100,8 @@ extension SessionContainerView {
     )
     environment.workspaces.save(workspace)
     store.selectDestination(.leaf(newLeafId), in: workspace.id)
+    rightPaneID = pane.id
+    rightPaneCollapsed = false
     withAnimation(Motion.split(reduceMotion: reduceMotion)) {
       openingSplit = opening
       workspaceRevision += 1
@@ -186,9 +189,7 @@ extension SessionContainerView {
   }
 
   func closeActiveLeaf() {
-    let workspace = selectedWorkspace
-    guard let tab = workspace.selectedCenterTab else { return }
-    closeLeaf(activeLeafId ?? tab.activeLeafId)
+    if let pane = activeRightPane { closeRightPane(pane.id) }
   }
 
   func closeLeaf(_ leafId: UUID) {

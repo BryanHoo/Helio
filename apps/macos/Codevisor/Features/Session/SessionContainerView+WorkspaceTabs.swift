@@ -16,13 +16,6 @@ extension SessionContainerView {
     }
   }
 
-  func activeCenterModel(in workspace: Workspace) -> PaneGroupModel {
-    let leafId =
-      workspace.selectedCenterTab?.resolvedActiveLeafId(preferred: activeLeafId)
-      ?? workspace.centerTree.allGroups.first!.id
-    return configuredCenterModel(leafId: leafId)
-  }
-
   /// A task-row context-menu action for this workspace.
   func performCenterTabRequest(_ request: CenterTabRequest) {
     switch request.action {
@@ -32,28 +25,10 @@ extension SessionContainerView {
     }
   }
 
-  func selectCenterTab(_ tabId: UUID) {
-    let workspace = selectedWorkspace
-    guard let tab = workspace.centerTabs.first(where: { $0.id == tabId }),
-      store.selectDestination(.tab(tabId), in: workspace.id)
-    else { return }
-    // A chat tab changes the routing session as well as the persisted layout.
-    let active = tab.root.group(id: tab.activeLeafId)?.selectedPane.map { [$0] } ?? []
-    let panes = active + tab.root.allGroups.flatMap(\.state.panes)
-    if let chatID = panes.first(where: { pane in
-      pane.kind == .chat
-        && environment.projectList.sessions.contains {
-          $0.id == pane.chatSessionId && $0.serverId == workspace.serverId
-        }
-    })?.chatSessionId, chatID != session?.id {
-      onFocusedChatChanged?(chatID)
-    }
-  }
-
   /// Focus follows committed navigation. A delayed callback from an earlier
   /// click must never activate its old tab or steal the new pane's focus.
   func focusSelectedCenterPane() {
-    guard let leafId = activeLeafId else { return }
+    guard !rightPaneCollapsed, let leafId = activeRightLeafID else { return }
     let model = configuredCenterModel(leafId: leafId)
     sessionFocus.centerGroup = model
     model.requestSelectedPaneFocus()
@@ -73,20 +48,12 @@ extension SessionContainerView {
     workspace.centerTabs.append(tab)
     environment.workspaces.save(workspace)
     store.selectDestination(.tab(tab.id), in: workspace.id)
+    rightPaneID = pane.id
+    rightPaneCollapsed = false
     publishPane(pane, workspaceId: workspace.id)
     // The New Tab page mounts a tick later; the group replays this focus
     // request into its picker once the page registers.
     focusSelectedCenterPane()
-  }
-
-  func renameCenterTab(_ tabId: UUID, to customTitle: String?) {
-    let chatID = selectedWorkspace.centerTabs.first { $0.id == tabId }.flatMap { tab in
-      tab.root.group(id: tab.activeLeafId)?.selectedPane?.chatSessionId
-    }
-    environment.workspaceSync.renameTab(
-      workspaceId: selectedWorkspace.id, tabId: tabId,
-      chatSessionId: chatID, to: customTitle ?? ""
-    )
   }
 
   func closeCenterTab(_ tabId: UUID) {

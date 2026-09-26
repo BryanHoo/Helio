@@ -21,6 +21,9 @@ extension SessionContainerView {
         store.navigationWorkspaceId == selectedWorkspace.id,
         selectedWorkspace.centerTree.group(id: leafId) != nil
       else { return }
+      if let pane = model?.state.selectedPane, pane.kind != .chat {
+        rightPaneID = pane.id
+      }
       activateLeaf(leafId)
       if let model {
         sessionFocus.centerGroup = model
@@ -110,15 +113,8 @@ extension SessionContainerView {
   /// changes re-evaluate the publisher above.
   var focusedChatCandidate: UUID? {
     guard isVisible, store.navigationWorkspaceId == selectedWorkspace.id else { return nil }
-    let workspace = selectedWorkspace
-    guard let leafId = workspace.selectedCenterTab?.resolvedActiveLeafId(preferred: activeLeafId) else {
-      return nil
-    }
-    let model = store.centerGroup(
-      leafId: leafId, workspace: workspace, session: session, project: project
-    )
-    guard let pane = model.state.selectedPane, pane.kind == .chat else { return nil }
-    return pane.chatSessionId
+    // 右栏获得键盘焦点时，中栏聊天仍保持可见和已读归属。
+    return session?.id
   }
 
   /// "New Chat" from a New tab page: creates the SESSION eagerly — a real
@@ -141,8 +137,8 @@ extension SessionContainerView {
         environment: environment
       )
     else { return }
-    // The pane's composer takes focus once it mounts; the responder
-    // observer then walks the sidebar selection over to the new chat.
+    onFocusedChatChanged?(created.id)
+    if selectedWorkspace.rightPaneDescriptors.isEmpty { addCenterTab() }
     sessionFocus.requestComposerFocus(forChat: created.id)
   }
 

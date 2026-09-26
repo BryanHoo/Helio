@@ -108,6 +108,8 @@ final class TerminalFocusController {
   /// The active center split: workspace tab/split commands pressed while
   /// the chat has focus route through its model to the container.
   weak var centerGroup: PaneGroupModel?
+  /// 中栏常驻聊天不随右栏工具标签的选中状态改变。
+  var persistentChatId: UUID?
   private var typeToFocusMonitor: Any?
 
   /// Composer text views by CHAT SESSION, so multi-chat workspaces can
@@ -416,6 +418,11 @@ final class TerminalFocusController {
   /// picks even if the mount-time grab ever races the swap), otherwise
   /// the editable composer text view.
   private func typeToFocusTarget() -> NSView? {
+    if let chatId = persistentChatId {
+      if let picker = chatQuestionPickers[chatId]?.view { return picker }
+      if let textView = chatComposers[chatId]?.view, textView.isEditable { return textView }
+      return nil
+    }
     if let selectedPane = centerGroup?.state.selectedPane {
       // A terminal or New Tab page must never route typing into some
       // other, merely mounted chat. An unkeyed chat is the legacy/draft
