@@ -40,7 +40,6 @@ struct ComposerCard: View {
   @State private var slashSelection = 0
   @State private var isSlashMenuDismissed = false
   @State private var slashMenuContentHeight: CGFloat = 0
-  @State private var isStopButtonHovered = false
   /// Owned by the shared composer shell so the question state can provide
   /// immediate submission feedback before the controller's async flag flips.
   @State private var didStartResolvingQuestion = false
@@ -221,107 +220,18 @@ private extension ComposerCard {
         }
       }
 
-      HStack(spacing: 10) {
-        if controller.isGoalEditing {
-          // Editing a goal strips the chrome down to back + send;
-          // plain ⌖-armed goal setting keeps the normal toolbar.
-          Text("esc to cancel")
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
-          Spacer(minLength: 0)
-          HStack(spacing: 4) {
-            goalEditBackButton
-            sendButton
-          }
-        } else {
-          attachButton
-          ModelConfigMenu(controller: controller)
-          CodexPermissionsMenu(controller: controller)
-          // Active modes show as removable chips (turned on via
-          // the /plan and /goal slash commands).
-          if controller.hasPlanMode, controller.isPlanModeOn {
-            ModeChip(
-              label: "Plan",
-              systemImage: "map",
-              isRemoveDisabled: controller.isPlanModeUpdatePending
-            ) {
-              Task { await controller.togglePlanMode() }
-            }
-          }
-          if controller.canEditGoal, controller.isGoalComposerArmed {
-            ModeChip(label: "Goal", systemImage: "target") {
-              withAnimation(.snappy(duration: 0.15)) { controller.exitGoalComposer() }
-            }
-          }
-          Spacer(minLength: 0)
-          // Action buttons cluster tighter than the picker chips.
-          // While the agent runs, stop takes the send slot; a draft
-          // in the composer brings send back with stop beside it.
-          HStack(spacing: 4) {
-            UsageRingButton(
-              usage: controller.usage,
-              limits: controller.usageLimits,
-              isLoadingLimits: controller.isLoadingUsageLimits,
-              limitsError: controller.usageLimitsError,
-              showWhenUnavailable: controller.activeHarnessId == "codex",
-              onRequestLimits: { await controller.loadUsageLimits() }
-            )
-            if controller.isSending, !hasComposerDraft {
-              stopButton
-            } else {
-              stopButton
-              sendButton
-            }
-          }
-        }
-      }
-      .font(.callout)
+      ComposerToolbar(
+        controller: controller,
+        isAcceptingSubmission: isAcceptingSubmission,
+        hasVisibleSlashMatches: !visibleSlashMatches.isEmpty,
+        onPickFiles: { isPickingFiles = true },
+        onSubmit: submitOrAcceptSlash
+      )
     }
   }
 
   private var isQuestionResolving: Bool {
     didStartResolvingQuestion || controller.isResolvingQuestion
-  }
-
-  /// Leaves edit-goal mode without changing the goal (the banner returns).
-  private var goalEditBackButton: some View {
-    ComposerNavigationButton(
-      systemImage: "arrow.left",
-      help: "Back — keep the current goal (esc)",
-      accessibilityLabel: "Back"
-    ) {
-      withAnimation(.snappy(duration: 0.15)) { controller.exitGoalComposer() }
-    }
-    .accessibilityHint("Keep the current goal. Keyboard shortcut: Escape")
-  }
-
-  private func chipLabel(_ text: String) -> some View {
-    Text(text)
-      .foregroundStyle(.secondary)
-      .contentShape(Rectangle())
-  }
-
-  private var attachButton: some View {
-    Button(action: pickFiles) {
-      Image(systemName: "paperclip")
-        .font(.system(size: 13, weight: .medium))
-        .foregroundStyle(.secondary)
-        .frame(width: 26, height: 26)
-        .contentShape(Rectangle())
-    }
-    .buttonStyle(HoverIconButtonStyle())
-    .help("Attach files")
-    .accessibilityLabel("Attach files")
-  }
-
-  private func pickFiles() {
-    isPickingFiles = true
-  }
-
-  /// Whether the composer holds something sendable (text or attachments).
-  private var hasComposerDraft: Bool {
-    !controller.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-      || !controller.composerAttachments.isEmpty
   }
 
   private func handlePastedAttachments(_ pasted: [PastedAttachment]) -> Bool {
@@ -335,89 +245,6 @@ private extension ComposerCard {
       }
     }
     return true
-  }
-
-  @ViewBuilder
-  private var stopButton: some View {
-    if controller.isSending {
-      if controller.isCancelling {
-        ProgressView()
-          .controlSize(.small)
-          .frame(width: 26, height: 26)
-          .help("Stopping…")
-      } else {
-        Button(action: stop) {
-          Image(systemName: "stop.fill")
-            .font(.system(size: 10, weight: .bold))
-            .frame(width: 26, height: 26)
-            .background(
-              Circle()
-                .fill(isStopButtonHovered ? Color.primary.opacity(0.06) : .clear)
-            )
-            .overlay(
-              Circle()
-                .strokeBorder(Color.secondary.opacity(isStopButtonHovered ? 0.55 : 0.35), lineWidth: 1)
-            )
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(isStopButtonHovered ? .primary : .secondary)
-        .onHover { isStopButtonHovered = $0 }
-        .help("Stop")
-        .accessibilityLabel("Stop")
-      }
-    }
-  }
-
-  private func stop() {
-    Task { await controller.stop() }
-  }
-
-  @ViewBuilder
-  private var sendButton: some View {
-    if isAcceptingSubmission || controller.isResolvingQuestion {
-      // A send or question response is still being accepted; spin in
-      // place and keep further input out until its transaction settles.
-      ProgressView()
-        .controlSize(.small)
-        .frame(width: 26, height: 26)
-        .background(Circle().fill(Color.secondary.opacity(0.16)))
-        .help(controller.isResolvingQuestion ? "Submitting response…" : "Sending…")
-    } else {
-      // Goal mode still respects the connecting gate: `submitGoal…`
-      // silently drops input while connecting, so an enabled-looking
-      // button would be a lie.
-      let hasSubmittableContent =
-        controller.isGoalComposerArmed
-        ? !controller.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        : hasComposerDraft || !visibleSlashMatches.isEmpty
-      let isBlockedByCapabilities =
-        hasSubmittableContent
-        && controller.isConnectingToHarness
-      let isEnabled =
-        !isAppUpdateInProgress
-        && controller.isServerReady
-        && (controller.isGoalComposerArmed
-          ? hasSubmittableContent
-            && (controller.isConnected || controller.selectedHarness != nil)
-            && !controller.isConnecting
-            && !controller.isConnectingToHarness
-          : !controller.isConnectingToHarness
-            && (controller.canSend || !visibleSlashMatches.isEmpty))
-      ComposerSubmitButton(
-        isEnabled: isEnabled,
-        help: isAppUpdateInProgress
-          ? "Updating… you can send once the update finishes."
-          : isBlockedByCapabilities
-            ? "Connecting to harness…"
-            : controller.isConnecting
-              ? "Connecting… you can send once the agent is ready."
-              : "Send (↩)",
-        accessibilityLabel: "Send"
-      ) {
-        submitOrAcceptSlash()
-      }
-    }
   }
 
   private var slashTokenRange: NSRange? {

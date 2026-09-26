@@ -18,9 +18,9 @@ final class FakeSessionServerClient: CodevisorServerClienting, @unchecked Sendab
   // reconcile keep receiving live events instead of a dead stream.
   private var _eventBuffer: [ServerEventEnvelope] = []
   private var _eventContinuations: [AsyncThrowingStream<ServerEventEnvelope, any Error>.Continuation] = []
-  private let lock = NSLock()
+  let lock = NSLock()
 
-  private var _runtimeRequests: [String] = []
+  var _runtimeRequests: [String] = []
 
   var runtimeRequests: [String] { lock.withLock { _runtimeRequests } }
 
@@ -28,10 +28,10 @@ final class FakeSessionServerClient: CodevisorServerClienting, @unchecked Sendab
   private var _promptedAttachments: [[ServerAttachmentRef]] = []
   private var _promptedMessageIds: [String?] = []
   private var _promptGate: AsyncStream<Void>?
-  private var _cancelCount = 0
-  private var _configUpdates: [(String, String)] = []
-  private var _configUpdateGate: AsyncStream<Void>?
-  private var _nextConfigUpdateShouldFail = false
+  var _cancelCount = 0
+  var _configUpdates: [(String, String)] = []
+  var _configUpdateGate: AsyncStream<Void>?
+  var _nextConfigUpdateShouldFail = false
   private var _eventSinceValues: [Int] = []
   private var _sessionEventSinceValues: [Int] = []
   private var _transcriptPageRequests: [(before: String?, limit: Int)] = []
@@ -46,17 +46,17 @@ final class FakeSessionServerClient: CodevisorServerClienting, @unchecked Sendab
   private var _queueReorders: [[String]] = []
   private var _queueDeletes: [String] = []
   private var _queueMutationFailuresRemaining = 0
-  private var _goalUpdates: [(String?, GoalStatus?, TokenBudgetUpdate)] = []
-  private var _goalClearCount = 0
-  private var _nextGoalClearShouldFail = false
-  private var _lastBudget: Int?
-  private var _questionAnswers: [(String, String, [String: QuestionAnswerEntry]?)] = []
-  private var _questionAnswerGate: AsyncStream<Void>?
+  var _goalUpdates: [(String?, GoalStatus?, TokenBudgetUpdate)] = []
+  var _goalClearCount = 0
+  var _nextGoalClearShouldFail = false
+  var _lastBudget: Int?
+  var _questionAnswers: [(String, String, [String: QuestionAnswerEntry]?)] = []
+  var _questionAnswerGate: AsyncStream<Void>?
   // Envelope ids for scripted prompt echoes are monotonic, like the real
   // server's: repeated prompts (and test-emitted events picking ids above
   // the echoed range) must never reuse an id, or cursor-based replay in
   // `subscribeEvents` would treat distinct events as already-seen.
-  private var _nextEnvelopeId = 1
+  var _nextEnvelopeId = 1
 
   var detailConversation: [ServerConversationItem] = []
   var detailCursor = 0
@@ -76,6 +76,7 @@ final class FakeSessionServerClient: CodevisorServerClienting, @unchecked Sendab
   /// leaving the turn generating so tests can emit their own events.
   var echoOnPrompt = true
   var openSessionResponse: ServerSessionOpenResponse?
+  var connectedSessionMetadata: ServerSessionRuntimeMetadata?
   var openSessionFailure: CodevisorServerClientError?
   var openSessionGate: AsyncStream<Void>?
   let openSessionRequests = TestSignal()
@@ -89,6 +90,11 @@ final class FakeSessionServerClient: CodevisorServerClienting, @unchecked Sendab
     if let openSessionGate { for await _ in openSessionGate {} }
     if let openSessionFailure { throw openSessionFailure }
     return openSessionResponse
+  }
+
+  func connectSession(id: UUID) async throws -> ServerSessionRuntimeMetadata? {
+    lock.withLock { _runtimeRequests.append("connect") }
+    return connectedSessionMetadata
   }
 
   init(sessionId: UUID) {
@@ -244,7 +250,7 @@ final class FakeSessionServerClient: CodevisorServerClienting, @unchecked Sendab
     lock.withLock { _questionAnswerGate = gate }
   }
 
-  private var lastBudget: Int? {
+  var lastBudget: Int? {
     lock.withLock { _lastBudget }
   }
 
@@ -473,92 +479,6 @@ extension FakeSessionServerClient {
         ])
       ))
     return ServerPromptAccepted(accepted: true, sessionId: id.uuidString)
-  }
-
-  private func nextEnvelopeId() -> Int {
-    lock.withLock {
-      defer { _nextEnvelopeId += 1 }
-      return _nextEnvelopeId
-    }
-  }
-
-  func cancelSession(id: UUID) async throws {
-    lock.withLock { _cancelCount += 1 }
-  }
-  func setSessionMode(id: UUID, modeId: String) async throws {
-    lock.withLock { _runtimeRequests.append("mode:\(modeId)") }
-  }
-
-  func setSessionConfig(id: UUID, configId: String, value: String) async throws {
-    let (gate, shouldFail) = lock.withLock {
-      _runtimeRequests.append("config:\(configId):\(value)")
-      _configUpdates.append((configId, value))
-      let shouldFail = _nextConfigUpdateShouldFail
-      _nextConfigUpdateShouldFail = false
-      return (_configUpdateGate, shouldFail)
-    }
-    if let gate {
-      for await _ in gate { break }
-    }
-    if shouldFail {
-      throw CodevisorServerClientError.invalidResponse
-    }
-  }
-
-  @discardableResult
-  func setSessionGoal(
-    id: UUID,
-    objective: String?,
-    status: GoalStatus?,
-    tokenBudget: TokenBudgetUpdate
-  ) async throws -> SessionGoal {
-    if objective == "goal fails" {
-      throw CodevisorServerClientError.invalidResponse
-    }
-    let goal = SessionGoal(
-      objective: objective ?? goalUpdates.last?.0 ?? "existing objective",
-      status: status ?? .active,
-      tokenBudget: {
-        switch tokenBudget {
-        case .keep: return goalUpdates.isEmpty ? nil : lastBudget
-        case .clear: return nil
-        case let .set(budget): return budget
-        }
-      }(),
-      createdAt: "2026-07-05T00:00:00.000Z",
-      updatedAt: "2026-07-05T00:00:00.000Z"
-    )
-    lock.withLock {
-      _goalUpdates.append((objective, status, tokenBudget))
-      _lastBudget = goal.tokenBudget
-    }
-    return goal
-  }
-
-  func clearSessionGoal(id: UUID) async throws {
-    let shouldFail = lock.withLock {
-      defer { _nextGoalClearShouldFail = false }
-      if !_nextGoalClearShouldFail {
-        _goalClearCount += 1
-      }
-      return _nextGoalClearShouldFail
-    }
-    if shouldFail { throw CodevisorServerClientError.invalidResponse }
-  }
-
-  func answerSessionQuestion(
-    id: UUID,
-    questionId: String,
-    outcome: String,
-    answers: [String: QuestionAnswerEntry]?
-  ) async throws {
-    if questionId == "question-fails" {
-      throw CodevisorServerClientError.invalidResponse
-    }
-    lock.withLock { _questionAnswers.append((questionId, outcome, answers)) }
-    if let gate = lock.withLock({ _questionAnswerGate }) {
-      for await _ in gate { break }
-    }
   }
 
   func sessionEvents(id: UUID) async throws -> [ServerEventEnvelope] {

@@ -460,6 +460,18 @@ extension SessionController {
       if let modes = metadata.modes { modeStateByHarness[harnessId] = modes }
       if let supportsGoals = metadata.supportsGoals { supportsGoalsByHarness[harnessId] = supportsGoals }
     }
+    if harnessId == "codex", loadsExistingHistory,
+      !["sandbox", "approval"].allSatisfy({ id in
+        model.configOptions.contains { $0.id == id && $0.options.count > 1 }
+      }),
+      let metadata = try? await serverClient.connectSession(id: session.id)
+    {
+      // 旧版快照缺少权限定义时，从该历史 thread 恢复实际权限和可选值。
+      model.applyRuntimeMetadata(modeState: metadata.modes, configOptions: metadata.configOptions)
+      if !metadata.configOptions.isEmpty { configOptionsByHarness[harnessId] = metadata.configOptions }
+      if let modes = metadata.modes { modeStateByHarness[harnessId] = modes }
+      if let supportsGoals = metadata.supportsGoals { supportsGoalsByHarness[harnessId] = supportsGoals }
+    }
     // Saved selections are validated when the next prompt resumes the provider.
     didLoadExistingRuntimeConfiguration = true
     didFinishExistingRuntimeConfiguration = true

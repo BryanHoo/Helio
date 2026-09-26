@@ -64,12 +64,24 @@ export const makeNavigationService = (context: ServiceContext) => ({
     }),
   saveSessionRuntimeState: (rawId: string, metadata: unknown) =>
     attempt("saveSessionRuntimeState", () => {
-      context.sqlite
-        .prepare(
-          `insert into session_state (session_id, state_key, revision, payload)
+      const id = canonicalUuid(rawId)
+      context.sqlite.transaction(() => {
+        context.sqlite
+          .prepare(
+            `insert into session_state (session_id, state_key, revision, payload)
       values (?, 'runtime_metadata', 0, ?) on conflict(session_id, state_key) do update set payload = excluded.payload`
-        )
-        .run(canonicalUuid(rawId), JSON.stringify(metadata))
+          )
+          .run(id, JSON.stringify(metadata))
+        const options = jsonRecord(metadata)?.configOptions
+        if (Array.isArray(options) && options.length > 0) {
+          // 新 runtime 快照包含完整选项；旧进程留下的配置事件不再有效。
+          context.sqlite
+            .prepare(
+              "delete from session_state where session_id = ? and state_key = 'config_option_update'"
+            )
+            .run(id)
+        }
+      })()
     }),
   getNavigationSnapshot: attempt("getNavigationSnapshot", (): NavigationSnapshot => {
     const { sqlite, config, sessionSummarySelect } = context

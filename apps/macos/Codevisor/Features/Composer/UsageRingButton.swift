@@ -35,14 +35,13 @@ struct UsageRingButton: View {
   var limits: ServerHarnessUsageLimits?
   var isLoadingLimits = false
   var limitsError: String?
-  var showWhenUnavailable = false
   var onRequestLimits: () async -> Void = {}
 
   @State private var isPopoverShown = false
   @State private var hoverTask: Task<Void, Never>?
 
   var body: some View {
-    if showWhenUnavailable || usage.map(hasVisibleUsage) == true {
+    if usage.map(hasVisibleUsage) == true {
       HStack(spacing: 5) {
         ring
         Text(contextPercent)

@@ -36,6 +36,23 @@ it("hydrates persisted runtime configuration and selects only durable work for r
     modes: { currentModeId: "new" },
     configOptions: ["updated"]
   })
+  await run(db.saveSessionRuntimeState(session.id, { configOptions: [] }))
+  expect(await run(db.getSessionRuntimeState(session.id))).toMatchObject({
+    configOptions: ["updated"]
+  })
+  await run(db.saveSessionRuntimeState(session.id, { sessionId: "provider-id" }))
+  expect(await run(db.getSessionRuntimeState(session.id))).toMatchObject({
+    configOptions: ["updated"]
+  })
+  // 恢复会话的新快照必须取代上次进程留下的配置事件；后续事件仍应生效。
+  await run(db.saveSessionRuntimeState(session.id, { configOptions: ["resumed"] }))
+  expect(await run(db.getSessionRuntimeState(session.id))).toMatchObject({
+    configOptions: ["resumed"]
+  })
+  await run(db.appendEvent("session.updated", session.id, { configOptions: ["next"] }))
+  expect(await run(db.getSessionRuntimeState(session.id))).toMatchObject({
+    configOptions: ["next"]
+  })
   expect(await run(db.listSessionsRequiringResume)).toEqual([])
   await run(db.appendEvent("session.updated", session.id, { goal: { status: "active" } }))
   expect(await run(db.listSessionsRequiringResume)).toEqual([session.id])

@@ -135,6 +135,76 @@ struct SessionControllerConfigurationTests {
     #expect(controller.modelOption?.currentValue == "sonnet")
   }
 
+  @Test("Opening an older Codex chat restores its own sandbox and approval from the runtime")
+  func restoresHistoricalCodexPermissions() async throws {
+    let chat = session()
+    let project = Project.fromFolder(
+      URL(fileURLWithPath: "/remote/project"), id: chat.projectId, serverId: chat.serverId
+    )
+    let client = FakeSessionServerClient(sessionId: chat.id)
+    let legacyModel = SessionConfigOption(
+      id: "model", name: "Model", category: SessionConfigOption.Category.model,
+      currentValue: "gpt-5.5", options: [SessionConfigSelectOption(value: "gpt-5.5", name: "GPT-5.5")]
+    )
+    let sandbox = SessionConfigOption(
+      id: "sandbox", name: "Sandbox", category: SessionConfigOption.Category.permission,
+      currentValue: "read-only",
+      options: [
+        SessionConfigSelectOption(value: "read-only", name: "Read-only"),
+        SessionConfigSelectOption(value: "workspace-write", name: "Workspace write"),
+      ]
+    )
+    let approval = SessionConfigOption(
+      id: "approval", name: "Approvals", category: SessionConfigOption.Category.permission,
+      currentValue: "never",
+      options: [
+        SessionConfigSelectOption(value: "on-request", name: "On request"),
+        SessionConfigSelectOption(value: "never", name: "Never"),
+      ]
+    )
+    let decoder = JSONDecoder()
+    client.openSessionResponse = try decoder.decode(
+      ServerSessionOpenResponse.self,
+      from: JSONSerialization.data(withJSONObject: [
+        "session": [
+          "id": chat.id.uuidString, "projectId": chat.projectId.uuidString,
+          "serverId": chat.serverId, "harnessId": "codex", "agentSessionId": "agent-1",
+          "title": "Remote chat", "origin": "codevisor", "createdAt": "2026-09-08T17:45:00Z",
+        ],
+        "transcript": [
+          "items": [], "setupActivities": [], "stateUpdates": [],
+          "hasNewer": false, "hasMore": false, "eventCursor": 0,
+        ],
+        "runtime": [
+          "sessionId": "agent-1",
+          "configOptions": try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode([legacyModel])
+          ),
+        ],
+      ])
+    )
+    client.connectedSessionMetadata = try decoder.decode(
+      ServerSessionRuntimeMetadata.self,
+      from: JSONSerialization.data(withJSONObject: [
+        "sessionId": "agent-1",
+        "configOptions": try JSONSerialization.jsonObject(
+          with: JSONEncoder().encode([legacyModel, sandbox, approval])
+        ),
+      ])
+    )
+    let controller = SessionController(
+      project: project, configCache: ConfigOptionCache(store: InMemoryStore()), serverClient: client
+    )
+    controller.configureExistingSession(chat)
+
+    await controller.connectIfNeeded()
+    defer { controller.model?.shutdown() }
+
+    #expect(client.runtimeRequests == ["connect"])
+    #expect(controller.configOptions.first { $0.id == "sandbox" }?.currentValue == "read-only")
+    #expect(controller.configOptions.first { $0.id == "approval" }?.currentValue == "never")
+  }
+
   @Test("Remote attention metadata does not republish the controller session")
   func ignoresPresentationOnlySessionUpdates() {
     let original = session()
