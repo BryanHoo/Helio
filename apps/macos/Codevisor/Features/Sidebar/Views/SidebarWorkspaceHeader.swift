@@ -46,29 +46,37 @@ struct SidebarWorkspaceHeader: View {
                 .foregroundStyle(.tertiary)
                 .frame(width: 42, alignment: .trailing)
             }
+            .opacity(hovered && !isReordering ? 0 : 1)
             .help(lastActivityAt.formatted(date: .abbreviated, time: .shortened))
             .accessibilityLabel(
               "Last activity \(lastActivityAt.formatted(date: .abbreviated, time: .shortened))"
             )
+            .accessibilityHidden(hovered && !isReordering)
           }
+          .padding(.horizontal, Self.horizontalPadding)
+          .padding(.top, Self.topPadding)
+          .padding(.bottom, Self.bottomPadding)
+          .frame(maxWidth: .infinity, alignment: .leading)
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Open \(title)")
-
-        if hovered && !isReordering {
-          Button(action: onArchive) {
-            Image(systemName: "archivebox").font(.caption2)
-          }
-          .buttonStyle(.plain)
-          .help("Archive task")
-          .accessibilityLabel("Archive \(title)")
-          .frame(width: 24, height: 20)
-        }
       }
-      .padding(.horizontal, Self.horizontalPadding)
-      .padding(.top, Self.topPadding)
-      .padding(.bottom, Self.bottomPadding)
+      .overlay(alignment: .trailing) {
+        // 归档按钮覆盖时间的位置，不改变任务行的宽度或高度。
+        Button(action: onArchive) {
+          Image(systemName: "archivebox")
+            .font(.caption2)
+            .frame(width: 42, height: 20, alignment: .trailing)
+        }
+        .buttonStyle(.plain)
+        .help("Archive task")
+        .accessibilityLabel("Archive \(title)")
+        .opacity(hovered && !isReordering ? 1 : 0)
+        .allowsHitTesting(hovered && !isReordering)
+        .accessibilityHidden(!hovered || isReordering)
+        .padding(.trailing, Self.horizontalPadding)
+      }
     }
     .contextMenu {
       Button(action: onNewTab) {
