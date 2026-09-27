@@ -127,19 +127,14 @@ export const reconcileForNamespace = async (
       // Ferried content landing locally forces an auth probe; the account
       // state change then republishes the roster via the auth bridge.
       const harnessFor: Record<string, string> = {
-        "pi-auth": "pi",
-        "opencode-auth": "opencode",
         "codex-auth-file": "codex"
       }
       return reconcileCredentials({
         db: services.db,
         serverId: config.id,
         sources: services.credentialFerry,
-        profileSources: services.auth?.sharedOpenCodeProfiles,
         onApplied: (sourceId: string) => {
-          const harnessId = sourceId.startsWith("opencode-profile:")
-            ? "opencode"
-            : harnessFor[sourceId]
+          const harnessId = harnessFor[sourceId]
           if (harnessId !== undefined) void services.auth?.refresh(harnessId).catch(swallowError)
         }
       })

@@ -35,6 +35,18 @@ describe("automatic shared accounts", () => {
     const token = vi.spyOn(a.vault, "token")
     expect((await a.shared.storedAccounts("codex"))?.map((account) => account.id)).toEqual([id])
     expect(await a.shared.storedAccounts("cursor")).toBeUndefined()
+    await Effect.runPromise(
+      a.db.saveHarnessAccount({
+        id: "custom-default",
+        harnessId: "custom",
+        profileKind: "default",
+        label: "Custom account",
+        authState: "unauthenticated",
+        canLogin: false,
+        canLogout: false
+      })
+    )
+    expect(await a.shared.probe("custom-default")).toBeUndefined()
     expect(token).not.toHaveBeenCalled()
   })
 

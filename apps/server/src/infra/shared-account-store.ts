@@ -79,8 +79,6 @@ export const makeSharedAccountStore = (db: CodevisorDatabaseService, serverId: s
   return {
     accounts,
     entries,
-    writeProvider: (key: string, value: unknown, deleted = false) =>
-      write(SHARED_ACCOUNTS_NAMESPACE, key, value, deleted),
     overridden: async (harnessId: string) => {
       const available = await accounts()
       return (await Effect.runPromise(db.getSyncEntries(SHARED_ACCOUNT_OVERRIDES))).some(

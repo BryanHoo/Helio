@@ -139,7 +139,7 @@ export const makeHarnessAuthCore = (config: HarnessAuthManagerConfig) => {
 
   const contextFor = async (
     account: HarnessAccountRecord,
-    shared = true
+    _shared = true
   ): Promise<HarnessAccountContext> => {
     const path = profilePath(account)
     if (path !== undefined) {
@@ -150,12 +150,6 @@ export const makeHarnessAuthCore = (config: HarnessAuthManagerConfig) => {
     const env: Record<string, string> = {}
     if (path !== undefined && account.harnessId === "codex") env.CODEX_HOME = path
     if (path !== undefined && account.harnessId === "claude-code") env.CLAUDE_CONFIG_DIR = path
-    if (path !== undefined && account.harnessId === "opencode") {
-      env.XDG_DATA_HOME = join(path, "data")
-      env.XDG_CONFIG_HOME = join(path, "config")
-      env.XDG_STATE_HOME = join(path, "state")
-      env.XDG_CACHE_HOME = join(path, "cache")
-    }
     const apiKey = await storedApiKey(account)
     if (apiKey !== undefined) {
       if (account.harnessId === "codex") env.OPENAI_API_KEY = apiKey
@@ -167,9 +161,7 @@ export const makeHarnessAuthCore = (config: HarnessAuthManagerConfig) => {
       ...(path === undefined ? {} : { profilePath: path }),
       ...(Object.keys(env).length === 0 ? {} : { env })
     }
-    return shared
-      ? (config.sharedProviders?.()?.context(publicAccount(account), context) ?? context)
-      : context
+    return context
   }
 
   const executable = async (harnessId: string): Promise<string> => {
@@ -187,9 +179,6 @@ export const makeHarnessAuthCore = (config: HarnessAuthManagerConfig) => {
     const accountContext = await contextFor(account, false)
     if (account.profileKind === "managed" && account.harnessId === "claude-code") {
       for (const name of CLAUDE_AUTH_OVERRIDE_ENV_VARS) delete base[name]
-    }
-    if (account.profileKind === "managed" && account.harnessId === "opencode") {
-      delete base.OPENCODE_AUTH_CONTENT
     }
     return { ...base, ...accountContext.env }
   }

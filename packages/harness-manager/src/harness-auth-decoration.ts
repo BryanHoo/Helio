@@ -32,22 +32,12 @@ export const makeHarnessAuthDecoration = (
       config.db.saveHarnessAccount({
         harnessId: harness.id,
         profileKind: "default",
-        label:
-          harness.id === "pi"
-            ? "Pi configuration"
-            : harness.id === "opencode"
-              ? "Existing OpenCode profile"
-              : `Existing ${harness.name} account`,
+        label: `Existing ${harness.name} account`,
         authState: "checking",
         // Harnesses Codevisor drives sign-in for directly. Everything else
         // starts false and only gains it if the generic ACP probe finds the
         // agent advertising methods.
-        canLogin:
-          harness.id === "codex" ||
-          harness.id === "claude-code" ||
-          harness.id === "cursor" ||
-          harness.id === "pi" ||
-          harness.id === "opencode",
+        canLogin: harness.id === "codex" || harness.id === "claude-code",
         canLogout: false
       })
     )
@@ -99,27 +89,6 @@ export const makeHarnessAuthDecoration = (
         }
       ]
     }
-    if (harnessId === "cursor") {
-      return [
-        {
-          id: "cursor-login",
-          name: "Sign in to Cursor",
-          kind: "browser",
-          description: "Continue in your web browser."
-        }
-      ]
-    }
-    if (harnessId === "grok-build")
-      return [
-        { id: "grok.com", name: "Sign in to Grok", kind: "deviceCode" },
-        {
-          id: "apiKey",
-          name: "Use xAI API Key",
-          kind: "apiKey",
-          description: "Use xAI API billing."
-        }
-      ]
-    if (harnessId === "pi") return []
     return acpLoginMethods.get(harnessId) ?? []
   }
 
@@ -134,8 +103,7 @@ export const makeHarnessAuthDecoration = (
       ...(active === undefined ? {} : { activeAccountId: active.id }),
       accounts,
       loginMethods: loginMethods(harnessId),
-      supportsMultipleAccounts:
-        harnessId === "codex" || harnessId === "claude-code" || harnessId === "opencode"
+      supportsMultipleAccounts: harnessId === "codex" || harnessId === "claude-code"
     }
   }
 

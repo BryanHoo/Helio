@@ -2,7 +2,6 @@ import { spawnCodexClient } from "@codevisor/adapter-codex"
 import type { HarnessAccount } from "@codevisor/api"
 import type { HarnessAccountRecord } from "@codevisor/db"
 
-import type { GrokAuth } from "./grok-auth.js"
 import type { HarnessAuthCore } from "./harness-auth-core.js"
 import {
   AUTH_CACHE_MS,
@@ -20,7 +19,7 @@ import {
 /// `status --format json`, everything else through the runtime's ACP
 /// authentication inspection. A harness only needs a branch here when its
 /// CLI can report an identity; the generic path reports state alone.
-export const makeHarnessAuthProbes = (core: HarnessAuthCore, grok: GrokAuth) => {
+export const makeHarnessAuthProbes = (core: HarnessAuthCore) => {
   const {
     accountCommand,
     accountEnv,
@@ -236,10 +235,9 @@ export const makeHarnessAuthProbes = (core: HarnessAuthCore, grok: GrokAuth) => 
   const probeAccount = async (
     accountId: string,
     force = false,
-    sharedScope = false
+    _sharedScope = false
   ): Promise<HarnessAccount> => {
     const previous = await run(config.db.getHarnessAccount(accountId))
-    if (previous?.harnessId === "grok-build") return grok.account(previous, sharedScope)
     const shared = await config.sharedAccounts?.()?.probe(accountId)
     if (shared !== undefined) return core.announce(previous, shared)
     const current = probes.get(accountId)

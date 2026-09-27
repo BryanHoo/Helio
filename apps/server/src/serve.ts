@@ -242,7 +242,6 @@ export const runServe = (
     const auth = initializeOptionalServerFeature("Harness authentication", () =>
       makeHarnessAuthManager({
         sharedAccounts: () => sharedAccounts,
-        sharedProviders: () => sharedAccounts?.providers,
         dataDir: dirname(databasePath),
         db,
         agents,
@@ -258,12 +257,10 @@ export const runServe = (
         serverId,
         baseUrl: `http://127.0.0.1:${port}`
       })
-    // Sync static credentials without overwriting machine-specific providers.
+    // 仅同步仍启用的静态凭据来源，不初始化旧 provider 认证。
     const credentialFerry = initializeOptionalServerFeature("Credential ferry", () =>
       credentialFerrySources({
-        resolveEnv: () => Promise.resolve(process.env),
-        localProviders: async (harness) =>
-          (await sharedAccounts?.providers.staticOverrides(harness)) ?? []
+        resolveEnv: () => Promise.resolve(process.env)
       })
     )
     const skills = initializeOptionalServerFeature("Skills", () => makeSkillsManager({ agents }))

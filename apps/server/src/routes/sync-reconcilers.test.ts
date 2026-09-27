@@ -351,7 +351,7 @@ describe("credentials plane", () => {
     const fanout = await run(makeEventFanout)
     const { services } = await makeServices("server-x")
     const contents = new Map<string, string | undefined>([
-      ["pi-auth", '{"openai":{"key":"sk-1","type":"api_key"}}'],
+      ["codex-auth-file", '{"OPENAI_API_KEY":"sk-1"}'],
       ["mystery-source", '{"whatever":true}']
     ])
     const makeSource = (id: string) => ({
@@ -364,12 +364,11 @@ describe("credentials plane", () => {
       }
     })
     const refreshed: Array<string | undefined> = []
-    const ferrySources = [makeSource("pi-auth"), makeSource("mystery-source")]
+    const ferrySources = [makeSource("codex-auth-file"), makeSource("mystery-source")]
     const withFerry = {
       ...services,
       credentialFerry: ferrySources,
       auth: {
-        sharedOpenCodeProfiles: async () => [makeSource("opencode-profile:work")],
         refresh: (harnessId?: string) => {
           refreshed.push(harnessId)
           return Promise.resolve()
@@ -382,18 +381,8 @@ describe("credentials plane", () => {
     await run(
       withFerry.db.mergeSyncEntries("harness-credentials", [
         {
-          key: "profiles:opencode",
-          value: "profiles",
-          timestamp: { wallMs: 9, counter: 0, deviceId: "elsewhere" }
-        },
-        {
-          key: "opencode-profile:work",
-          value: "key",
-          timestamp: { wallMs: 9, counter: 1, deviceId: "elsewhere" }
-        },
-        {
-          key: "pi-auth",
-          value: '{"openai":{"key":"fleet","type":"api_key"}}',
+          key: "codex-auth-file",
+          value: '{"OPENAI_API_KEY":"fleet"}',
           timestamp: { wallMs: 10, counter: 0, deviceId: "elsewhere" }
         },
         {
@@ -406,12 +395,11 @@ describe("credentials plane", () => {
     const result = await reconcileForNamespace(withFerry, config, "credentials")
     expect(result).toBeDefined()
     expect((result?.status as { applied: string[] }).applied.toSorted()).toEqual([
-      "mystery-source",
-      "opencode-profile:work",
-      "pi-auth"
+      "codex-auth-file",
+      "mystery-source"
     ])
-    expect(refreshed.toSorted()).toEqual(["opencode", "pi"])
-    expect(contents.get("pi-auth")).toContain("fleet")
+    expect(refreshed).toEqual(["codex"])
+    expect(contents.get("codex-auth-file")).toContain("fleet")
 
     // The harnesses trigger re-runs the ferry: a local edit publishes into
     // the replica without any credentials-specific mutation hook. (No auth
@@ -421,9 +409,9 @@ describe("credentials plane", () => {
       ...services,
       credentialFerry: ferrySources
     } as unknown as typeof services
-    contents.set("pi-auth", '{"openai":{"key":"sk-2","type":"api_key"}}')
+    contents.set("codex-auth-file", '{"OPENAI_API_KEY":"sk-2"}')
     await runBackgroundSyncReconcile(withFerryNoAuth, config, fanout, "harnesses")
     const entries = await run(withFerry.db.getSyncEntries("harness-credentials"))
-    expect(entries.find((entry) => entry.key === "pi-auth")?.value).toContain("sk-2")
+    expect(entries.find((entry) => entry.key === "codex-auth-file")?.value).toContain("sk-2")
   })
 })

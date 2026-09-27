@@ -7,7 +7,6 @@ import {
   type AgentRuntimeService,
   type HarnessDefinition
 } from "@codevisor/agent-runtime"
-import type { Harness } from "@codevisor/api"
 import { makeDatabase, type CodevisorDatabaseService } from "@codevisor/db"
 import type { TerminalManagerService } from "@codevisor/terminal"
 import { Effect } from "effect"
@@ -35,74 +34,6 @@ afterEach(async () => {
   for (const directory of directories.splice(0)) {
     rmSync(directory, { force: true, recursive: true })
   }
-})
-
-describe("Pi harness authentication", () => {
-  it("routes Pi setup to the native provider manager instead of ACP or a terminal", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "codevisor-pi-auth-"))
-    directories.push(directory)
-
-    const db = await run(
-      makeDatabase({ filename: join(directory, "codevisor.sqlite"), serverId: "test" })
-    )
-    databases.push(db)
-    const account = await run(
-      db.saveHarnessAccount({
-        id: "pi-account",
-        harnessId: "pi",
-        profileKind: "default",
-        label: "Pi configuration",
-        authState: "unauthenticated",
-        canLogin: true,
-        canLogout: false
-      })
-    )
-
-    const authenticateHarness = vi.fn(() => Effect.void)
-    const agents = {
-      authenticateHarness,
-      probeHarnessAuth: vi.fn(() =>
-        Effect.succeed({
-          state: "unauthenticated" as const,
-          methods: [
-            {
-              id: "pi_terminal_login",
-              name: "Launch pi in the terminal",
-              description: "Configure Pi providers"
-            }
-          ],
-          canLogout: false
-        })
-      )
-    } as unknown as AgentRuntimeService
-    const terminal = {} as TerminalManagerService
-    const manager = makeHarnessAuthManager({
-      agents,
-      catalog: [...harnessCatalog, legacyFixture("pi")],
-      dataDir: directory,
-      db,
-      terminal,
-      resolveEnv: () => Promise.resolve({ HOME: directory })
-    })
-    const definition = legacyFixture("pi")
-    const harness: Harness = {
-      id: definition.id,
-      name: definition.name,
-      symbolName: definition.symbolName,
-      source: "registry",
-      launchKind: "npx",
-      enabled: true,
-      readiness: { state: "ready", path: "/usr/local/bin/pi" }
-    }
-
-    const [decorated] = await manager.decorateHarnesses([harness], true)
-    expect(decorated?.enabled).toBe(false)
-    expect(decorated?.auth?.loginMethods).toEqual([])
-    await expect(manager.beginLogin(account.id)).rejects.toThrow(
-      "Choose and authenticate a Pi provider in Codevisor settings"
-    )
-    expect(authenticateHarness).not.toHaveBeenCalled()
-  })
 })
 
 describe("activate-time account rebinding", () => {
@@ -180,10 +111,10 @@ describe("harness authentication refresh", () => {
     await Promise.all([
       run(
         db.saveHarnessAccount({
-          id: "pi-account",
-          harnessId: "pi",
+          id: "generic-account",
+          harnessId: "generic",
           profileKind: "default",
-          label: "Pi configuration",
+          label: "Existing account",
           authState: "checking",
           canLogin: true,
           canLogout: false
@@ -213,7 +144,7 @@ describe("harness authentication refresh", () => {
     )
     const manager = makeHarnessAuthManager({
       agents: { probeHarnessAuth } as unknown as AgentRuntimeService,
-      catalog: [...harnessCatalog, legacyFixture("pi"), legacyFixture("gemini")],
+      catalog: [...harnessCatalog, legacyFixture("generic"), legacyFixture("gemini")],
       dataDir: directory,
       db,
       terminal: {} as TerminalManagerService,
@@ -222,9 +153,9 @@ describe("harness authentication refresh", () => {
 
     await expect(manager.refresh()).resolves.toBeUndefined()
 
-    expect(probeHarnessAuth).toHaveBeenCalledWith("pi", expect.any(Object))
+    expect(probeHarnessAuth).toHaveBeenCalledWith("generic", expect.any(Object))
     expect(probeHarnessAuth).toHaveBeenCalledWith("gemini", expect.any(Object))
-    await expect(run(db.getHarnessAccount("pi-account"))).resolves.toMatchObject({
+    await expect(run(db.getHarnessAccount("generic-account"))).resolves.toMatchObject({
       authState: "notRequired"
     })
     await expect(run(db.getHarnessAccount("gemini-account"))).resolves.toMatchObject({
@@ -243,10 +174,10 @@ describe("harness authentication refresh", () => {
     databases.push(db)
     await run(
       db.saveHarnessAccount({
-        id: "opencode-account",
-        harnessId: "opencode",
+        id: "generic-account",
+        harnessId: "generic",
         profileKind: "default",
-        label: "Existing OpenCode profile",
+        label: "Existing generic account",
         authState: "checking",
         canLogin: true,
         canLogout: false
@@ -268,7 +199,7 @@ describe("harness authentication refresh", () => {
     )
     const manager = makeHarnessAuthManager({
       agents: { probeHarnessAuth } as unknown as AgentRuntimeService,
-      catalog: [...harnessCatalog, legacyFixture("opencode")],
+      catalog: [...harnessCatalog, legacyFixture("generic")],
       dataDir: directory,
       db,
       terminal: {} as TerminalManagerService,
@@ -283,7 +214,7 @@ describe("harness authentication refresh", () => {
     })
 
     const waiterCount = 64
-    const refreshes = Array.from({ length: waiterCount }, () => manager.refresh("opencode"))
+    const refreshes = Array.from({ length: waiterCount }, () => manager.refresh("generic"))
     await Promise.all([allJoined.promise, probeStarted.promise])
     releaseProbe()
     await Promise.all(refreshes)
@@ -291,7 +222,7 @@ describe("harness authentication refresh", () => {
     expect(probeHarnessAuth).toHaveBeenCalledTimes(1)
     expect(events.filter((kind) => kind === "harness.account.updated")).toHaveLength(1)
     expect(events.filter((kind) => kind === "harness.auth.updated")).toHaveLength(1)
-    await expect(run(db.getHarnessAccount("opencode-account"))).resolves.toMatchObject({
+    await expect(run(db.getHarnessAccount("generic-account"))).resolves.toMatchObject({
       authState: "error",
       detail: "ACP initialize timed out after 10000ms"
     })

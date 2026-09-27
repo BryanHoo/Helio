@@ -4,23 +4,11 @@ import type {
   HarnessAccountContext,
   HarnessDefinition
 } from "@codevisor/agent-runtime"
-import type {
-  Harness,
-  HarnessAccount,
-  HarnessAuthFlow,
-  OpenCodeAuthFlow,
-  OpenCodeAuthProvider,
-  PiAuthMethod,
-  PiAuthProvider,
-  PiAuthProviderFlow
-} from "@codevisor/api"
+import type { Harness, HarnessAccount, HarnessAuthFlow } from "@codevisor/api"
 import type { CodevisorDatabaseService } from "@codevisor/db"
 import type { TerminalManagerService } from "@codevisor/terminal"
-import type { OAuthAuth } from "@earendil-works/pi-ai"
 
-import type { CredentialSource } from "./credential-ferry.js"
 import type { SharedAccountIntegration } from "./shared-account-integration.js"
-import type { SharedProviderIntegration } from "./shared-provider-integration.js"
 
 export interface HarnessAuthExecOptions {
   readonly cwd?: string
@@ -48,14 +36,11 @@ export interface HarnessAuthEvent {
 
 export interface HarnessAuthManagerConfig {
   readonly sharedAccounts?: () => SharedAccountIntegration | undefined
-  readonly sharedProviders?: () => SharedProviderIntegration | undefined
   readonly dataDir: string
   readonly db: CodevisorDatabaseService
   readonly agents: AgentRuntimeService
   readonly terminal: TerminalManagerService
   readonly preferDeviceCode?: boolean
-  /// Test seam: replaces Grok's device-code authorization client.
-  readonly grokOAuth?: OAuthAuth
   /// Test seam: replaces the SDK-backed Claude OAuth client factory.
   readonly claudeAuth?: typeof spawnClaudeAuthClient
   /// Overrides the login-shell environment resolver in tests and embedded hosts.
@@ -69,7 +54,6 @@ export interface HarnessAuthManagerConfig {
 }
 
 export interface HarnessAuthManager {
-  readonly sharedOpenCodeProfiles?: (content?: string) => Promise<ReadonlyArray<CredentialSource>>
   readonly decorateHarnesses: (
     harnesses: ReadonlyArray<Harness>,
     force?: boolean
@@ -102,28 +86,5 @@ export interface HarnessAuthManager {
   readonly accountContext: (accountId: string) => Promise<HarnessAccountContext>
   readonly activeAccountContext: (harnessId: string) => Promise<HarnessAccountContext | undefined>
   readonly markAccountExpired: (accountId: string, detail?: string) => Promise<void>
-  readonly piProviders?: () => Promise<ReadonlyArray<PiAuthProvider>>
-  readonly beginPiLogin?: (
-    providerId: string,
-    method: PiAuthMethod,
-    shared?: boolean
-  ) => Promise<PiAuthProviderFlow>
-  readonly piLoginFlow?: (flowId: string) => PiAuthProviderFlow
-  readonly answerPiLogin?: (flowId: string, value: string) => Promise<PiAuthProviderFlow>
-  readonly cancelPiLogin?: (flowId: string) => void
-  readonly logoutPiProvider?: (providerId: string) => Promise<void>
-  readonly openCodeProviders?: (accountId: string) => Promise<ReadonlyArray<OpenCodeAuthProvider>>
-  readonly beginOpenCodeLogin?: (
-    accountId: string,
-    providerId: string,
-    methodId: string,
-    inputs?: Readonly<Record<string, string>>,
-    apiKey?: string,
-    shared?: boolean
-  ) => Promise<OpenCodeAuthFlow>
-  readonly openCodeLoginFlow?: (flowId: string) => OpenCodeAuthFlow
-  readonly answerOpenCodeLogin?: (flowId: string, code: string) => Promise<OpenCodeAuthFlow>
-  readonly cancelOpenCodeLogin?: (flowId: string) => void
-  readonly logoutOpenCodeProvider?: (accountId: string, providerId: string) => Promise<void>
   readonly subscribe: (listener: (event: HarnessAuthEvent) => void) => () => void
 }

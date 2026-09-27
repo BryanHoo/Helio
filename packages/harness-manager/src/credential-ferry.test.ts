@@ -3,9 +3,14 @@ import { mkdtemp, readFile, writeFile, mkdir, stat } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { credentialFerrySources, canonicalCredentialJson } from "./credential-ferry.js"
+import {
+  credentialFerrySources,
+  canonicalCredentialJson,
+  readJsonFile,
+  withFileLock
+} from "./credential-ferry.js"
 
 const roots: string[] = []
 afterEach(() => {
@@ -20,116 +25,6 @@ const makeSources = async () => {
   const byId = Object.fromEntries(sources.map((source) => [source.id, source]))
   return { home, byId }
 }
-
-describe("pi source", () => {
-  it("keeps machine API-key overrides out of shared state and preserves them when shared keys change", async () => {
-    const { home } = await makeSources()
-    const sources = credentialFerrySources({
-      resolveEnv: async () => ({ HOME: home }),
-      localProviders: async () => ["openai"]
-    })
-    for (const [id, path, type] of [
-      ["pi-auth", join(home, ".pi", "agent", "auth.json"), "api_key"],
-      ["opencode-auth", join(home, ".local", "share", "opencode", "auth.json"), "api"]
-    ]) {
-      const source = sources.find((source) => source.id === id)!
-      await mkdir(join(path!, ".."), { recursive: true })
-      await writeFile(path!, JSON.stringify({ openai: { type, key: "machine-key" } }))
-      const shared = JSON.stringify({ openai: { type, key: "shared-key" } })
-      expect(await source.localOverrides!()).toContain("openai")
-      expect(await source.read()).toBe("{}")
-      expect(JSON.parse((await source.read(shared))!)).toEqual(JSON.parse(shared))
-      await source.apply(
-        JSON.stringify({ openai: { type, key: "changed-shared" }, google: { type, key: "other" } })
-      )
-      expect(JSON.parse(await readFile(path!, "utf8"))).toEqual({
-        openai: { type, key: "machine-key" },
-        google: { type, key: "other" }
-      })
-      await writeFile(path!, "{}")
-      expect(JSON.parse((await source.read(shared))!)).toEqual(JSON.parse(shared))
-    }
-  })
-  it("publishes only api_key entries and grafts them without touching oauth", async () => {
-    const { home, byId } = await makeSources()
-    const path = join(home, ".pi", "agent", "auth.json")
-    await mkdir(join(home, ".pi", "agent"), { recursive: true })
-    await writeFile(
-      path,
-      JSON.stringify({
-        anthropic: { type: "oauth", refresh: "r", access: "a", expires: 1 },
-        openai: { type: "api_key", key: "sk-1" }
-      })
-    )
-    const source = byId["pi-auth"]!
-    expect(source.tombstoneOnAbsence).toBe(false)
-    const published = await source.read()
-    expect(published).toBe(canonicalCredentialJson({ openai: { type: "api_key", key: "sk-1" } }))
-
-    // Applying a fleet subset replaces the api_key class (removals travel)
-    // and preserves the local oauth entry verbatim.
-    await source.apply(canonicalCredentialJson({ groq: { type: "api_key", key: "sk-2" } }))
-    const merged = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>
-    expect(Object.keys(merged).toSorted()).toEqual(["anthropic", "groq"])
-    expect(merged.anthropic).toMatchObject({ type: "oauth", refresh: "r" })
-    expect((await stat(path)).mode & 0o777).toBe(0o600)
-  })
-
-  it("publishes nothing when the file is absent, and applies onto a fresh machine", async () => {
-    const { home, byId } = await makeSources()
-    const source = byId["pi-auth"]!
-    expect(await source.read()).toBeUndefined()
-    await source.apply(canonicalCredentialJson({ openai: { type: "api_key", key: "sk-9" } }))
-    const written = JSON.parse(
-      await readFile(join(home, ".pi", "agent", "auth.json"), "utf8")
-    ) as Record<string, unknown>
-    expect(written.openai).toMatchObject({ key: "sk-9" })
-  })
-})
-
-describe("opencode source", () => {
-  it("keeps a local OAuth sign-in while retaining the shared key it shadows", async () => {
-    const { home, byId } = await makeSources()
-    const source = byId["opencode-auth"]!
-    expect(await source.localOverrides!()).toEqual([])
-    const path = join(home, ".local", "share", "opencode", "auth.json")
-    await mkdir(join(home, ".local", "share", "opencode"), { recursive: true })
-    const oauth = { type: "oauth", access: "local-session" }
-    await writeFile(
-      path,
-      JSON.stringify({ anthropic: oauth, openai: { type: "api", key: "local-key" } })
-    )
-    const shared = canonicalCredentialJson({ anthropic: { type: "api", key: "shared-key" } })
-    expect(await source.localOverrides!()).toEqual(["anthropic"])
-    expect(JSON.parse((await source.read(shared))!)).toEqual({
-      anthropic: { type: "api", key: "shared-key" },
-      openai: { type: "api", key: "local-key" }
-    })
-    await source.apply(shared)
-    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ anthropic: oauth })
-    expect(await source.read(shared)).toBe(shared)
-    await source.apply("{}")
-    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ anthropic: oauth })
-    expect(await source.read("{}")).toBe("{}")
-  })
-
-  it("ferries api and wellknown entries, never oauth", async () => {
-    const { home, byId } = await makeSources()
-    const path = join(home, ".local", "share", "opencode", "auth.json")
-    await mkdir(join(home, ".local", "share", "opencode"), { recursive: true })
-    await writeFile(
-      path,
-      JSON.stringify({
-        anthropic: { type: "oauth", access: "a" },
-        openrouter: { type: "api", key: "or-1" },
-        cloudflare: { type: "wellknown", key: "cf", token: "t" }
-      })
-    )
-    const source = byId["opencode-auth"]!
-    const published = JSON.parse((await source.read())!) as Record<string, unknown>
-    expect(Object.keys(published).toSorted()).toEqual(["cloudflare", "openrouter"])
-  })
-})
 
 describe("codex source", () => {
   it("ferries api-key files but never a live ChatGPT login, either direction", async () => {
@@ -225,80 +120,63 @@ describe("devin source", () => {
   })
 })
 
-describe("hostile files and path variants", () => {
-  it("rejects non-object files, surfaces read errors, and honors dir overrides", async () => {
-    const home = await mkdtemp(join(tmpdir(), "codevisor-ferry-h-"))
-    roots.push(home)
+describe("supported credential sources", () => {
+  it("exposes only static Codex and Devin credentials", async () => {
+    const { byId } = await makeSources()
+    expect(Object.keys(byId).sort()).toEqual(["codex-auth-file", "devin-credentials-file"])
+  })
 
-    // PI_CODING_AGENT_DIR with a ~ prefix expands against HOME; a custom
-    // CODEX_HOME wins over the default.
-    const env = {
-      HOME: home,
-      XDG_DATA_HOME: join(home, ".local", "share"),
-      PI_CODING_AGENT_DIR: "~/custom-pi",
-      CODEX_HOME: join(home, "custom-codex")
-    }
-    const sources = credentialFerrySources({ resolveEnv: () => Promise.resolve(env) })
-    const byId = Object.fromEntries(sources.map((source) => [source.id, source]))
-
-    await mkdir(join(home, "custom-pi"), { recursive: true })
-    await writeFile(
-      join(home, "custom-pi", "auth.json"),
-      JSON.stringify({ openai: { type: "api_key", key: "sk-custom" }, junk: "not-an-object" })
-    )
-    // Non-object entries are simply not part of the travelling class.
-    expect(await byId["pi-auth"]!.read()).toBe(
-      canonicalCredentialJson({ openai: { type: "api_key", key: "sk-custom" } })
-    )
-    // Applying twice exercises the lock file's already-exists path.
-    await byId["pi-auth"]!.apply(canonicalCredentialJson({ a: { type: "api_key", key: "1" } }))
-    await byId["pi-auth"]!.apply(canonicalCredentialJson({ a: { type: "api_key", key: "2" } }))
-
+  it("rejects malformed Codex files and honors CODEX_HOME", async () => {
+    const { home } = await makeSources()
+    const path = join(home, "custom-codex", "auth.json")
     await mkdir(join(home, "custom-codex"), { recursive: true })
-    await writeFile(join(home, "custom-codex", "auth.json"), JSON.stringify(["an", "array"]))
-    await expect(byId["codex-auth-file"]!.read()).rejects.toThrow("Not a credential object")
+    await writeFile(path, JSON.stringify(["not", "an object"]))
+    const source = credentialFerrySources({
+      resolveEnv: async () => ({ HOME: home, CODEX_HOME: join(home, "custom-codex") })
+    }).find((entry) => entry.id === "codex-auth-file")!
+    await expect(source.read()).rejects.toThrow("Not a credential object")
+  })
 
-    // An unreadable file propagates its error rather than masking it.
-    const { chmod } = await import("node:fs/promises")
-    await chmod(join(home, "custom-codex", "auth.json"), 0o000)
-    await expect(byId["codex-auth-file"]!.read()).rejects.toThrow()
-    await chmod(join(home, "custom-codex", "auth.json"), 0o600)
+  it("sorts credential keys and propagates filesystem failures", async () => {
+    expect(canonicalCredentialJson({ z: 1, a: 2 })).toBe('{"a":2,"z":1}')
+    const { home } = await makeSources()
+    const directory = join(home, "directory-instead-of-json")
+    await mkdir(directory)
+    await expect(readJsonFile(directory)).rejects.toThrow()
+  })
 
-    // An unwritable parent surfaces the real error from the lock setup.
-    const lockedHome = await mkdtemp(join(tmpdir(), "codevisor-ferry-l-"))
-    roots.push(lockedHome)
-    const lockedDir = join(lockedHome, "custom-pi")
-    await mkdir(lockedDir, { recursive: true })
-    const { chmod: chmodDir } = await import("node:fs/promises")
-    await chmodDir(lockedDir, 0o500)
-    const locked = credentialFerrySources({
-      resolveEnv: () => Promise.resolve({ HOME: lockedHome, PI_CODING_AGENT_DIR: lockedDir })
-    }).find((source) => source.id === "pi-auth")!
+  it("releases the credential lock after both success and failure", async () => {
+    const { home } = await makeSources()
+    const path = join(home, "nested", "auth.json")
     await expect(
-      locked.apply(canonicalCredentialJson({ a: { type: "api_key", key: "x" } }))
-    ).rejects.toThrow()
-    await chmodDir(lockedDir, 0o700)
-
-    // An empty override falls back to the default location.
-    const emptied = credentialFerrySources({
-      resolveEnv: () => Promise.resolve({ HOME: home, PI_CODING_AGENT_DIR: "", CODEX_HOME: "" })
+      withFileLock(path, async () => {
+        throw new Error("write failed")
+      })
+    ).rejects.toThrow("write failed")
+    await withFileLock(path, async () => {
+      expect(await readFile(path, "utf8")).toBe("{}")
     })
-    expect(await emptied.find((source) => source.id === "pi-auth")!.read()).toBeUndefined()
+    const invalidPath = join(home, "nested", "auth.json", "child")
+    await expect(withFileLock(invalidPath, async () => undefined)).rejects.toThrow()
+    await expect(
+      withFileLock(
+        path,
+        async () => undefined,
+        async () => {
+          throw Object.assign(new Error("permission denied"), { code: "EACCES" })
+        }
+      )
+    ).rejects.toThrow("permission denied")
+  })
 
-    // Absent HOME falls back to the OS home for path computation only —
-    // reads on the resulting paths must not throw.
-    const bare = credentialFerrySources({
-      resolveEnv: () => Promise.resolve({ PI_CODING_AGENT_DIR: "~/nowhere-pi" })
-    })
-    const pi = bare.find((source) => source.id === "pi-auth")!
-    expect(await pi.read()).toBeUndefined()
-    const codexBare = bare.find((source) => source.id === "codex-auth-file")!
-    await codexBare.read().catch(() => undefined)
-    // Fully empty env: the pi DEFAULT path also computes off the OS home.
-    const emptyEnv = credentialFerrySources({ resolveEnv: () => Promise.resolve({}) })
-    await emptyEnv
-      .find((source) => source.id === "pi-auth")!
-      .read()
-      .catch(() => undefined)
+  it("resolves the Codex path from the system home when HOME is absent", async () => {
+    const { home } = await makeSources()
+    vi.stubEnv("HOME", home)
+    try {
+      const source = credentialFerrySources({ resolveEnv: async () => ({}) })[0]!
+      expect(await source.read()).toBeUndefined()
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })

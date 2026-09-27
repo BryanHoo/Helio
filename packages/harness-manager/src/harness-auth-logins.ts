@@ -7,7 +7,6 @@ import { spawnCodexClient } from "@codevisor/adapter-codex"
 import type { HarnessAccount, HarnessAuthFlow } from "@codevisor/api"
 import type { HarnessAccountRecord } from "@codevisor/db"
 
-import type { GrokAuth } from "./grok-auth.js"
 import type { HarnessAuthCore } from "./harness-auth-core.js"
 import type { HarnessAuthProbes } from "./harness-auth-probes.js"
 import {
@@ -28,8 +27,7 @@ export type HarnessLoginOperations = Pick<
 /// flows, Claude's paste-code OAuth, API-key logins, and ACP authentication.
 export const makeHarnessLoginOperations = (
   core: HarnessAuthCore,
-  probes: HarnessAuthProbes,
-  grok: GrokAuth
+  probes: HarnessAuthProbes
 ): HarnessLoginOperations => {
   const {
     accountCommand,
@@ -300,12 +298,11 @@ export const makeHarnessLoginOperations = (
     accountId: string,
     methodId?: string,
     apiKey?: string,
-    shared = false
+    _shared = false
   ): Promise<HarnessAuthFlow> => {
     accountId = (await config.sharedAccounts?.()?.prepareLogin(accountId, methodId)) ?? accountId
     const account = await run(config.db.getHarnessAccount(accountId))
     if (account === undefined) throw new Error(`Harness account not found: ${accountId}`)
-    if (account.harnessId === "grok-build") return grok.begin(account, methodId, apiKey, shared)
     if (methodId === "apiKey") return beginApiKeyLogin(account, apiKey)
     if (
       account.harnessId === "codex" ||
@@ -322,9 +319,6 @@ export const makeHarnessLoginOperations = (
         await config.sharedAccounts?.()?.loginFailed(account.id)
         throw cause
       }
-    }
-    if (account.harnessId === "pi") {
-      throw new Error("Choose and authenticate a Pi provider in Codevisor settings")
     }
     const methods = acpLoginMethods.get(account.harnessId) ?? []
     const selectedMethod = methodId ?? methods[0]?.id
@@ -352,7 +346,6 @@ export const makeHarnessLoginOperations = (
   }
 
   const cancelLogin = async (flowId: string): Promise<void> => {
-    await grok.cancel(flowId)
     const codex = codexLogins.get(flowId)
     if (codex !== undefined) {
       if (codex.loginId !== undefined) {
@@ -379,14 +372,13 @@ export const makeHarnessLoginOperations = (
     }
   }
 
-  const logout = async (accountId: string, sharedScope = false): Promise<HarnessAccount> => {
+  const logout = async (accountId: string, _sharedScope = false): Promise<HarnessAccount> => {
     const account = await run(config.db.getHarnessAccount(accountId))
     // A shared sign-out settles its own state without a probe; announce it so
     // every mounted catalog — not just the client that clicked — follows.
     const shared = await config.sharedAccounts?.()?.logout(accountId)
     if (shared !== undefined) return announce(account, shared)
     if (account === undefined) throw new Error(`Harness account not found: ${accountId}`)
-    if (account.harnessId === "grok-build") return grok.logout(account, sharedScope)
     await rm(apiKeyPath(account), { force: true })
     if (account.harnessId === "codex") {
       const client = await initializeCodexClient(account)

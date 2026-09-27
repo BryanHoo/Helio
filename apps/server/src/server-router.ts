@@ -55,11 +55,6 @@ export const handleRequest = async (
 ): Promise<void> => {
   try {
     const url = parseRequestUrl(request)
-    if (url.pathname === "/harness/provider-token") {
-      if (!services.sharedAccounts) throw new HttpFailure(501, "Account gateway unavailable")
-      await services.sharedAccounts.providers.runtime.handle(request, response)
-      return
-    }
     if (url.pathname.startsWith("/harness/claude/")) {
       if (!services.sharedAccounts) throw new HttpFailure(501, "Account gateway unavailable")
       await services.sharedAccounts.gateway.handle(request, response, url)

@@ -27,7 +27,6 @@ import {
   type SharedHarnessAccount
 } from "./shared-account-store.js"
 import { makeSharedClaudeGateway } from "./shared-claude-gateway.js"
-import { makeSharedProviderAccounts } from "./shared-provider-accounts.js"
 
 const LOCAL = "local.shared-accounts"
 const run = Effect.runPromise
@@ -50,7 +49,6 @@ export const makeSharedAccounts = (options: {
   const store = makeSharedAccountStore(db, serverId)
   const vault = options.vault ?? sharedAccountVault(dataDir)
   const environment = options.environment ?? resolveShellEnv
-  const providers = makeSharedProviderAccounts({ ...options, store, vault, environment })
   const discover = options.discover ?? discoverNativeAccount
   const pending = new Set<string>()
   let reconciling: Promise<void> | undefined
@@ -237,7 +235,6 @@ export const makeSharedAccounts = (options: {
       }
       for (const account of await store.accounts()) await saveLocal(account)
       for (const harnessId of ["claude-code", "codex"]) await applySelection(harnessId)
-      await providers.reconcile()
     })().finally(() => {
       reconciling = undefined
     })
@@ -362,7 +359,6 @@ export const makeSharedAccounts = (options: {
   }
   return {
     store,
-    providers,
     reconcile,
     /// For changes that arrived from another machine through sync: held
     /// credentials may predate them (a global sign-out), so drop them first.

@@ -1,14 +1,7 @@
 import { defineConfig } from "vitest/config"
 
-// The auth modules orchestrate external CLIs, browser/device flows,
-// terminals, credential files, and filesystem migrations; the lifecycle
-// modules orchestrate installers, updaters, terminals, timers, and update
-// feeds; the OpenCode
-// server module drives a real `opencode serve` process (rationale carried
-// over from the repo root config when these lived in apps/server). Their
-// focused tests still run; credential-ferry stays at
-// 100%. The *-test-support module is shared test
-// scaffolding, not product code.
+// Auth and lifecycle modules orchestrate external CLIs and update feeds.
+// Test support is excluded from production coverage.
 export default defineConfig({
   test: {
     // 只运行源码测试，避免 tsc 产出的 dist 测试重复执行。
@@ -38,10 +31,7 @@ export default defineConfig({
         "src/harness-lifecycle-support.ts",
         "src/harness-lifecycle-test-support.ts",
         "src/harness-lifecycle-updates.ts",
-        "src/shared-credential-vault-test-support.ts",
-        "src/opencode-auth.ts",
-        "src/opencode-auth-server.ts",
-        "src/pi-auth.ts"
+        "src/shared-credential-vault-test-support.ts"
       ],
       provider: "v8",
       thresholds: { branches: 100, functions: 100, lines: 100, statements: 100 }

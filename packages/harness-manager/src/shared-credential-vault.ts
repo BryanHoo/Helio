@@ -36,7 +36,7 @@ export const openSharedCredential = (
     Buffer.concat([cipher.update(bytes.subarray(28)), cipher.final()]).toString("utf8")
   ) as SharedTokenBundle
   if (
-    !["codex", "claude-code", "pi", "opencode", "grok-build"].includes(bundle.harnessId) ||
+    !["codex", "claude-code"].includes(bundle.harnessId) ||
     typeof bundle.subject !== "string" ||
     typeof bundle.accessToken !== "string" ||
     !Number.isFinite(bundle.expiresAt) ||
@@ -72,8 +72,7 @@ export interface SharedCredentialVaultConfig {
 
 /// Access tokens closer to expiry than this are refreshed instead of served,
 /// so a long request never starts on a token that dies underneath it.
-const minimumValidityMs = (harnessId: SharedTokenBundle["harnessId"]): number =>
-  ["pi", "opencode", "grok-build"].includes(harnessId) ? 6 * 60_000 : 60_000
+const MINIMUM_VALIDITY_MS = 60_000
 
 /// Reads are local-first. The coordinator exists to elect a single refresher
 /// across machines and to hold the sealed result; it is not the read path. A
@@ -131,8 +130,7 @@ export const makeSharedCredentialVault = (config: SharedCredentialVaultConfig) =
     remember(reference, committed.credential)
   }
   const serves = (bundle: SharedTokenBundle, rejectedAccessToken: string | undefined) =>
-    bundle.expiresAt > now() + minimumValidityMs(bundle.harnessId) &&
-    bundle.accessToken !== rejectedAccessToken
+    bundle.expiresAt > now() + MINIMUM_VALIDITY_MS && bundle.accessToken !== rejectedAccessToken
   /// The bundle the coordinator last confirmed, while that confirmation is
   /// still inside the window and no refresh of ours awaits its commit.
   const held = (reference: SharedCredentialReference): SharedTokenBundle | undefined => {

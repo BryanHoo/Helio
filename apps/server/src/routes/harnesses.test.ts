@@ -21,24 +21,12 @@ describe("harness routes", () => {
     const legacyServer = await startWithApp(services)
     runningServers.push(legacyServer)
     const unavailableRequests: ReadonlyArray<readonly [string, string]> = [
-      ["GET", "/v1/harnesses/pi/providers"],
-      ["POST", "/v1/harnesses/pi/providers/openai/login"],
-      ["DELETE", "/v1/harnesses/pi/providers/openai"],
-      ["POST", "/v1/harnesses/pi/auth-flows/pi-flow-1/answer"],
-      ["GET", "/v1/harnesses/pi/auth-flows/pi-flow-1"],
-      ["DELETE", "/v1/harnesses/pi/auth-flows/pi-flow-1"],
       ["POST", "/v1/harnesses/auth/refresh"],
       ["DELETE", "/v1/harnesses/codex/accounts/account-1/login/flow-1"],
       ["POST", "/v1/harnesses/codex/accounts/account-1/login"],
       ["POST", "/v1/harnesses/codex/accounts/account-1/auth/probe"],
       ["PATCH", "/v1/harnesses/codex/accounts/account-1"],
-      ["GET", "/v1/harnesses/codex/accounts"],
-      ["GET", "/v1/harnesses/opencode/accounts/account-1/providers"],
-      ["POST", "/v1/harnesses/opencode/accounts/account-1/providers/openai/login"],
-      ["DELETE", "/v1/harnesses/opencode/accounts/account-1/providers/openai"],
-      ["GET", "/v1/harnesses/opencode/auth-flows/flow-open"],
-      ["DELETE", "/v1/harnesses/opencode/auth-flows/flow-open"],
-      ["POST", "/v1/harnesses/opencode/auth-flows/flow-open/answer"]
+      ["GET", "/v1/harnesses/codex/accounts"]
     ]
     for (const [method, path] of unavailableRequests) {
       expect(
@@ -52,52 +40,15 @@ describe("harness routes", () => {
     }
   })
 
-  it("drives Pi, OpenCode, and account routes through the auth service", async () => {
+  it("drives account routes through the auth service", async () => {
     const { services } = await makeServices("server-a")
-    const { accountList, auth, piFlow, piProvider, state } = makeAuthFixture()
+    const { accountList, auth, state } = makeAuthFixture()
     const server = await startWithApp({ ...services, auth })
     runningServers.push(server)
     expect((await jsonRequest(server, "/v1/harnesses")).status).toBe(200)
-    expect((await jsonRequest(server, "/v1/harnesses/pi/providers")).body).toEqual([piProvider])
-    expect(
-      await jsonRequest(server, "/v1/harnesses/pi/providers/openai/login", {
-        method: "POST",
-        body: JSON.stringify({ method: "api_key" })
-      })
-    ).toMatchObject({ status: 201, body: piFlow })
-    expect(auth.beginPiLogin).toHaveBeenCalledWith("openai", "api_key")
-    expect(
-      await jsonRequest(server, "/v1/harnesses/pi/auth-flows/pi-flow-1/answer", {
-        method: "POST",
-        body: JSON.stringify({ value: "sk-test" })
-      })
-    ).toMatchObject({ status: 200, body: { state: "complete" } })
-    expect(auth.answerPiLogin).toHaveBeenCalledWith("pi-flow-1", "sk-test")
-    expect((await jsonRequest(server, "/v1/harnesses/pi/auth-flows/pi-flow-1")).body).toEqual(
-      piFlow
-    )
-    expect(
-      (
-        await jsonRequest(server, "/v1/harnesses/pi/auth-flows/pi-flow-1", {
-          method: "DELETE"
-        })
-      ).status
-    ).toBe(204)
-    expect(auth.cancelPiLogin).toHaveBeenCalledWith("pi-flow-1")
-    expect(
-      (
-        await jsonRequest(server, "/v1/harnesses/pi/providers/openai", {
-          method: "DELETE"
-        })
-      ).status
-    ).toBe(204)
-    expect(auth.logoutPiProvider).toHaveBeenCalledWith("openai")
     for (const [method, path] of [
-      ["GET", "/v1/harnesses/pi/providers/openai/login"],
-      ["GET", "/v1/harnesses/pi/providers/openai"],
-      ["GET", "/v1/harnesses/pi/auth-flows/pi-flow-1/answer"],
-      ["POST", "/v1/harnesses/pi/auth-flows/pi-flow-1"],
-      ["POST", "/v1/harnesses/opencode/auth-flows/flow-open"]
+      ["GET", "/v1/harnesses/pi/providers"],
+      ["GET", "/v1/harnesses/opencode/accounts/account-1/providers"]
     ] as const) {
       expect((await jsonRequest(server, path, { method })).status).toBe(404)
     }
@@ -207,57 +158,6 @@ describe("harness routes", () => {
       ).toBe(action === "login" ? 201 : 200)
     }
     expect(auth.beginLogin).toHaveBeenCalledWith("account-1", "apiKey", "sk-test-secret")
-    expect(
-      (await jsonRequest(server, "/v1/harnesses/opencode/accounts/account-1/providers")).status
-    ).toBe(200)
-    expect(
-      (
-        await jsonRequest(
-          server,
-          "/v1/harnesses/opencode/accounts/account-1/providers/openai/login",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              methodId: "0",
-              inputs: { plan: "plus" }
-            })
-          }
-        )
-      ).status
-    ).toBe(201)
-    expect(auth.beginOpenCodeLogin).toHaveBeenCalledWith(
-      "account-1",
-      "openai",
-      "0",
-      { plan: "plus" },
-      undefined
-    )
-    expect((await jsonRequest(server, "/v1/harnesses/opencode/auth-flows/flow-open")).status).toBe(
-      200
-    )
-    expect(
-      (
-        await jsonRequest(server, "/v1/harnesses/opencode/auth-flows/flow-open/answer", {
-          method: "POST",
-          body: JSON.stringify({ code: "authorization-code" })
-        })
-      ).status
-    ).toBe(200)
-    expect(auth.answerOpenCodeLogin).toHaveBeenCalledWith("flow-open", "authorization-code")
-    expect(
-      (
-        await jsonRequest(server, "/v1/harnesses/opencode/accounts/account-1/providers/openai", {
-          method: "DELETE"
-        })
-      ).status
-    ).toBe(204)
-    expect(
-      (
-        await jsonRequest(server, "/v1/harnesses/opencode/auth-flows/flow-open", {
-          method: "DELETE"
-        })
-      ).status
-    ).toBe(204)
     expect(
       (
         await jsonRequest(server, "/v1/harnesses/codex/accounts/account-1/login/flow-1", {

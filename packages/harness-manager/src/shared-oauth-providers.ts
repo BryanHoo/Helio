@@ -8,7 +8,6 @@ import {
   type SharedOAuthHarness,
   type SharedTokenBundle
 } from "./shared-credential-types.js"
-import { refreshProviderOAuth } from "./shared-provider-oauth.js"
 
 const object = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -169,8 +168,6 @@ export const refreshSharedOAuth = async (
 ): Promise<SharedTokenBundle> => {
   if (bundle.ownership !== "managed" || !bundle.refreshToken)
     throw new SharedCredentialError("reauthenticate")
-  if (["pi", "opencode", "grok-build"].includes(bundle.harnessId))
-    return refreshProviderOAuth(bundle, request, now)
   const codex = bundle.harnessId === "codex"
   const response = await request(
     codex ? "https://auth.openai.com/oauth/token" : "https://platform.claude.com/v1/oauth/token",
