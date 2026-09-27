@@ -65,9 +65,8 @@ export const makeCodexProvider = (
   const versionReader = config.versionReader ?? readCodexVersion
   const readConfigFile = config.configFileReader ?? defaultConfigFileReader
 
-  // PATH first, then fallbackPaths. When both the user CLI and Codex.app
-  // bundle are present, compare resolved binary versions and run the newer
-  // app-server so Codevisor sees the newest Codex model catalog.
+  // The builtin catalog has only the app-managed binary. Custom harness
+  // definitions may still supply fallback candidates for embedded hosts.
   const codexCandidates = (definition: HarnessDefinition): ReadonlyArray<string> => [
     ...definition.detectBinaries,
     ...(definition.fallbackPaths ?? [])

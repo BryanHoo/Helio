@@ -32,20 +32,17 @@ const fixture = (id: string, overrides: Partial<HarnessDefinition>): HarnessDefi
 })
 
 describe("catalog installation routes", () => {
-  it("offers Codex's script without requiring npm or Homebrew", async () => {
+  it("does not install or update app-managed CLIs globally", async () => {
     const lifecycle = makeHarnessLifecycleManager({
-      agents: agentsStub([definition("codex")], []),
+      agents: agentsStub([definition("codex"), definition("claude-code")], []),
       db: await makeDb(),
       resolveEnv: async () => ({ PATH: makeBinDir(["curl"]) })
     })
-    expect(await lifecycle.installMethods("codex")).toContainEqual({
-      id: "curl",
-      kind: "curl",
-      label: "Installer script",
-      command: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
-      available: true,
-      recommended: true
-    })
+    for (const id of ["codex", "claude-code"]) {
+      expect(await lifecycle.installMethods(id)).toEqual([])
+      await expect(lifecycle.beginInstall(id, "curl")).rejects.toThrow("No runnable install method")
+      await expect(lifecycle.beginUpdate(id)).rejects.toThrow("not installed")
+    }
   })
 
   it.each([false, true])("checks uv availability on PATH (installed: %s)", async (available) => {
@@ -77,11 +74,7 @@ describe("catalog installation routes", () => {
       resolveEnv: async () => ({ PATH: makeBinDir(["brew", "curl"]) })
     })
     const codex = await lifecycle.installMethods("codex")
-    expect(codex.find((m) => m.id === "brew")).toMatchObject({
-      available: false,
-      recommended: false
-    })
-    expect(codex.find((m) => m.id === "curl")).toMatchObject({ available: true, recommended: true })
+    expect(codex).toEqual([])
     expect((await lifecycle.installMethods(brew.id)).find((m) => m.id === "brew")).toMatchObject({
       available: true,
       recommended: true
@@ -91,21 +84,23 @@ describe("catalog installation routes", () => {
     )
   })
 
-  it.each([
-    [
-      "claude-code",
-      "/opt/homebrew/Caskroom/claude-code@latest/1.0.0/claude",
-      "brew upgrade --cask claude-code@latest"
-    ],
-    [
-      "codex",
-      "/opt/homebrew/Cellar/codex/1.0.0/bin/codex",
-      "/opt/homebrew/Cellar/codex/1.0.0/bin/codex update"
-    ]
-  ])("updates %s through its installed owner", async (id, path, command) => {
+  it("keeps owner-specific updates available for explicitly defined external harnesses", async () => {
+    const id = "fixture-external"
+    const path = "/opt/homebrew/Cellar/fixture-external/1.0.0/bin/fixture-external"
+    const external = fixture(id, {
+      update: {
+        sources: [
+          {
+            apply: { args: ["update"], kind: "selfUpdate" },
+            check: { kind: "npm", packageName: id },
+            when: "any"
+          }
+        ]
+      }
+    })
     const { spawnShell, spawns, processes } = fakeSpawner()
     const lifecycle = makeHarnessLifecycleManager({
-      agents: agentsStub([definition(id)], [harness(id, path!, "1.0.0")]),
+      agents: agentsStub([external], [harness(id, path, "1.0.0")]),
       db: await makeDb(),
       home: "/Users/dev",
       realpath: (p) => p,
@@ -114,8 +109,8 @@ describe("catalog installation routes", () => {
       spawnShell,
       terminal: fakeTerminal().terminal
     })
-    await lifecycle.beginUpdate(id!)
-    expect(spawns[0]?.command).toBe(command)
+    await lifecycle.beginUpdate(id)
+    expect(spawns[0]?.command).toBe(`${path} update`)
     const settled = waitForLifecycleSettle(lifecycle)
     processes[0]?.emitExit(0)
     await settled

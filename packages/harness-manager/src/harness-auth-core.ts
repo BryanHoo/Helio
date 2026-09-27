@@ -66,6 +66,7 @@ export const makeHarnessAuthCore = (config: HarnessAuthManagerConfig) => {
   let environmentPromise: Promise<NodeJS.ProcessEnv> | undefined
   let claudeStoragePreparation: Promise<void> | undefined
   const runExecFile: HarnessAuthExec = config.execFile ?? defaultExecFile
+  const locateExecutable = config.locateExecutable ?? locateExecutableOnPath
 
   const emit = (event: HarnessAuthEvent): void => {
     for (const listener of listeners) listener(event)
@@ -168,7 +169,7 @@ export const makeHarnessAuthCore = (config: HarnessAuthManagerConfig) => {
     const env = await environment()
     const entry = definition(harnessId)
     for (const candidate of [...entry.detectBinaries, ...(entry.fallbackPaths ?? [])]) {
-      const located = locateExecutableOnPath(candidate, env)
+      const located = locateExecutable(candidate, env)
       if (located !== undefined) return located
     }
     throw new Error(`${entry.name} is not installed`)

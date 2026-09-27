@@ -35,6 +35,7 @@ import { migrateLegacyLayout, migrateTmpDataDir } from "./infra/legacy-layout.js
 import { migrateLinuxDataLayout } from "./infra/linux-data-migration.js"
 import { acquireServerLease, type ServerLease } from "./infra/server-lease.js"
 import { makeSharedAccounts, type SharedAccounts } from "./infra/shared-accounts.js"
+import { locateManagedHarness, managedHarnessEnvironment } from "./managed-harness-cli.js"
 import { restoreTerminalPersistence } from "./serve-boot.js"
 import {
   SERVER_PROCESS_TITLE,
@@ -234,8 +235,10 @@ export const runServe = (
     const gitEnvironment = resolveShellEnv()
     const agents = makeAgentRuntime({
       ...(backgroundTerminals === undefined ? {} : { backgroundTerminals }),
+      env: managedHarnessEnvironment(process.env),
+      locateExecutable: locateManagedHarness,
       providerFactories: serverAgentProviders,
-      resolveEnv: () => resolveShellEnv()
+      resolveEnv: async () => managedHarnessEnvironment(await resolveShellEnv())
     })
     const sessionActivity = makeActiveWorkSleepInhibitor()
     let sharedAccounts: SharedAccounts | undefined
@@ -246,6 +249,8 @@ export const runServe = (
         db,
         agents,
         terminal,
+        locateExecutable: locateManagedHarness,
+        resolveEnv: async () => managedHarnessEnvironment(await resolveShellEnv()),
         preferDeviceCode: resolvedKind === "remote"
       })
     )

@@ -1,4 +1,3 @@
-import { harnessCatalog } from "@codevisor/agent-runtime"
 import type { AgentRuntimeService, HarnessDefinition } from "@codevisor/agent-runtime"
 import type { FetchLike } from "@codevisor/updater"
 import { Effect } from "effect"
@@ -21,6 +20,30 @@ import { makeHarnessLifecycleManager } from "./harness-lifecycle.js"
 
 afterEach(cleanupLifecycleTests)
 afterEach(() => vi.useRealTimers())
+
+const externalClaudeDefinition: HarnessDefinition = {
+  ...installableDefinition,
+  id: "claude-code",
+  installMethods: [
+    { cask: true, formula: "claude-code@latest", kind: "brew" },
+    { kind: "npm", packageName: "@anthropic-ai/claude-code" }
+  ],
+  update: {
+    sources: [
+      { apply: { kind: "reinstall" }, check: { kind: "brew" }, when: "brew" },
+      {
+        apply: { kind: "reinstall" },
+        check: { kind: "npm", packageName: "@anthropic-ai/claude-code" },
+        when: "npm"
+      },
+      {
+        apply: { args: ["update"], kind: "selfUpdate" },
+        check: { kind: "npm", packageName: "@anthropic-ai/claude-code" },
+        when: "any"
+      }
+    ]
+  }
+}
 
 describe("harness lifecycle install/update execution", () => {
   it("resolves install methods with availability and preference", async () => {
@@ -258,9 +281,7 @@ describe("harness lifecycle install/update execution", () => {
 
   it("checks and updates Homebrew Claude through its owning cask", async () => {
     const db = await makeDb()
-    const definition = harnessCatalog.find((candidate) => candidate.id === "claude-code")
-    expect(definition).toBeDefined()
-    if (definition === undefined) return
+    const definition = externalClaudeDefinition
 
     const binary = "/opt/homebrew/Caskroom/claude-code@latest/2.1.215/claude"
     let installedVersion = "2.1.215"
@@ -312,9 +333,7 @@ describe("harness lifecycle install/update execution", () => {
 
   it("checks and updates npm-owned Claude through npm", async () => {
     const db = await makeDb()
-    const definition = harnessCatalog.find((candidate) => candidate.id === "claude-code")
-    expect(definition).toBeDefined()
-    if (definition === undefined) return
+    const definition = externalClaudeDefinition
 
     const binary = "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js"
     let installedVersion = "2.1.215"
@@ -366,9 +385,7 @@ describe("harness lifecycle install/update execution", () => {
 
   it("updates native Claude through Claude's self-updater", async () => {
     const db = await makeDb()
-    const definition = harnessCatalog.find((candidate) => candidate.id === "claude-code")
-    expect(definition).toBeDefined()
-    if (definition === undefined) return
+    const definition = externalClaudeDefinition
 
     const binary = "/Users/dev/.local/share/claude/versions/2.1.215"
     let installedVersion = "2.1.215"

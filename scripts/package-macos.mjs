@@ -10,7 +10,7 @@ import {
   ensureBuildDirectories,
   localDevelopmentEnvironment
 } from "./dev-layout.mjs"
-import { removeBundledHarnessBinaries, stageReleaseRuntime } from "./release-runtime.mjs"
+import { stageReleaseRuntime, verifyBundledHarnessBinaries } from "./release-runtime.mjs"
 import { runXcodebuild } from "./xcodebuild.mjs"
 
 const repoRoot = await realpath(fileURLToPath(new URL("..", import.meta.url)))
@@ -105,7 +105,7 @@ await run("bun", [
   "@codevisor/server",
   "--frozen-lockfile"
 ])
-await removeBundledHarnessBinaries(runtimeRoot)
+await verifyBundledHarnessBinaries(runtimeRoot)
 
 const bundledRuntime = join(app, "Contents/Resources/server", target)
 await rm(bundledRuntime, { recursive: true, force: true })

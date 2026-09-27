@@ -1,3 +1,4 @@
+import { constants } from "node:fs"
 import {
   access,
   chmod,
@@ -5,12 +6,12 @@ import {
   cp,
   mkdir,
   readdir,
-  rm,
   stat,
   symlink,
   writeFile
 } from "node:fs/promises"
 import { join } from "node:path"
+import { pathToFileURL } from "node:url"
 
 const exists = async (path) => {
   try {
@@ -21,43 +22,16 @@ const exists = async (path) => {
   }
 }
 
-const bundledHarnessPackage = (name) =>
-  name === "claude-code" || name === "codex" || name.startsWith("claude-agent-sdk-")
-
-export async function removeBundledHarnessBinaries(runtimeRoot) {
-  const nodeModules = [join(runtimeRoot, "node_modules")]
-  for (const parent of ["apps", "packages"]) {
-    const directory = join(runtimeRoot, parent)
-    if (!(await exists(directory))) continue
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      if (entry.isDirectory()) nodeModules.push(join(directory, entry.name, "node_modules"))
-    }
-  }
-
-  const store = join(runtimeRoot, "node_modules/.bun")
-  if (await exists(store)) {
-    nodeModules.push(join(store, "node_modules"))
-    for (const entry of await readdir(store, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue
-      const match = entry.name.match(/^@(anthropic-ai|openai)\+([^@]+)@/)
-      if (match === null || !bundledHarnessPackage(match[2])) continue
-      // 删除平台原生包本体，避免发布包保留 SDK 自带的 Claude 可执行文件。
-      await rm(join(store, entry.name), { recursive: true, force: true })
-    }
-    for (const entry of await readdir(store, { withFileTypes: true })) {
-      if (entry.isDirectory()) nodeModules.push(join(store, entry.name, "node_modules"))
-    }
-  }
-
-  for (const directory of nodeModules) {
-    for (const scope of ["@anthropic-ai", "@openai"]) {
-      const scoped = join(directory, scope)
-      if (!(await exists(scoped))) continue
-      for (const entry of await readdir(scoped, { withFileTypes: true })) {
-        if (bundledHarnessPackage(entry.name)) {
-          await rm(join(scoped, entry.name), { recursive: true, force: true })
-        }
-      }
+export async function verifyBundledHarnessBinaries(runtimeRoot) {
+  const modulePath = join(runtimeRoot, "apps/server/dist/managed-harness-cli.js")
+  const { locateManagedHarness } = await import(pathToFileURL(modulePath).href)
+  for (const name of ["codex", "claude"]) {
+    const binary = locateManagedHarness(name, { PATH: "" })
+    if (binary === undefined) throw new Error(`Packaged ${name} CLI is missing`)
+    try {
+      await access(binary, constants.X_OK)
+    } catch {
+      throw new Error(`Packaged ${name} CLI is missing: ${binary}`)
     }
   }
 }

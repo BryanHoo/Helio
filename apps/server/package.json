@@ -16,6 +16,7 @@
     "start": "node dist/main.js serve"
   },
   "dependencies": {
+    "@anthropic-ai/claude-code": "2.1.283",
     "@codevisor/adapter-claude": "workspace:*",
     "@codevisor/adapter-codex": "workspace:*",
     "@codevisor/agent-runtime": "workspace:*",
@@ -35,6 +36,7 @@
     "@effect/platform-node": "4.0.0-beta.92",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@napi-rs/canvas": "1.0.9",
+    "@openai/codex": "0.157.1",
     "effect": "4.0.0-beta.92",
     "ffmpeg-static": "5.3.0",
     "pdfjs-dist": "6.3.289",

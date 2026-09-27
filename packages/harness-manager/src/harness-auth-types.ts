@@ -45,6 +45,8 @@ export interface HarnessAuthManagerConfig {
   readonly claudeAuth?: typeof spawnClaudeAuthClient
   /// Overrides the login-shell environment resolver in tests and embedded hosts.
   readonly resolveEnv?: () => Promise<NodeJS.ProcessEnv>
+  /// Application-owned hosts can pin the executable independently of the login shell PATH.
+  readonly locateExecutable?: (name: string, env: NodeJS.ProcessEnv) => string | undefined
   /// Overrides non-interactive authentication commands in tests.
   readonly execFile?: HarnessAuthExec
   /// The effective harness catalog (builtins + user-defined entries).

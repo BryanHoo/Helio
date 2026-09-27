@@ -12,6 +12,7 @@ import type { TerminalManagerService } from "@codevisor/terminal"
 import { Effect } from "effect"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import { makeHarnessAuthCore } from "./harness-auth-core.js"
 import { makeHarnessAuthManager } from "./harness-auth.js"
 
 const run = <A, E>(effect: Effect.Effect<A, E>): Promise<A> => Effect.runPromise(effect)
@@ -34,6 +35,22 @@ afterEach(async () => {
   for (const directory of directories.splice(0)) {
     rmSync(directory, { force: true, recursive: true })
   }
+})
+
+describe("application-managed authentication CLI", () => {
+  it("uses the host's pinned executable and never falls back to PATH", async () => {
+    const core = makeHarnessAuthCore({
+      agents: { catalog: harnessCatalog } as AgentRuntimeService,
+      catalog: harnessCatalog,
+      dataDir: "/unused",
+      db: {} as CodevisorDatabaseService,
+      terminal: {} as TerminalManagerService,
+      resolveEnv: async () => ({ PATH: "/usr/local/bin" }),
+      locateExecutable: (name) => (name === "codex" ? "/app/bin/codex" : undefined)
+    })
+    await expect(core.executable("codex")).resolves.toBe("/app/bin/codex")
+    await expect(core.executable("claude-code")).rejects.toThrow("Claude Code is not installed")
+  })
 })
 
 describe("activate-time account rebinding", () => {
